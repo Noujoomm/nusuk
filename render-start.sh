@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-echo "==> Running database migrations..."
+echo "==> Syncing database schema..."
 cd apps/api
-npx prisma migrate deploy
+npx prisma db push --accept-data-loss
 
 echo "==> Seeding database..."
 node dist/prisma/seed.js || echo "Seed skipped (may already exist)"
