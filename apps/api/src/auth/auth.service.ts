@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -88,6 +88,38 @@ export class AuthService {
     });
 
     return user;
+  }
+
+  async register(dto: { email: string; password: string; name: string; nameAr: string }) {
+    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (existing) throw new ConflictException('البريد الإلكتروني مستخدم بالفعل');
+
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        name: dto.name,
+        nameAr: dto.nameAr,
+        passwordHash,
+        role: 'employee',
+        isActive: true,
+      },
+      include: { trackPermissions: { include: { track: true } } },
+    });
+
+    const tokens = await this.generateTokens(user.id, user.email, user.role);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        token: tokens.refreshToken,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    this.logger.log(`New user registered: ${user.email}`);
+    return { ...tokens, user: this.sanitizeUser(user) };
   }
 
   async login(email: string, password: string) {

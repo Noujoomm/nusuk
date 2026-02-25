@@ -4,25 +4,35 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/stores/auth';
-import { LogIn, Eye, EyeOff } from 'lucide-react';
+import { UserPlus, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
-  const login = useAuth((s) => s.login);
+  const register = useAuth((s) => s.register);
+  const [name, setName] = useState('');
+  const [nameAr, setNameAr] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (password !== confirmPassword) {
+      toast.error('كلمتا المرور غير متطابقتين');
+      return;
+    }
+
     setLoading(true);
     try {
-      await login(email, password);
+      await register({ email, password, name, nameAr });
+      toast.success('تم إنشاء الحساب بنجاح');
       router.push('/');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'فشل تسجيل الدخول');
+      toast.error(err.response?.data?.message || 'فشل إنشاء الحساب');
     } finally {
       setLoading(false);
     }
@@ -39,13 +49,38 @@ export default function LoginPage() {
       <div className="glass p-8 w-full max-w-md relative z-10">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-500/20 mb-4">
-            <LogIn className="w-8 h-8 text-brand-400" />
+            <UserPlus className="w-8 h-8 text-brand-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white">نظام نسك</h1>
-          <p className="text-gray-400 mt-1">نظام إدارة المشاريع</p>
+          <h1 className="text-2xl font-bold text-white">إنشاء حساب جديد</h1>
+          <p className="text-gray-400 mt-1">نظام نسك - إدارة المشاريع</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1.5">الاسم الكامل (English)</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="input-field"
+              placeholder="Full Name"
+              required
+              dir="ltr"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1.5">الاسم بالعربي</label>
+            <input
+              type="text"
+              value={nameAr}
+              onChange={(e) => setNameAr(e.target.value)}
+              className="input-field"
+              placeholder="الاسم الكامل"
+              required
+            />
+          </div>
+
           <div>
             <label className="block text-sm text-gray-400 mb-1.5">البريد الإلكتروني</label>
             <input
@@ -53,7 +88,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="input-field"
-              placeholder="admin@nusuk.sa"
+              placeholder="example@email.com"
               required
               dir="ltr"
             />
@@ -67,8 +102,9 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="input-field pl-10"
-                placeholder="••••••"
+                placeholder="6 أحرف على الأقل"
                 required
+                minLength={6}
                 dir="ltr"
               />
               <button
@@ -81,19 +117,33 @@ export default function LoginPage() {
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm text-gray-400 mb-1.5">تأكيد كلمة المرور</label>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="input-field"
+              placeholder="أعد كتابة كلمة المرور"
+              required
+              minLength={6}
+              dir="ltr"
+            />
+          </div>
+
           <button
             type="submit"
             disabled={loading}
             className="btn-primary w-full py-3 text-center disabled:opacity-50"
           >
-            {loading ? 'جاري الدخول...' : 'تسجيل الدخول'}
+            {loading ? 'جاري إنشاء الحساب...' : 'إنشاء حساب'}
           </button>
         </form>
 
         <p className="text-center text-gray-400 text-sm mt-6">
-          ليس لديك حساب؟{' '}
-          <Link href="/register" className="text-brand-400 hover:text-brand-300">
-            أنشئ حساب جديد
+          لديك حساب؟{' '}
+          <Link href="/login" className="text-brand-400 hover:text-brand-300">
+            سجل دخول
           </Link>
         </p>
       </div>

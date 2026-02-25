@@ -5,7 +5,7 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuditService } from '../audit/audit.service';
-import { LoginDto, RefreshDto } from './auth.dto';
+import { LoginDto, RefreshDto, RegisterDto } from './auth.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -13,6 +13,31 @@ export class AuthController {
     private auth: AuthService,
     private audit: AuditService,
   ) {}
+
+  @Post('register')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const result = await this.auth.register(dto);
+
+    res.cookie('refresh_token', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/api/auth/refresh',
+    });
+
+    await this.audit.log({
+      actorId: result.user.id,
+      actionType: 'register',
+      entityType: 'user',
+      entityId: result.user.id,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    return { accessToken: result.accessToken, user: result.user };
+  }
 
   @Post('login')
   @Throttle({ default: { limit: 5, ttl: 60000 } })

@@ -21,6 +21,7 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (data: { email: string; password: string; name: string; nameAr: string }) => Promise<void>;
   logout: () => Promise<void>;
   loadUser: () => Promise<void>;
   hasPermission: (trackId: string, permission: string) => boolean;
@@ -32,6 +33,13 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   login: async (email, password) => {
     const { data } = await authApi.login(email, password);
+    localStorage.setItem('access_token', data.accessToken);
+    set({ user: data.user });
+    connectSocket();
+  },
+
+  register: async (registerData) => {
+    const { data } = await authApi.register(registerData);
     localStorage.setItem('access_token', data.accessToken);
     set({ user: data.user });
     connectSocket();
