@@ -7,7 +7,7 @@ services:
     region: frankfurt
     plan: free
     buildCommand: cd apps/api && npm ci && npx prisma generate && npm run build
-    startCommand: cd apps/api && npx prisma migrate deploy && node dist/main.js
+    startCommand: cd apps/api && npx prisma migrate deploy && npx prisma db seed && node dist/main.js
     envVars:
       - key: DATABASE_URL
         fromDatabase:
