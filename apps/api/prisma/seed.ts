@@ -31,6 +31,22 @@ async function main() {
   });
   console.log(`  Admin: admin@nusuk.sa / admin123 (id: ${admin.id})`);
 
+  // 1b. Create main admin user
+  const mainAdminPassword = await bcrypt.hash('Ma112001', 12);
+  const mainAdmin = await prisma.user.upsert({
+    where: { email: 'snoujoom@gmail.com' },
+    update: {},
+    create: {
+      email: 'snoujoom@gmail.com',
+      name: 'Mazin Admin',
+      nameAr: 'مازن المدير',
+      passwordHash: mainAdminPassword,
+      role: 'admin',
+      isActive: true,
+    },
+  });
+  console.log(`  Main Admin: snoujoom@gmail.com / Ma112001 (id: ${mainAdmin.id})`);
+
   // 2. Create PM user
   const pmPassword = await bcrypt.hash('pm123', 12);
   const pm = await prisma.user.upsert({
