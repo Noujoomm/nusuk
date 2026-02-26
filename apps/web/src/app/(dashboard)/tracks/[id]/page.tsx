@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { tracksApi, recordsApi, employeesApi, deliverablesApi, scopesApi, penaltiesApi, trackKpisApi } from '@/lib/api';
+import { tracksApi, recordsApi, employeesApi, deliverablesApi, scopesApi, penaltiesApi, trackKpisApi, dailyUpdatesApi, filesApi } from '@/lib/api';
 import { useAuth } from '@/stores/auth';
 import { getSocket, joinTrack, leaveTrack } from '@/lib/socket';
 import { STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS, PRIORITY_COLORS, CONTRACT_TYPE_LABELS, formatDate, formatNumber } from '@/lib/utils';
 import {
   Plus, Search, Edit3, Trash2, ChevronLeft, ChevronRight, X,
   Users, Package, Target, AlertTriangle, ClipboardList, ChevronDown,
-  BarChart3, FileText, TrendingUp,
+  BarChart3, FileText, TrendingUp, Upload, Paperclip, Clock, CheckCircle2, AlertCircle, XCircle, Send,
 } from 'lucide-react';
 import RecordModal from '@/components/record-modal';
 import RecordDetailPanel from '@/components/record-detail-panel';
@@ -82,8 +82,16 @@ export default function TrackDetailPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<RecordItem | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<RecordItem | null>(null);
-  const [activeTab, setActiveTab] = useState<'records' | 'details' | 'stats' | 'scope'>('records');
+  const [activeTab, setActiveTab] = useState<'records' | 'details' | 'stats' | 'scope' | 'updates'>('records');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+
+  // Daily updates state
+  const [dailyUpdates, setDailyUpdates] = useState<any[]>([]);
+  const [updatesLoading, setUpdatesLoading] = useState(false);
+  const [showUpdateForm, setShowUpdateForm] = useState(false);
+  const [updateForm, setUpdateForm] = useState({ titleAr: '', content: '', status: 'in_progress', progress: 0 });
+  const [updateFiles, setUpdateFiles] = useState<File[]>([]);
+  const [submittingUpdate, setSubmittingUpdate] = useState(false);
 
   // Entity CRUD state
   const [entityModal, setEntityModal] = useState<{ type: string; data: any | null } | null>(null);
@@ -151,6 +159,73 @@ export default function TrackDetailPage() {
   useEffect(() => {
     loadRecords();
   }, [loadRecords]);
+
+  const loadDailyUpdates = useCallback(async () => {
+    setUpdatesLoading(true);
+    try {
+      const { data } = await dailyUpdatesApi.list({ trackId: id, pageSize: 50 });
+      setDailyUpdates(data.data);
+    } catch {}
+    setUpdatesLoading(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (activeTab === 'updates') loadDailyUpdates();
+  }, [activeTab, loadDailyUpdates]);
+
+  const handleSubmitUpdate = async () => {
+    if (!updateForm.titleAr.trim() || !updateForm.content.trim()) {
+      toast.error('يجب تعبئة العنوان والمحتوى');
+      return;
+    }
+    setSubmittingUpdate(true);
+    try {
+      // Upload files first
+      const uploadedFiles: any[] = [];
+      for (const file of updateFiles) {
+        const { data } = await filesApi.upload(file, { trackId: id, category: 'daily_update' });
+        uploadedFiles.push({
+          id: data.id,
+          fileName: data.fileName,
+          fileSize: data.fileSize,
+          mimeType: data.mimeType,
+          filePath: data.filePath,
+        });
+      }
+
+      await dailyUpdatesApi.create({
+        title: updateForm.titleAr,
+        titleAr: updateForm.titleAr,
+        content: updateForm.content,
+        contentAr: updateForm.content,
+        type: 'track',
+        trackId: id,
+        status: updateForm.status,
+        progress: updateForm.progress,
+        attachments: uploadedFiles,
+      });
+
+      toast.success('تم إضافة التحديث');
+      setShowUpdateForm(false);
+      setUpdateForm({ titleAr: '', content: '', status: 'in_progress', progress: 0 });
+      setUpdateFiles([]);
+      loadDailyUpdates();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'فشل إضافة التحديث');
+    }
+    setSubmittingUpdate(false);
+  };
+
+  const handleDeleteUpdate = async (updateId: string) => {
+    if (!confirm('هل أنت متأكد من حذف هذا التحديث؟')) return;
+    try {
+      await dailyUpdatesApi.delete(updateId);
+      toast.success('تم حذف التحديث');
+      loadDailyUpdates();
+    } catch {
+      toast.error('فشل حذف التحديث');
+    }
+  };
 
   const handleDeleteRecord = async (recordId: string) => {
     if (!confirm('هل أنت متأكد من حذف هذا السجل؟')) return;
@@ -286,6 +361,7 @@ export default function TrackDetailPage() {
       <div className="flex gap-2">
         {[
           { key: 'records' as const, label: `السجلات (${total})` },
+          { key: 'updates' as const, label: 'التحديثات اليومية' },
           { key: 'scope' as const, label: 'نطاق العمل' },
           { key: 'stats' as const, label: 'الإحصائيات' },
           { key: 'details' as const, label: 'تفاصيل المسار' },
@@ -393,6 +469,215 @@ export default function TrackDetailPage() {
       )}
 
       {/* Scope Blocks Tab */}
+      {/* Daily Updates Tab */}
+      {activeTab === 'updates' && (
+        <div className="space-y-4">
+          {/* Add update button */}
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-white">التحديثات اليومية</h3>
+            <button
+              onClick={() => setShowUpdateForm(!showUpdateForm)}
+              className="btn-primary flex items-center gap-2 px-4 py-2 text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              إضافة تحديث
+            </button>
+          </div>
+
+          {/* New Update Form */}
+          {showUpdateForm && (
+            <div className="glass p-6 space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1.5">عنوان التحديث</label>
+                <input
+                  type="text"
+                  value={updateForm.titleAr}
+                  onChange={(e) => setUpdateForm({ ...updateForm, titleAr: e.target.value })}
+                  className="input-field"
+                  placeholder="مثال: تحديث أعمال التوزيع..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-1.5">تفاصيل التحديث</label>
+                <textarea
+                  value={updateForm.content}
+                  onChange={(e) => setUpdateForm({ ...updateForm, content: e.target.value })}
+                  className="input-field min-h-[100px] resize-y"
+                  placeholder="اكتب تفاصيل التحديث هنا..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1.5">الحالة</label>
+                  <select
+                    value={updateForm.status}
+                    onChange={(e) => setUpdateForm({ ...updateForm, status: e.target.value })}
+                    className="input-field"
+                  >
+                    <option value="in_progress">قيد التنفيذ</option>
+                    <option value="completed">مكتمل</option>
+                    <option value="delayed">متأخر</option>
+                    <option value="rejected">مرفوض</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1.5">نسبة الإنجاز ({updateForm.progress}%)</label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={updateForm.progress}
+                    onChange={(e) => setUpdateForm({ ...updateForm, progress: parseInt(e.target.value) })}
+                    className="w-full accent-brand-500"
+                  />
+                </div>
+              </div>
+
+              {/* File Upload */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-1.5">المرفقات</label>
+                <div className="border-2 border-dashed border-white/10 rounded-xl p-4 text-center hover:border-brand-500/30 transition-colors">
+                  <input
+                    type="file"
+                    multiple
+                    onChange={(e) => {
+                      if (e.target.files) setUpdateFiles([...updateFiles, ...Array.from(e.target.files)]);
+                    }}
+                    className="hidden"
+                    id="update-files"
+                  />
+                  <label htmlFor="update-files" className="cursor-pointer flex flex-col items-center gap-2">
+                    <Upload className="w-8 h-8 text-gray-500" />
+                    <span className="text-sm text-gray-400">اضغط لرفع الملفات</span>
+                    <span className="text-xs text-gray-500">PDF, Word, Excel, صور</span>
+                  </label>
+                </div>
+                {updateFiles.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {updateFiles.map((file, i) => (
+                      <div key={i} className="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <Paperclip className="w-3.5 h-3.5 text-gray-400" />
+                          <span className="text-sm text-gray-300">{file.name}</span>
+                          <span className="text-xs text-gray-500">({(file.size / 1024).toFixed(0)} KB)</span>
+                        </div>
+                        <button onClick={() => setUpdateFiles(updateFiles.filter((_, j) => j !== i))} className="text-gray-500 hover:text-red-400">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => { setShowUpdateForm(false); setUpdateFiles([]); }} className="px-4 py-2 text-sm text-gray-400 hover:text-white">
+                  إلغاء
+                </button>
+                <button
+                  onClick={handleSubmitUpdate}
+                  disabled={submittingUpdate}
+                  className="btn-primary flex items-center gap-2 px-6 py-2 text-sm disabled:opacity-50"
+                >
+                  <Send className="w-4 h-4" />
+                  {submittingUpdate ? 'جاري الإرسال...' : 'نشر التحديث'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Updates List */}
+          {updatesLoading ? (
+            <div className="text-center py-12 text-gray-500">جاري التحميل...</div>
+          ) : dailyUpdates.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">لا توجد تحديثات بعد</div>
+          ) : (
+            <div className="space-y-3">
+              {dailyUpdates.map((update) => {
+                const statusConfig: Record<string, { icon: any; color: string; label: string }> = {
+                  completed: { icon: CheckCircle2, color: 'text-emerald-400', label: 'مكتمل' },
+                  in_progress: { icon: Clock, color: 'text-amber-400', label: 'قيد التنفيذ' },
+                  delayed: { icon: AlertCircle, color: 'text-red-400', label: 'متأخر' },
+                  rejected: { icon: XCircle, color: 'text-red-500', label: 'مرفوض' },
+                };
+                const st = statusConfig[update.status] || statusConfig.in_progress;
+                const StatusIcon = st.icon;
+                const attachments = (update.attachments as any[]) || [];
+
+                return (
+                  <div key={update.id} className="glass p-5">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-300 text-sm font-bold">
+                          {(update.author?.nameAr || '؟')[0]}
+                        </div>
+                        <div>
+                          <span className="text-sm text-white font-medium">{update.author?.nameAr || update.author?.name}</span>
+                          <span className="text-xs text-gray-500 mr-2">
+                            {new Date(update.createdAt).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-white/5 ${st.color}`}>
+                          <StatusIcon className="w-3.5 h-3.5" />
+                          {st.label}
+                        </span>
+                        {(update.authorId === user?.id || isAdmin) && (
+                          <button onClick={() => handleDeleteUpdate(update.id)} className="p-1 rounded hover:bg-red-500/10 text-gray-500 hover:text-red-400">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <h4 className="text-white font-semibold mb-1">{update.titleAr || update.title}</h4>
+                    <p className="text-gray-400 text-sm whitespace-pre-wrap leading-relaxed">{update.contentAr || update.content}</p>
+
+                    {/* Progress bar */}
+                    {update.progress > 0 && (
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                          <span>الإنجاز</span>
+                          <span>{update.progress}%</span>
+                        </div>
+                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-brand-500 transition-all"
+                            style={{ width: `${update.progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Attachments */}
+                    {attachments.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {attachments.map((att: any, i: number) => (
+                          <a
+                            key={i}
+                            href={att.filePath ? `/api/files/download/${att.id}` : '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 transition-colors"
+                          >
+                            <Paperclip className="w-3 h-3 text-gray-500" />
+                            {att.fileName}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {activeTab === 'scope' && track && (
         <ScopeBlocksPanel trackId={id} trackColor={track.color} />
       )}

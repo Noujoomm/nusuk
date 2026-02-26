@@ -35,8 +35,6 @@ export class DailyUpdatesController {
   }
 
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles('admin', 'pm', 'track_lead')
   async create(@Body() dto: CreateDailyUpdateDto, @CurrentUser() user: any, @Req() req: Request) {
     const result = await this.service.create(dto, user.id);
     await this.audit.log({

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, MinLength, IsIn } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, MinLength, IsIn, IsInt, Min, Max, IsArray } from 'class-validator';
 
 export class CreateDailyUpdateDto {
   @IsString()
@@ -24,6 +24,17 @@ export class CreateDailyUpdateDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(['completed', 'in_progress', 'delayed', 'rejected'])
+  status?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  progress?: number;
+
+  @IsOptional()
+  @IsString()
   trackId?: string;
 
   @IsOptional()
@@ -34,6 +45,10 @@ export class CreateDailyUpdateDto {
   @IsString()
   @IsIn(['normal', 'important', 'urgent'])
   priority?: string;
+
+  @IsOptional()
+  @IsArray()
+  attachments?: any[];
 }
 
 export class UpdateDailyUpdateDto {
@@ -62,6 +77,17 @@ export class UpdateDailyUpdateDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(['completed', 'in_progress', 'delayed', 'rejected'])
+  status?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  progress?: number;
+
+  @IsOptional()
+  @IsString()
   trackId?: string;
 
   @IsOptional()
@@ -72,4 +98,8 @@ export class UpdateDailyUpdateDto {
   @IsString()
   @IsIn(['normal', 'important', 'urgent'])
   priority?: string;
+
+  @IsOptional()
+  @IsArray()
+  attachments?: any[];
 }
