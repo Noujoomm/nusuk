@@ -11,7 +11,7 @@
     "dev:api": "cd apps/api && npm run start:dev",
     "dev:web": "cd apps/web && npm run dev",
     "build": "cd apps/api && npx prisma generate && npm run build && cd ../web && npm run build",
-    "start": "cd apps/api && (npx prisma db push --accept-data-loss || echo 'DB push skipped') && (node dist/prisma/seed.js || true) && API_PORT=4000 node dist/main.js & sleep 5 && cd ../web && npx next start -p ${PORT:-10000}",
+    "start": "cd apps/api && (npx prisma db push --accept-data-loss || echo 'DB push skipped') && (node dist/prisma/seed.js || true) && API_PORT=4000 node dist/src/main.js & sleep 5 && cd ../web && npx next start -p ${PORT:-10000}",
     "lint": "npm run lint --workspaces --if-present"
   },
   "dependencies": {

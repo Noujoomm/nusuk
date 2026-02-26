@@ -6,7 +6,7 @@ services:
     region: frankfurt
     plan: starter
     buildCommand: npm install && cd apps/api && npx prisma generate && npm run build && cd ../web && npm run build
-    startCommand: cd apps/api && (npx prisma db push --accept-data-loss || echo "DB push skipped") && (node dist/prisma/seed.js || true) && API_PORT=4000 node dist/main.js & sleep 5 && cd apps/web && npx next start -p ${PORT:-10000}
+    startCommand: cd apps/api && (npx prisma db push --accept-data-loss || echo "DB push skipped") && (node dist/prisma/seed.js || true) && API_PORT=4000 node dist/src/main.js & sleep 5 && cd apps/web && npx next start -p ${PORT:-10000}
     envVars:
       - key: DATABASE_URL
         fromDatabase:
