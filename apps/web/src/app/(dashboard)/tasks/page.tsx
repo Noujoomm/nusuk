@@ -65,6 +65,7 @@ export default function TasksPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [assigneeTypeFilter, setAssigneeTypeFilter] = useState('');
+  const [trackFilter, setTrackFilter] = useState('');
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
 
@@ -97,6 +98,7 @@ export default function TasksPage() {
       if (statusFilter) params.status = statusFilter;
       if (priorityFilter) params.priority = priorityFilter;
       if (assigneeTypeFilter) params.assigneeType = assigneeTypeFilter;
+      if (trackFilter) params.trackId = trackFilter;
       if (debouncedSearch) params.search = debouncedSearch;
 
       const { data } = await tasksApi.list(params);
@@ -108,7 +110,7 @@ export default function TasksPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, statusFilter, priorityFilter, assigneeTypeFilter, debouncedSearch]);
+  }, [activeTab, statusFilter, priorityFilter, assigneeTypeFilter, trackFilter, debouncedSearch]);
 
   // Load on mount and when filters change
   useEffect(() => {
@@ -287,6 +289,20 @@ export default function TasksPage() {
           {Object.entries(PRIORITY_LABELS).map(([key, label]) => (
             <option key={key} value={key}>
               {label}
+            </option>
+          ))}
+        </select>
+
+        {/* Track filter */}
+        <select
+          value={trackFilter}
+          onChange={(e) => setTrackFilter(e.target.value)}
+          className="input-field w-auto"
+        >
+          <option value="">كل المسارات</option>
+          {tracks.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.nameAr}
             </option>
           ))}
         </select>
