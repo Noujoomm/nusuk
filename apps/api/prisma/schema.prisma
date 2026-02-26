@@ -50,8 +50,9 @@ model User {
 
   // Phase 3: Updates & Import
   dailyUpdates       DailyUpdate[]          @relation("DailyUpdateAuthor")
-  dailyUpdateReads   DailyUpdateRead[]      @relation("DailyUpdateReader")
-  importHistory      ImportHistory[]        @relation("ImportHistoryAuthor")
+  dailyUpdateReads       DailyUpdateRead[]          @relation("DailyUpdateReader")
+  dailyUpdateAttachments DailyUpdateAttachment[]    @relation("DailyUpdateAttachmentUploader")
+  importHistory          ImportHistory[]             @relation("ImportHistoryAuthor")
 
   @@map("users")
 }
@@ -498,9 +499,10 @@ model DailyUpdate {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  author User   @relation("DailyUpdateAuthor", fields: [authorId], references: [id])
-  track  Track? @relation(fields: [trackId], references: [id], onDelete: SetNull)
-  reads  DailyUpdateRead[]
+  author      User   @relation("DailyUpdateAuthor", fields: [authorId], references: [id])
+  track       Track? @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  reads       DailyUpdateRead[]
+  fileAttachments DailyUpdateAttachment[]
 
   @@index([authorId])
   @@index([trackId])
@@ -509,6 +511,26 @@ model DailyUpdate {
   @@index([pinned])
   @@index([createdAt])
   @@map("daily_updates")
+}
+
+model DailyUpdateAttachment {
+  id              String   @id @default(cuid())
+  updateId        String   @map("update_id")
+  originalName    String   @map("original_name")
+  storedName      String   @map("stored_name")
+  mimeType        String   @map("mime_type")
+  sizeBytes       Int      @map("size_bytes")
+  storageProvider String   @default("LOCAL") @map("storage_provider") // LOCAL, S3
+  storagePath     String   @map("storage_path")
+  uploadedById    String   @map("uploaded_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  update     DailyUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
+  uploadedBy User        @relation("DailyUpdateAttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([updateId])
+  @@index([createdAt])
+  @@map("daily_update_attachments")
 }
 
 model DailyUpdateRead {

@@ -9,7 +9,8 @@ import {
   Plus, Edit3, Trash2, Upload, Download, UserPlus, RefreshCw,
   GitBranch, Users, Package, Target, AlertTriangle, ClipboardList,
   FileText, CheckSquare, Shield, Bell, MessageSquare, Search,
-  Megaphone, Globe, Zap, Clock,
+  Megaphone, Globe, Zap, Clock, Paperclip, Image, FileSpreadsheet,
+  FileType, Archive, Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -76,6 +77,24 @@ const formatTimeAgo = (dateStr: string) => {
   if (diffDay < 7) return `منذ ${diffDay} يوم`;
   return formatDate(dateStr);
 };
+
+const getFileIcon = (mimeType: string) => {
+  if (mimeType.startsWith('image/')) return Image;
+  if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return FileSpreadsheet;
+  if (mimeType.includes('pdf')) return FileText;
+  if (mimeType.includes('zip') || mimeType.includes('compressed')) return Archive;
+  if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return FileType;
+  if (mimeType.includes('word') || mimeType.includes('document')) return FileText;
+  return Paperclip;
+};
+
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
 // ─── Main Page ───
 
@@ -344,6 +363,34 @@ function DailyUpdatesTab({ isAdmin, userId }: { isAdmin: boolean; userId: string
                     <span className="text-xs text-gray-600">(معدّل)</span>
                   )}
                 </div>
+
+                {/* Attachments */}
+                {update.fileAttachments && update.fileAttachments.length > 0 && (
+                  <div className="mt-3 mr-[52px]">
+                    <div className="flex flex-wrap gap-2">
+                      {update.fileAttachments.map((att: any) => {
+                        const FileIcon = getFileIcon(att.mimeType);
+                        return (
+                          <a
+                            key={att.id}
+                            href={`${API_URL}/api/daily-updates/attachments/${att.id}/download`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-2 bg-white/5 hover:bg-white/10 rounded-lg px-3 py-2 text-xs transition-colors group"
+                          >
+                            <FileIcon className="w-4 h-4 text-gray-500 group-hover:text-brand-400" />
+                            <div className="flex flex-col">
+                              <span className="text-gray-300 group-hover:text-white max-w-[150px] truncate">{att.originalName}</span>
+                              <span className="text-gray-600 text-[10px]">{formatFileSize(att.sizeBytes)}</span>
+                            </div>
+                            <Download className="w-3 h-3 text-gray-600 group-hover:text-brand-400" />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -380,6 +427,10 @@ function DailyUpdatesTab({ isAdmin, userId }: { isAdmin: boolean; userId: string
 
 // ─── Create/Edit Modal ───
 
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
+const MAX_FILES = 10;
+const ALLOWED_EXTS = ['.xlsx', '.xls', '.docx', '.doc', '.pptx', '.ppt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.txt', '.csv', '.zip'];
+
 function CreateUpdateModal({ data, tracks, onClose, onSave }: {
   data: any | null;
   tracks: any[];
@@ -397,7 +448,40 @@ function CreateUpdateModal({ data, tracks, onClose, onSave }: {
     priority: data?.priority || 'normal',
     pinned: data?.pinned || false,
   });
+  const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  const handleFilesChange = (newFiles: FileList | null) => {
+    if (!newFiles) return;
+    setUploadError('');
+    const additions = Array.from(newFiles);
+
+    // Validate count
+    if (files.length + additions.length > MAX_FILES) {
+      setUploadError(`الحد الأقصى ${MAX_FILES} ملفات`);
+      return;
+    }
+
+    // Validate each
+    for (const f of additions) {
+      const ext = '.' + f.name.split('.').pop()?.toLowerCase();
+      if (!ALLOWED_EXTS.includes(ext)) {
+        setUploadError(`نوع الملف غير مدعوم: ${ext}`);
+        return;
+      }
+      if (f.size > MAX_FILE_SIZE) {
+        setUploadError(`${f.name} يتجاوز 25 MB`);
+        return;
+      }
+    }
+    setFiles((prev) => [...prev, ...additions]);
+  };
+
+  const removeFile = (idx: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+    setUploadError('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -412,8 +496,12 @@ function CreateUpdateModal({ data, tracks, onClose, onSave }: {
       if (!payload.trackId) delete payload.trackId;
       if (isEdit) {
         await dailyUpdatesApi.update(data.id, payload);
+        // Upload new files to existing update
+        if (files.length > 0) {
+          await dailyUpdatesApi.addAttachments(data.id, files);
+        }
       } else {
-        await dailyUpdatesApi.create(payload);
+        await dailyUpdatesApi.create(payload, files.length > 0 ? files : undefined);
       }
       toast.success(isEdit ? 'تم تعديل التحديث' : 'تم نشر التحديث');
       onSave();
@@ -496,6 +584,73 @@ function CreateUpdateModal({ data, tracks, onClose, onSave }: {
             />
           </div>
 
+          {/* File Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1.5">
+              المرفقات <span className="text-gray-600">({files.length}/{MAX_FILES})</span>
+            </label>
+            <div
+              className="border-2 border-dashed border-white/10 rounded-xl p-4 text-center hover:border-brand-500/30 transition-colors cursor-pointer"
+              onClick={() => document.getElementById('modal-files')?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-brand-500/50'); }}
+              onDragLeave={(e) => e.currentTarget.classList.remove('border-brand-500/50')}
+              onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-brand-500/50'); handleFilesChange(e.dataTransfer.files); }}
+            >
+              <input
+                type="file"
+                multiple
+                id="modal-files"
+                className="hidden"
+                accept={ALLOWED_EXTS.join(',')}
+                onChange={(e) => handleFilesChange(e.target.files)}
+              />
+              <Upload className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">اسحب الملفات أو اضغط للاختيار</p>
+              <p className="text-[10px] text-gray-600 mt-1">Excel, Word, PowerPoint, PDF, صور, CSV, ZIP — حد 25 MB لكل ملف</p>
+            </div>
+            {uploadError && <p className="text-xs text-red-400 mt-1">{uploadError}</p>}
+            {files.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {files.map((file, i) => {
+                  const FileIcon = getFileIcon(file.type);
+                  return (
+                    <div key={i} className="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span className="text-sm text-gray-300 truncate">{file.name}</span>
+                        <span className="text-[10px] text-gray-600 shrink-0">{formatFileSize(file.size)}</span>
+                      </div>
+                      <button type="button" onClick={() => removeFile(i)} className="text-gray-500 hover:text-red-400 shrink-0 mr-1">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Existing attachments for edit mode */}
+            {isEdit && data?.fileAttachments && data.fileAttachments.length > 0 && (
+              <div className="mt-2">
+                <p className="text-xs text-gray-500 mb-1">المرفقات الحالية:</p>
+                <div className="space-y-1">
+                  {data.fileAttachments.map((att: any) => {
+                    const FileIcon = getFileIcon(att.mimeType);
+                    return (
+                      <div key={att.id} className="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileIcon className="w-4 h-4 text-brand-400 shrink-0" />
+                          <span className="text-sm text-gray-300 truncate">{att.originalName}</span>
+                          <span className="text-[10px] text-gray-600 shrink-0">{formatFileSize(att.sizeBytes)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -508,7 +663,8 @@ function CreateUpdateModal({ data, tracks, onClose, onSave }: {
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="flex-1 btn-primary disabled:opacity-50">
+            <button type="submit" disabled={saving} className="flex-1 btn-primary disabled:opacity-50 flex items-center justify-center gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               {saving ? 'جاري النشر...' : isEdit ? 'حفظ التعديلات' : 'نشر التحديث'}
             </button>
             <button type="button" onClick={onClose} className="px-6 py-2 rounded-xl bg-white/5 text-gray-400 hover:bg-white/10 text-sm font-medium transition-colors">

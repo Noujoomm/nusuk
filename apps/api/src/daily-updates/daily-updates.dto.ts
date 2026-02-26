@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, MinLength, IsIn, IsInt, Min, Max, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, MinLength, IsIn, IsInt, Min, Max } from 'class-validator';
 
 export class CreateDailyUpdateDto {
   @IsString()
@@ -45,10 +45,6 @@ export class CreateDailyUpdateDto {
   @IsString()
   @IsIn(['normal', 'important', 'urgent'])
   priority?: string;
-
-  @IsOptional()
-  @IsArray()
-  attachments?: any[];
 }
 
 export class UpdateDailyUpdateDto {
@@ -98,8 +94,4 @@ export class UpdateDailyUpdateDto {
   @IsString()
   @IsIn(['normal', 'important', 'urgent'])
   priority?: string;
-
-  @IsOptional()
-  @IsArray()
-  attachments?: any[];
 }

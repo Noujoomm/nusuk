@@ -240,13 +240,32 @@ export const insightsApi = {
 export const dailyUpdatesApi = {
   list: (params?: any) => api.get('/daily-updates', { params }),
   get: (id: string) => api.get(`/daily-updates/${id}`),
-  create: (data: any) => api.post('/daily-updates', data),
+  create: (data: any, files?: File[]) => {
+    const form = new FormData();
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        form.append(key, String(value));
+      }
+    });
+    if (files) {
+      files.forEach((file) => form.append('files', file));
+    }
+    return api.post('/daily-updates', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
   update: (id: string, data: any) => api.patch(`/daily-updates/${id}`, data),
   delete: (id: string) => api.delete(`/daily-updates/${id}`),
   togglePin: (id: string) => api.patch(`/daily-updates/${id}/pin`),
   markAsRead: (id: string) => api.post(`/daily-updates/${id}/read`),
   markAllAsRead: () => api.post('/daily-updates/read-all'),
   unreadCount: () => api.get('/daily-updates/unread-count'),
+  addAttachments: (updateId: string, files: File[]) => {
+    const form = new FormData();
+    files.forEach((file) => form.append('files', file));
+    return api.post(`/daily-updates/${updateId}/attachments`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  deleteAttachment: (attachmentId: string) => api.delete(`/daily-updates/attachments/${attachmentId}`),
+  downloadAttachment: (attachmentId: string) =>
+    api.get(`/daily-updates/attachments/${attachmentId}/download`, { responseType: 'blob' }),
 };
 
 // ─── Audit ───

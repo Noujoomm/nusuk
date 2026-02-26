@@ -24,6 +24,7 @@ import { EmbeddingsModule } from './embeddings/embeddings.module';
 import { AIAnalysisModule } from './ai-analysis/ai-analysis.module';
 import { ScopeBlocksModule } from './scope-blocks/scope-blocks.module';
 import { ProgressModule } from './progress/progress.module';
+import { StorageModule } from './storage/storage.module';
 import { DailyUpdatesModule } from './daily-updates/daily-updates.module';
 import { ImportsModule } from './imports/imports.module';
 import { HealthController } from './health.controller';
@@ -54,6 +55,7 @@ import { HealthController } from './health.controller';
     AIAnalysisModule,
     ScopeBlocksModule,
     ProgressModule,
+    StorageModule,
     DailyUpdatesModule,
     ImportsModule,
   ],
