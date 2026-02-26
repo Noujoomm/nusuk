@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/stores/auth';
 import { cn, ROLE_LABELS } from '@/lib/utils';
+import { dailyUpdatesApi } from '@/lib/api';
 import {
   LayoutDashboard,
   GitBranch,
@@ -39,7 +41,7 @@ const NAV_ITEMS = [
   { href: '/search', label: 'البحث الذكي', icon: Search, roles: ['admin', 'pm', 'track_lead', 'employee', 'hr'] },
   { href: '/ai-analyze', label: 'تحليل الملفات AI', icon: Sparkles, roles: ['admin', 'pm'] },
   { href: '/import', label: 'استيراد البيانات', icon: Upload, roles: ['admin', 'pm', 'hr'] },
-  { href: '/updates', label: 'التحديثات', icon: Activity, roles: ['admin', 'pm'] },
+  { href: '/updates', label: 'التحديثات', icon: Activity, roles: ['admin', 'pm', 'track_lead', 'employee', 'hr'] },
   { href: '/users', label: 'المستخدمين', icon: Users, roles: ['admin'] },
 ];
 
@@ -47,6 +49,17 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const [unreadUpdates, setUnreadUpdates] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchUnread = () => {
+      dailyUpdatesApi.unreadCount().then(({ data }) => setUnreadUpdates(data.unreadCount || 0)).catch(() => {});
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -88,6 +101,11 @@ export default function Sidebar() {
             >
               <item.icon className="w-5 h-5" />
               {item.label}
+              {item.href === '/updates' && unreadUpdates > 0 && (
+                <span className="mr-auto bg-brand-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                  {unreadUpdates > 99 ? '99+' : unreadUpdates}
+                </span>
+              )}
             </Link>
           );
         })}

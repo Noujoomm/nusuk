@@ -50,6 +50,7 @@ model User {
 
   // Phase 3: Updates & Import
   dailyUpdates       DailyUpdate[]          @relation("DailyUpdateAuthor")
+  dailyUpdateReads   DailyUpdateRead[]      @relation("DailyUpdateReader")
   importHistory      ImportHistory[]        @relation("ImportHistoryAuthor")
 
   @@map("users")
@@ -499,6 +500,7 @@ model DailyUpdate {
 
   author User   @relation("DailyUpdateAuthor", fields: [authorId], references: [id])
   track  Track? @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  reads  DailyUpdateRead[]
 
   @@index([authorId])
   @@index([trackId])
@@ -507,6 +509,21 @@ model DailyUpdate {
   @@index([pinned])
   @@index([createdAt])
   @@map("daily_updates")
+}
+
+model DailyUpdateRead {
+  id        String   @id @default(cuid())
+  updateId  String   @map("update_id")
+  userId    String   @map("user_id")
+  readAt    DateTime @default(now()) @map("read_at")
+
+  update DailyUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
+  user   User        @relation("DailyUpdateReader", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([updateId, userId])
+  @@index([userId])
+  @@index([updateId])
+  @@map("daily_update_reads")
 }
 
 // ─── IMPORT HISTORY ───

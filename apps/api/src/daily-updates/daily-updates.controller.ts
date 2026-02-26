@@ -25,8 +25,14 @@ export class DailyUpdatesController {
     @Query('search') search?: string,
     @Query('pinned') pinned?: string,
     @Query('priority') priority?: string,
+    @CurrentUser() user?: any,
   ) {
-    return this.service.findAll({ page, pageSize, type, trackId, search, pinned, priority });
+    return this.service.findAll({ page, pageSize, type, trackId, search, pinned, priority, userId: user?.id });
+  }
+
+  @Get('unread-count')
+  getUnreadCount(@CurrentUser() user: any) {
+    return this.service.getUnreadCount(user.id);
   }
 
   @Get(':id')
@@ -34,7 +40,19 @@ export class DailyUpdatesController {
     return this.service.findById(id);
   }
 
+  @Post('read-all')
+  async markAllAsRead(@CurrentUser() user: any) {
+    return this.service.markAllAsRead(user.id);
+  }
+
+  @Post(':id/read')
+  async markAsRead(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.service.markAsRead(id, user.id);
+  }
+
   @Post()
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm')
   async create(@Body() dto: CreateDailyUpdateDto, @CurrentUser() user: any, @Req() req: Request) {
     const result = await this.service.create(dto, user.id);
     await this.audit.log({
@@ -50,6 +68,8 @@ export class DailyUpdatesController {
   }
 
   @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm')
   async update(@Param('id') id: string, @Body() dto: UpdateDailyUpdateDto, @CurrentUser() user: any, @Req() req: Request) {
     const before = await this.service.findById(id);
     const result = await this.service.update(id, dto, user.id, user.role);
@@ -67,6 +87,8 @@ export class DailyUpdatesController {
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm')
   async delete(@Param('id') id: string, @CurrentUser() user: any, @Req() req: Request) {
     const before = await this.service.findById(id);
     const result = await this.service.delete(id, user.id, user.role);

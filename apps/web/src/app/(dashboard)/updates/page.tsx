@@ -83,7 +83,7 @@ export default function UpdatesPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'updates' | 'activity'>('updates');
 
-  const isAdmin = user?.role === 'admin' || user?.role === 'pm' || user?.role === 'track_lead';
+  const isAdmin = user?.role === 'admin' || user?.role === 'pm';
 
   return (
     <div className="space-y-6">
@@ -131,6 +131,7 @@ function DailyUpdatesTab({ isAdmin, userId }: { isAdmin: boolean; userId: string
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editTarget, setEditTarget] = useState<any>(null);
   const [tracks, setTracks] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const loadUpdates = useCallback(async () => {
     setLoading(true);
@@ -142,6 +143,7 @@ function DailyUpdatesTab({ isAdmin, userId }: { isAdmin: boolean; userId: string
       setUpdates(data.data);
       setTotal(data.total);
       setTotalPages(data.totalPages);
+      setUnreadCount(data.unreadCount || 0);
     } catch {
       toast.error('فشل تحميل التحديثات');
     }
@@ -176,6 +178,24 @@ function DailyUpdatesTab({ isAdmin, userId }: { isAdmin: boolean; userId: string
     }
   };
 
+  const handleMarkAsRead = async (updateId: string) => {
+    try {
+      await dailyUpdatesApi.markAsRead(updateId);
+      setUpdates((prev) => prev.map((u) => u.id === updateId ? { ...u, isRead: true } : u));
+      setUnreadCount((c) => Math.max(0, c - 1));
+    } catch {}
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await dailyUpdatesApi.markAllAsRead();
+      setUpdates((prev) => prev.map((u) => ({ ...u, isRead: true })));
+      setUnreadCount(0);
+    } catch {
+      toast.error('فشلت العملية');
+    }
+  };
+
   return (
     <>
       {/* Top bar */}
@@ -200,6 +220,15 @@ function DailyUpdatesTab({ isAdmin, userId }: { isAdmin: boolean; userId: string
           <option value="track">مسار</option>
           <option value="department">قسم</option>
         </select>
+        {unreadCount > 0 && (
+          <button
+            onClick={handleMarkAllAsRead}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 text-xs text-gray-400 hover:bg-white/10 transition-colors"
+          >
+            <CheckSquare className="w-3.5 h-3.5" />
+            تعيين الكل كمقروء ({unreadCount})
+          </button>
+        )}
         {isAdmin && (
           <button
             onClick={() => { setEditTarget(null); setShowCreateModal(true); }}
@@ -232,13 +261,23 @@ function DailyUpdatesTab({ isAdmin, userId }: { isAdmin: boolean; userId: string
             const priorityConf = PRIORITY_CONFIG[update.priority] || PRIORITY_CONFIG.normal;
             const typeConf = TYPE_CONFIG[update.type] || TYPE_CONFIG.global;
             const TypeIcon = typeConf.icon;
-            const canManage = isAdmin || update.authorId === userId;
+            const canManage = isAdmin;
 
             return (
-              <div key={update.id} className={`glass p-5 relative ${update.pinned ? 'border border-amber-500/20' : ''}`}>
+              <div
+                key={update.id}
+                className={`glass p-5 relative cursor-pointer transition-colors ${update.pinned ? 'border border-amber-500/20' : ''} ${!update.isRead ? 'border-r-2 border-r-brand-500' : ''}`}
+                onClick={() => { if (!update.isRead) handleMarkAsRead(update.id); }}
+              >
+                {/* Unread dot */}
+                {!update.isRead && (
+                  <div className="absolute top-4 left-4">
+                    <div className="w-2.5 h-2.5 rounded-full bg-brand-500 animate-pulse" />
+                  </div>
+                )}
                 {/* Pinned indicator */}
                 {update.pinned && (
-                  <div className="absolute top-3 left-3">
+                  <div className={`absolute ${!update.isRead ? 'top-3 left-10' : 'top-3 left-3'}`}>
                     <Pin className="w-4 h-4 text-amber-400" />
                   </div>
                 )}

@@ -14,8 +14,9 @@ export class DailyUpdatesService {
     search?: string;
     pinned?: string;
     priority?: string;
+    userId?: string;
   }) {
-    const { page = 1, pageSize = 20, type, trackId, search, pinned, priority } = params;
+    const { page = 1, pageSize = 20, type, trackId, search, pinned, priority, userId } = params;
     const where: any = { isDeleted: false };
     if (type) where.type = type;
     if (trackId) where.trackId = trackId;
@@ -36,6 +37,7 @@ export class DailyUpdatesService {
         include: {
           author: { select: { id: true, name: true, nameAr: true, role: true } },
           track: { select: { id: true, name: true, nameAr: true, color: true } },
+          ...(userId ? { reads: { where: { userId }, select: { id: true } } } : {}),
         },
         orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
         skip: (page - 1) * pageSize,
@@ -44,7 +46,21 @@ export class DailyUpdatesService {
       this.prisma.dailyUpdate.count({ where }),
     ]);
 
-    return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+    // Add isRead flag
+    const enriched = data.map((item: any) => {
+      const { reads, ...rest } = item;
+      return { ...rest, isRead: reads ? reads.length > 0 : false };
+    });
+
+    // Count unread for this user
+    let unreadCount = 0;
+    if (userId) {
+      const totalUpdates = await this.prisma.dailyUpdate.count({ where: { isDeleted: false } });
+      const readCount = await this.prisma.dailyUpdateRead.count({ where: { userId } });
+      unreadCount = Math.max(0, totalUpdates - readCount);
+    }
+
+    return { data: enriched, total, page, pageSize, totalPages: Math.ceil(total / pageSize), unreadCount };
   }
 
   async findById(id: string) {
@@ -117,6 +133,42 @@ export class DailyUpdatesService {
       data: { isDeleted: true },
     });
     return { message: 'تم حذف التحديث' };
+  }
+
+  async markAsRead(updateId: string, userId: string) {
+    const existing = await this.prisma.dailyUpdate.findUnique({ where: { id: updateId } });
+    if (!existing || existing.isDeleted) throw new NotFoundException('التحديث غير موجود');
+
+    await this.prisma.dailyUpdateRead.upsert({
+      where: { updateId_userId: { updateId, userId } },
+      create: { updateId, userId },
+      update: {},
+    });
+    return { success: true };
+  }
+
+  async markAllAsRead(userId: string) {
+    const unreadUpdates = await this.prisma.dailyUpdate.findMany({
+      where: {
+        isDeleted: false,
+        NOT: { reads: { some: { userId } } },
+      },
+      select: { id: true },
+    });
+
+    if (unreadUpdates.length > 0) {
+      await this.prisma.dailyUpdateRead.createMany({
+        data: unreadUpdates.map((u) => ({ updateId: u.id, userId })),
+        skipDuplicates: true,
+      });
+    }
+    return { success: true, marked: unreadUpdates.length };
+  }
+
+  async getUnreadCount(userId: string) {
+    const totalUpdates = await this.prisma.dailyUpdate.count({ where: { isDeleted: false } });
+    const readCount = await this.prisma.dailyUpdateRead.count({ where: { userId } });
+    return { unreadCount: Math.max(0, totalUpdates - readCount) };
   }
 
   async togglePin(id: string) {

@@ -244,6 +244,9 @@ export const dailyUpdatesApi = {
   update: (id: string, data: any) => api.patch(`/daily-updates/${id}`, data),
   delete: (id: string) => api.delete(`/daily-updates/${id}`),
   togglePin: (id: string) => api.patch(`/daily-updates/${id}/pin`),
+  markAsRead: (id: string) => api.post(`/daily-updates/${id}/read`),
+  markAllAsRead: () => api.post('/daily-updates/read-all'),
+  unreadCount: () => api.get('/daily-updates/unread-count'),
 };
 
 // ─── Audit ───
