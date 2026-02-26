@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { tracksApi, recordsApi, employeesApi, deliverablesApi, scopesApi, penaltiesApi, trackKpisApi, dailyUpdatesApi, filesApi } from '@/lib/api';
+import { tracksApi, recordsApi, employeesApi, deliverablesApi, scopesApi, penaltiesApi, trackKpisApi, dailyUpdatesApi, filesApi, tasksApi, usersApi } from '@/lib/api';
 import { useAuth } from '@/stores/auth';
 import { getSocket, joinTrack, leaveTrack } from '@/lib/socket';
-import { STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS, PRIORITY_COLORS, CONTRACT_TYPE_LABELS, formatDate, formatNumber } from '@/lib/utils';
+import { STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS, PRIORITY_COLORS, CONTRACT_TYPE_LABELS, formatDate, formatNumber, TASK_STATUS_LABELS, TASK_STATUS_COLORS, cn } from '@/lib/utils';
 import {
   Plus, Search, Edit3, Trash2, ChevronLeft, ChevronRight, X,
   Users, Package, Target, AlertTriangle, ClipboardList, ChevronDown,
@@ -17,6 +17,10 @@ import ScopeBlocksPanel from '@/components/scope-blocks-panel';
 import InlineEdit from '@/components/inline-edit';
 import toast from 'react-hot-toast';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import TaskCard from '@/components/tasks/task-card';
+import TaskModal from '@/components/tasks/task-modal';
+import TaskDetailPanel from '@/components/tasks/task-detail-panel';
+import { Task } from '@/stores/tasks';
 
 interface Track {
   id: string;
@@ -82,7 +86,7 @@ export default function TrackDetailPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<RecordItem | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<RecordItem | null>(null);
-  const [activeTab, setActiveTab] = useState<'records' | 'details' | 'stats' | 'scope' | 'updates'>('records');
+  const [activeTab, setActiveTab] = useState<'records' | 'tasks' | 'details' | 'stats' | 'scope' | 'updates'>('records');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   // Daily updates state
@@ -96,6 +100,17 @@ export default function TrackDetailPage() {
   // Entity CRUD state
   const [entityModal, setEntityModal] = useState<{ type: string; data: any | null } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string; label: string } | null>(null);
+
+  // Tasks state
+  const [trackTasks, setTrackTasks] = useState<Task[]>([]);
+  const [trackTasksTotal, setTrackTasksTotal] = useState(0);
+  const [trackTasksLoading, setTrackTasksLoading] = useState(false);
+  const [taskStatusFilter, setTaskStatusFilter] = useState('');
+  const [taskSearch, setTaskSearch] = useState('');
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [allUsers, setAllUsers] = useState<{ id: string; name: string; nameAr: string }[]>([]);
+  const [allTracks, setAllTracks] = useState<{ id: string; nameAr: string; color?: string }[]>([]);
 
   const canEdit = hasPermission(id, 'edit');
   const canCreate = hasPermission(id, 'create');
@@ -172,6 +187,36 @@ export default function TrackDetailPage() {
   useEffect(() => {
     if (activeTab === 'updates') loadDailyUpdates();
   }, [activeTab, loadDailyUpdates]);
+
+  // Load track tasks
+  const loadTrackTasks = useCallback(async () => {
+    setTrackTasksLoading(true);
+    try {
+      const params: any = {};
+      if (taskStatusFilter) params.status = taskStatusFilter;
+      if (taskSearch) params.search = taskSearch;
+      const { data } = await tasksApi.byTrack(id, params);
+      setTrackTasks(data.data || data || []);
+      setTrackTasksTotal(Array.isArray(data) ? data.length : data.total || 0);
+    } catch {
+      setTrackTasks([]);
+    }
+    setTrackTasksLoading(false);
+  }, [id, taskStatusFilter, taskSearch]);
+
+  useEffect(() => {
+    if (activeTab === 'tasks') loadTrackTasks();
+  }, [activeTab, loadTrackTasks]);
+
+  // Load users + tracks for task modal
+  useEffect(() => {
+    if (activeTab === 'tasks' && allUsers.length === 0) {
+      Promise.all([usersApi.list(), tracksApi.list()]).then(([uRes, tRes]) => {
+        setAllUsers(uRes.data?.data || uRes.data || []);
+        setAllTracks(tRes.data?.data || tRes.data || []);
+      }).catch(() => {});
+    }
+  }, [activeTab, allUsers.length]);
 
   const handleSubmitUpdate = async () => {
     if (!updateForm.titleAr.trim() || !updateForm.content.trim()) {
@@ -361,6 +406,7 @@ export default function TrackDetailPage() {
       <div className="flex gap-2">
         {[
           { key: 'records' as const, label: `السجلات (${total})` },
+          { key: 'tasks' as const, label: 'المهام' },
           { key: 'updates' as const, label: 'التحديثات اليومية' },
           { key: 'scope' as const, label: 'نطاق العمل' },
           { key: 'stats' as const, label: 'الإحصائيات' },
@@ -465,6 +511,88 @@ export default function TrackDetailPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Tasks Tab */}
+      {activeTab === 'tasks' && (
+        <div className="space-y-4">
+          {/* Header + Add button */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-400">
+              {trackTasksTotal > 0 ? `${trackTasksTotal} مهمة` : 'لا توجد مهام'}
+            </p>
+            {isAdmin && (
+              <button
+                onClick={() => setTaskModalOpen(true)}
+                className="rounded-xl bg-brand-500/20 px-4 py-2.5 text-sm font-medium text-brand-300 hover:bg-brand-500/30 transition-colors flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                إضافة مهمة
+              </button>
+            )}
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="text"
+                placeholder="بحث في المهام..."
+                value={taskSearch}
+                onChange={(e) => setTaskSearch(e.target.value)}
+                className="input-field pr-10"
+              />
+            </div>
+            <select
+              value={taskStatusFilter}
+              onChange={(e) => setTaskStatusFilter(e.target.value)}
+              className="input-field w-auto"
+            >
+              <option value="">كل الحالات</option>
+              {Object.entries(TASK_STATUS_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Task Cards */}
+          {trackTasksLoading ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : trackTasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-400">
+              <ClipboardList className="h-12 w-12" />
+              <p className="text-sm">لا توجد مهام لهذا المسار</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {trackTasks.map((task) => (
+                <TaskCard key={task.id} task={task} onClick={setSelectedTask} />
+              ))}
+            </div>
+          )}
+
+          {/* Task Modal */}
+          <TaskModal
+            isOpen={taskModalOpen}
+            onClose={() => setTaskModalOpen(false)}
+            tracks={allTracks.length > 0 ? allTracks : track ? [{ id: track.id, nameAr: track.nameAr, color: track.color }] : []}
+            users={allUsers}
+            onSuccess={loadTrackTasks}
+            defaultTrackId={id}
+          />
+
+          {/* Task Detail Panel */}
+          {selectedTask && (
+            <TaskDetailPanel
+              task={selectedTask}
+              onClose={() => setSelectedTask(null)}
+              onUpdate={loadTrackTasks}
+            />
+          )}
         </div>
       )}
 
