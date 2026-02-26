@@ -335,6 +335,14 @@ export const tasksApi = {
   getTaskUpdates: (id: string, params?: any) => api.get(`/tasks/${id}/updates`, { params }),
   createTaskUpdate: (id: string, data: any) => api.post(`/tasks/${id}/updates`, data),
   deleteTaskUpdate: (id: string, updateId: string) => api.delete(`/tasks/${id}/updates/${updateId}`),
+  // Task Files
+  getTaskFiles: (id: string) => api.get(`/tasks/${id}/files`),
+  uploadTaskFile: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/tasks/${id}/files`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  deleteTaskFile: (id: string, fileId: string) => api.delete(`/tasks/${id}/files/${fileId}`),
 };
 
 // ─── AI ───

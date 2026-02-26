@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { X, Search, Check } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { X, Search, Check, Plus, Trash2, Upload, FileText, Loader2, CheckSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { tasksApi } from '@/lib/api';
 import { PRIORITY_LABELS, cn } from '@/lib/utils';
@@ -29,6 +29,21 @@ interface Props {
   defaultTrackId?: string;
 }
 
+interface ChecklistDraft {
+  id: string;
+  title: string;
+  isNew: boolean;
+}
+
+interface FileDraft {
+  id: string;
+  file?: File;
+  fileName: string;
+  fileSize: number;
+  isNew: boolean;
+  isExisting?: boolean;
+}
+
 const EMPTY_FORM = {
   titleAr: '',
   title: '',
@@ -44,6 +59,14 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
   const [submitting, setSubmitting] = useState(false);
   const [userSearch, setUserSearch] = useState('');
 
+  // Checklist
+  const [checklistItems, setChecklistItems] = useState<ChecklistDraft[]>([]);
+  const [newChecklistTitle, setNewChecklistTitle] = useState('');
+
+  // Files
+  const [files, setFiles] = useState<FileDraft[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const isEdit = !!task;
 
   useEffect(() => {
@@ -58,12 +81,37 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
           dueDate: task.dueDate ? task.dueDate.substring(0, 10) : '',
           assigneeIds: task.assignments?.map((a) => a.userId || a.user?.id).filter(Boolean) as string[] || [],
         });
+        // Load existing checklist
+        setChecklistItems(
+          (task.checklist || []).map((c: any) => ({ id: c.id, title: c.titleAr || c.title, isNew: false }))
+        );
+        // Load existing files
+        setFiles(
+          (task.files || []).map((f: any) => ({ id: f.id, fileName: f.fileName, fileSize: f.fileSize, isNew: false, isExisting: true }))
+        );
       } else {
         setForm({ ...EMPTY_FORM, trackId: defaultTrackId || '' });
+        setChecklistItems([]);
+        setFiles([]);
       }
       setUserSearch('');
+      setNewChecklistTitle('');
     }
   }, [isOpen, task]);
+
+  // Load full task detail for edit mode
+  useEffect(() => {
+    if (isOpen && task?.id) {
+      tasksApi.get(task.id).then(({ data }) => {
+        setChecklistItems(
+          (data.checklist || []).map((c: any) => ({ id: c.id, title: c.titleAr || c.title, isNew: false }))
+        );
+        setFiles(
+          (data.files || []).map((f: any) => ({ id: f.id, fileName: f.fileName, fileSize: f.fileSize, isNew: false, isExisting: true }))
+        );
+      }).catch(() => {});
+    }
+  }, [isOpen, task?.id]);
 
   const filteredUsers = useMemo(() => {
     if (!userSearch) return users;
@@ -88,6 +136,42 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
     }));
   };
 
+  // Checklist handlers
+  const addChecklistItem = () => {
+    if (!newChecklistTitle.trim()) return;
+    setChecklistItems((prev) => [...prev, { id: `new-${Date.now()}`, title: newChecklistTitle.trim(), isNew: true }]);
+    setNewChecklistTitle('');
+  };
+
+  const removeChecklistItem = (id: string) => {
+    setChecklistItems((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  // File handlers
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files;
+    if (!selected) return;
+    const newFiles: FileDraft[] = Array.from(selected).map((f) => ({
+      id: `new-${Date.now()}-${f.name}`,
+      file: f,
+      fileName: f.name,
+      fileSize: f.size,
+      isNew: true,
+    }));
+    setFiles((prev) => [...prev, ...newFiles]);
+    e.target.value = '';
+  };
+
+  const removeFile = (id: string) => {
+    setFiles((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.titleAr.trim()) {
@@ -108,12 +192,47 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
         assigneeIds: form.assigneeIds.length > 0 ? form.assigneeIds : undefined,
       };
 
+      let taskId: string;
+
       if (isEdit && task) {
         await tasksApi.update(task.id, payload);
+        taskId = task.id;
+
+        // Delete removed checklist items
+        const existingIds = checklistItems.filter((c) => !c.isNew).map((c) => c.id);
+        const originalIds = (task.checklist || []).map((c: any) => c.id);
+        for (const id of originalIds) {
+          if (!existingIds.includes(id)) {
+            await tasksApi.deleteChecklistItem(taskId, id).catch(() => {});
+          }
+        }
+
+        // Delete removed files
+        const existingFileIds = files.filter((f) => f.isExisting).map((f) => f.id);
+        const originalFileIds = (task.files || []).map((f: any) => f.id);
+        for (const id of originalFileIds) {
+          if (!existingFileIds.includes(id)) {
+            await tasksApi.deleteTaskFile(taskId, id).catch(() => {});
+          }
+        }
+
         toast.success('تم تحديث المهمة');
       } else {
-        await tasksApi.create(payload);
+        const res = await tasksApi.create(payload);
+        taskId = res.data.id;
         toast.success('تم إنشاء المهمة');
+      }
+
+      // Create new checklist items
+      const newChecklist = checklistItems.filter((c) => c.isNew);
+      for (const item of newChecklist) {
+        await tasksApi.createChecklistItem(taskId, { title: item.title, titleAr: item.title }).catch(() => {});
+      }
+
+      // Upload new files
+      const newFiles = files.filter((f) => f.isNew && f.file);
+      for (const f of newFiles) {
+        await tasksApi.uploadTaskFile(taskId, f.file!).catch(() => {});
       }
 
       onSuccess();
@@ -226,7 +345,6 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-300">المسؤولون</label>
 
-            {/* Selected users chips */}
             {selectedUsers.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-2">
                 {selectedUsers.map((u) => (
@@ -247,7 +365,6 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
               </div>
             )}
 
-            {/* Search + user list */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="relative mb-2">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
@@ -259,7 +376,7 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
                   className="input-field pr-9 text-sm"
                 />
               </div>
-              <div className="max-h-40 overflow-y-auto space-y-1">
+              <div className="max-h-32 overflow-y-auto space-y-1">
                 {filteredUsers.length === 0 ? (
                   <p className="text-xs text-gray-500 text-center py-2">لا يوجد موظفون</p>
                 ) : (
@@ -287,6 +404,94 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
               </div>
             </div>
           </div>
+
+          {/* قائمة المهام (Checklist) */}
+          <div>
+            <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-gray-300">
+              <CheckSquare className="h-4 w-4" />
+              قائمة المهام
+            </label>
+
+            {checklistItems.length > 0 && (
+              <div className="space-y-1.5 mb-2">
+                {checklistItems.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
+                    <CheckSquare className="h-3.5 w-3.5 text-brand-400 shrink-0" />
+                    <span className="flex-1 text-sm text-gray-300">{item.title}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeChecklistItem(item.id)}
+                      className="p-0.5 rounded text-gray-500 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newChecklistTitle}
+                onChange={(e) => setNewChecklistTitle(e.target.value)}
+                placeholder="أضف بند جديد..."
+                className="input-field flex-1 text-sm"
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addChecklistItem(); } }}
+              />
+              <button
+                type="button"
+                onClick={addChecklistItem}
+                disabled={!newChecklistTitle.trim()}
+                className="rounded-xl bg-brand-500/20 px-3 py-2 text-brand-300 hover:bg-brand-500/30 disabled:opacity-50 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* رفع الملفات */}
+          <div>
+            <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-gray-300">
+              <Upload className="h-4 w-4" />
+              المرفقات
+            </label>
+
+            {files.length > 0 && (
+              <div className="space-y-1.5 mb-2">
+                {files.map((f) => (
+                  <div key={f.id} className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
+                    <FileText className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                    <span className="flex-1 text-sm text-gray-300 truncate">{f.fileName}</span>
+                    <span className="text-[10px] text-gray-500 shrink-0">{formatFileSize(f.fileSize)}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(f.id)}
+                      className="p-0.5 rounded text-gray-500 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 rounded-xl border border-dashed border-white/20 px-4 py-3 text-sm text-gray-400 hover:border-brand-500/50 hover:text-brand-300 transition-colors w-full justify-center"
+            >
+              <Upload className="h-4 w-4" />
+              اختر ملفات للرفع
+            </button>
+          </div>
         </form>
 
         <div className="flex justify-end gap-3 border-t border-white/10 px-6 py-4">
@@ -302,7 +507,7 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
             disabled={submitting}
             className="rounded-xl bg-brand-500/20 px-5 py-2.5 text-sm font-medium text-brand-300 transition-colors hover:bg-brand-500/30 disabled:opacity-50"
           >
-            {submitting ? 'جاري الحفظ...' : isEdit ? 'تحديث' : 'إنشاء'}
+            {submitting ? <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />جاري الحفظ...</span> : isEdit ? 'تحديث' : 'إنشاء'}
           </button>
         </div>
       </div>

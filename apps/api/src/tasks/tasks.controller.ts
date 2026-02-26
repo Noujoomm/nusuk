@@ -1,5 +1,12 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req, UseInterceptors, UploadedFile as UpFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { mkdirSync } from 'fs';
+import { extname, join } from 'path';
 import { Request } from 'express';
+
+const TASK_UPLOADS_DIR = join(process.cwd(), 'uploads', 'tasks');
+try { mkdirSync(TASK_UPLOADS_DIR, { recursive: true }); } catch {}
 import { TasksService } from './tasks.service';
 import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -296,5 +303,45 @@ export class TasksController {
     @CurrentUser() user: any,
   ) {
     return this.tasks.deleteTaskUpdate(id, updateId, user.id);
+  }
+
+  // ─── Task Files Endpoints ───
+
+  @Get(':id/files')
+  getTaskFiles(@Param('id') id: string) {
+    return this.tasks.getTaskFiles(id);
+  }
+
+  @Post(':id/files')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: TASK_UPLOADS_DIR,
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, uniqueSuffix + extname(file.originalname));
+      },
+    }),
+    limits: { fileSize: 50 * 1024 * 1024 },
+  }))
+  uploadTaskFile(
+    @Param('id') id: string,
+    @UpFile() file: Express.Multer.File,
+    @CurrentUser() user: any,
+  ) {
+    return this.tasks.uploadTaskFile(id, {
+      fileName: file.originalname,
+      fileSize: file.size,
+      mimeType: file.mimetype,
+      filePath: file.path,
+    }, user.id);
+  }
+
+  @Delete(':id/files/:fileId')
+  deleteTaskFile(
+    @Param('id') id: string,
+    @Param('fileId') fileId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.tasks.deleteTaskFile(id, fileId, user.id);
   }
 }

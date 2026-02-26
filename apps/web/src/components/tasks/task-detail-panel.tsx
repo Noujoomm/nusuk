@@ -47,15 +47,17 @@ const ASSIGNEE_TYPE_ICONS: Record<string, typeof Users> = {
   TRACK: Users, USER: User, HR: Building2, GLOBAL: Globe,
 };
 
-export default function TaskDetailPanel({ task, onClose, onUpdate }: Props) {
+export default function TaskDetailPanel({ task: initialTask, onClose, onUpdate }: Props) {
   const { user } = useAuth();
+  const [task, setTask] = useState(initialTask);
+  const [detailLoading, setDetailLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>('details');
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [progress, setProgress] = useState(task.progress ?? 0);
+  const [progress, setProgress] = useState(initialTask.progress ?? 0);
   const [savingProgress, setSavingProgress] = useState(false);
 
   // Checklist state
-  const [checklistItems, setChecklistItems] = useState(task.checklist || []);
+  const [checklistItems, setChecklistItems] = useState(initialTask.checklist || []);
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const [addingChecklist, setAddingChecklist] = useState(false);
 
@@ -66,9 +68,27 @@ export default function TaskDetailPanel({ task, onClose, onUpdate }: Props) {
   const [addingNote, setAddingNote] = useState(false);
 
   // Task Updates state
-  const [taskUpdates, setTaskUpdates] = useState(task.taskUpdates || []);
+  const [taskUpdates, setTaskUpdates] = useState(initialTask.taskUpdates || []);
   const [newUpdate, setNewUpdate] = useState('');
   const [addingUpdate, setAddingUpdate] = useState(false);
+
+  // Load full task details on mount
+  useEffect(() => {
+    const loadDetail = async () => {
+      try {
+        const { data } = await tasksApi.get(initialTask.id);
+        setTask(data);
+        setChecklistItems(data.checklist || []);
+        setTaskUpdates(data.taskUpdates || []);
+        setProgress(data.progress ?? 0);
+      } catch {
+        // fallback to initial data
+      } finally {
+        setDetailLoading(false);
+      }
+    };
+    loadDetail();
+  }, [initialTask.id]);
 
   const statusLabel = TASK_STATUS_LABELS[task.status] || task.status;
   const statusColor = TASK_STATUS_COLORS[task.status] || 'bg-gray-500/20 text-gray-300';

@@ -883,6 +883,40 @@ export class TasksService {
     };
   }
 
+  // ─── TASK FILES ───
+
+  async getTaskFiles(taskId: string) {
+    await this.findById(taskId);
+    return this.prisma.taskFile.findMany({
+      where: { taskId },
+      include: { uploadedBy: { select: { id: true, name: true, nameAr: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async uploadTaskFile(taskId: string, fileData: { fileName: string; fileSize: number; mimeType: string; filePath: string }, userId: string) {
+    await this.findById(taskId);
+    const file = await this.prisma.taskFile.create({
+      data: {
+        taskId,
+        fileName: fileData.fileName,
+        fileSize: fileData.fileSize,
+        mimeType: fileData.mimeType,
+        filePath: fileData.filePath,
+        uploadedById: userId,
+      },
+      include: { uploadedBy: { select: { id: true, name: true, nameAr: true } } },
+    });
+    return file;
+  }
+
+  async deleteTaskFile(taskId: string, fileId: string, userId: string) {
+    const file = await this.prisma.taskFile.findFirst({ where: { id: fileId, taskId } });
+    if (!file) throw new NotFoundException('الملف غير موجود');
+    await this.prisma.taskFile.delete({ where: { id: fileId } });
+    return { message: 'تم حذف الملف' };
+  }
+
   private async writeTaskAudit(taskId: string, action: string, before: any, after: any, actorUserId: string) {
     try {
       await this.prisma.taskAuditLog.create({

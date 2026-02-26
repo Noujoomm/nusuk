@@ -34,7 +34,7 @@ export class CommentsController {
       entityType: dto.entityType,
       entityId: dto.entityId,
       parentId: dto.parentId,
-      authorId: user.userId,
+      authorId: user.id,
       body: dto.body,
     });
   }
@@ -45,11 +45,11 @@ export class CommentsController {
     @Body() dto: UpdateCommentDto,
     @CurrentUser() user: any,
   ) {
-    return this.comments.update(id, user.userId, dto.body);
+    return this.comments.update(id, user.id, dto.body);
   }
 
   @Delete(':id')
   delete(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.comments.delete(id, user.userId, user.role);
+    return this.comments.delete(id, user.id, user.role);
   }
 }
