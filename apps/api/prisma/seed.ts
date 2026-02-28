@@ -118,33 +118,6 @@ async function main() {
     console.log(`  Permission: lead -> consulting (view, edit, create, delete)`);
   }
 
-  // 6. Create sample records
-  const statuses = ['draft', 'active', 'in_progress', 'completed'] as const;
-  const priorities = ['low', 'medium', 'high', 'critical'] as const;
-
-  for (const [name, track] of Object.entries(trackObjects)) {
-    for (let i = 1; i <= 5; i++) {
-      await prisma.record.create({
-        data: {
-          trackId: track.id,
-          title: `${name} task ${i}`,
-          titleAr: `مهمة ${name} رقم ${i}`,
-          status: statuses[i % statuses.length],
-          priority: priorities[i % priorities.length],
-          owner: i % 2 === 0 ? 'فريق المسار' : 'قائد المسار',
-          progress: Math.round(Math.random() * 100),
-          createdById: i % 3 === 0 ? lead.id : pm.id,
-          extraFields: {
-            department: `قسم ${i}`,
-            responsible: `مسؤول ${i}`,
-            completionPct: Math.round(Math.random() * 100),
-          },
-        },
-      });
-    }
-    console.log(`  Created 5 sample records for ${name}`);
-  }
-
   console.log('\nSeed completed successfully!');
 }
 

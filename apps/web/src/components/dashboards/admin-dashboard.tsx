@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/stores/auth';
-import { tracksApi, recordsApi, tasksApi, employeesApi, kpisApi, insightsApi } from '@/lib/api';
+import { tracksApi, tasksApi, employeesApi, kpisApi, insightsApi } from '@/lib/api';
 import { cn, formatDate, formatNumber, TASK_STATUS_LABELS, TASK_STATUS_COLORS } from '@/lib/utils';
 import { getSocket } from '@/lib/socket';
 import {
@@ -28,7 +28,7 @@ interface Track {
   name: string;
   nameAr: string;
   color: string;
-  _count: { records: number; employees: number; deliverables: number };
+  _count: { tasks: number; employees: number; deliverables: number };
 }
 
 interface KPIStat {
@@ -43,7 +43,7 @@ interface KPIStat {
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalTrackTasks, setTotalTrackTasks] = useState(0);
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [taskStats, setTaskStats] = useState<any>(null);
   const [recentTasks, setRecentTasks] = useState<any[]>([]);
@@ -65,8 +65,8 @@ export default function AdminDashboard() {
         const trackData: Track[] = tracksRes.data;
         setTracks(trackData);
 
-        const records = trackData.reduce((sum, t) => sum + (t._count?.records || 0), 0);
-        setTotalRecords(records);
+        const trackTasks = trackData.reduce((sum, t) => sum + (t._count?.tasks || 0), 0);
+        setTotalTrackTasks(trackTasks);
 
         const emps = employeesRes.data.data || employeesRes.data || [];
         setTotalEmployees(Array.isArray(emps) ? emps.length : 0);
@@ -118,7 +118,7 @@ export default function AdminDashboard() {
 
   const topStats = [
     { label: 'المسارات', value: tracks.length, icon: GitBranch, color: 'text-emerald-400', bg: 'bg-emerald-500/20', href: '/tracks' },
-    { label: 'إجمالي السجلات', value: totalRecords, icon: FileText, color: 'text-blue-400', bg: 'bg-blue-500/20' },
+    { label: 'إجمالي المهام', value: totalTasks, icon: FileText, color: 'text-blue-400', bg: 'bg-blue-500/20' },
     { label: 'المهام', value: totalTasks, icon: CheckSquare, color: 'text-amber-400', bg: 'bg-amber-500/20', href: '/tasks' },
     { label: 'الموظفون', value: totalEmployees, icon: Users, color: 'text-violet-400', bg: 'bg-violet-500/20', href: '/employees' },
   ];
@@ -369,7 +369,7 @@ export default function AdminDashboard() {
                 <span className="text-sm font-medium truncate">{track.nameAr}</span>
               </div>
               <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>{formatNumber(track._count?.records || 0)} سجل</span>
+                <span>{formatNumber(track._count?.tasks || 0)} مهمة</span>
                 <TrendingUp className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-brand-400" />
               </div>
             </Link>

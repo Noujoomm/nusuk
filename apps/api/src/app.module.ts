@@ -7,14 +7,12 @@ import { PrismaModule } from './common/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { TracksModule } from './tracks/tracks.module';
-import { RecordsModule } from './records/records.module';
 import { AuditModule } from './audit/audit.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { ReportsModule } from './reports/reports.module';
 import { FilesModule } from './files/files.module';
 import { KPIModule } from './kpi-management/kpi.module';
 import { InsightsModule } from './insights/insights.module';
-import { SubtasksModule } from './subtasks/subtasks.module';
 import { CommentsModule } from './comments/comments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SearchModule } from './search/search.module';
@@ -40,14 +38,12 @@ import { HealthController } from './health.controller';
     AuthModule,
     UsersModule,
     TracksModule,
-    RecordsModule,
     AuditModule,
     WebsocketModule,
     ReportsModule,
     FilesModule,
     KPIModule,
     InsightsModule,
-    SubtasksModule,
     CommentsModule,
     NotificationsModule,
     SearchModule,

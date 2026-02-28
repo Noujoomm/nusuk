@@ -23,7 +23,6 @@ export class SystemExportService {
       dailyUpdates,
       uploadedFiles,
       taskFiles,
-      records,
       scopeBlocks,
       kpiEntries,
       penalties,
@@ -47,7 +46,6 @@ export class SystemExportService {
       this.exportDailyUpdates(),
       this.exportUploadedFiles(),
       this.exportTaskFiles(),
-      this.exportRecords(),
       this.exportScopeBlocks(),
       this.exportKPIEntries(),
       this.exportPenalties(),
@@ -81,7 +79,6 @@ export class SystemExportService {
         dailyUpdates,
         uploadedFiles,
         taskFiles,
-        records,
         scopeBlocks,
         kpiEntries,
         penalties,
@@ -106,7 +103,6 @@ export class SystemExportService {
         dailyUpdates: dailyUpdates.length,
         uploadedFiles: uploadedFiles.length,
         taskFiles: taskFiles.length,
-        records: records.length,
         scopeBlocks: scopeBlocks.length,
         kpiEntries: kpiEntries.length,
         penalties: penalties.length,
@@ -137,7 +133,6 @@ export class SystemExportService {
       dailyUpdatesCount,
       uploadedFilesCount,
       taskFilesCount,
-      recordsCount,
       scopeBlocksCount,
       kpiEntriesCount,
       penaltiesCount,
@@ -157,8 +152,6 @@ export class SystemExportService {
       taskChecklistCount,
       adminNotesCount,
       taskUpdatesCount,
-      subtasksCount,
-      checklistItemsCount,
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.track.count(),
@@ -167,7 +160,6 @@ export class SystemExportService {
       this.prisma.dailyUpdate.count(),
       this.prisma.uploadedFile.count(),
       this.prisma.taskFile.count(),
-      this.prisma.record.count(),
       this.prisma.scopeBlock.count(),
       this.prisma.kPIEntry.count(),
       this.prisma.penalty.count(),
@@ -187,8 +179,6 @@ export class SystemExportService {
       this.prisma.taskChecklist.count(),
       this.prisma.adminNote.count(),
       this.prisma.taskUpdate.count(),
-      this.prisma.subtask.count(),
-      this.prisma.checklistItem.count(),
     ]);
 
     return {
@@ -205,9 +195,6 @@ export class SystemExportService {
         { name: 'DailyUpdate', nameAr: 'التحديثات اليومية', count: dailyUpdatesCount, icon: 'daily' },
         { name: 'UploadedFile', nameAr: 'الملفات المرفوعة', count: uploadedFilesCount, icon: 'files' },
         { name: 'TaskFile', nameAr: 'ملفات المهام', count: taskFilesCount, icon: 'taskfiles' },
-        { name: 'Record', nameAr: 'السجلات', count: recordsCount, icon: 'records' },
-        { name: 'Subtask', nameAr: 'المهام الفرعية', count: subtasksCount, icon: 'subtasks' },
-        { name: 'ChecklistItem', nameAr: 'بنود القوائم', count: checklistItemsCount, icon: 'checklist' },
         { name: 'ScopeBlock', nameAr: 'نطاقات العمل', count: scopeBlocksCount, icon: 'scope' },
         { name: 'KPIEntry', nameAr: 'مؤشرات الأداء', count: kpiEntriesCount, icon: 'kpi' },
         { name: 'Penalty', nameAr: 'المخالفات', count: penaltiesCount, icon: 'penalties' },
@@ -226,12 +213,12 @@ export class SystemExportService {
       ],
       totalRecords:
         usersCount + tracksCount + employeesCount + tasksCount + dailyUpdatesCount +
-        uploadedFilesCount + taskFilesCount + recordsCount + scopeBlocksCount +
+        uploadedFilesCount + taskFilesCount + scopeBlocksCount +
         kpiEntriesCount + penaltiesCount + deliverablesCount + scopesCount +
         trackKpisCount + reportsCount + aiReportsCount + auditLogsCount +
         commentsCount + notificationsCount + embeddingsCount + importHistoryCount +
         progressItemsCount + achievementsCount + taskAssignmentsCount +
-        taskChecklistCount + adminNotesCount + taskUpdatesCount + subtasksCount + checklistItemsCount,
+        taskChecklistCount + adminNotesCount + taskUpdatesCount,
     };
   }
 
@@ -355,13 +342,6 @@ export class SystemExportService {
         penalties: true,
         scopes: true,
         scopeBlocks: { orderBy: { orderIndex: 'asc' } },
-        records: {
-          include: {
-            createdBy: { select: { id: true, name: true, nameAr: true } },
-            subtasks: { include: { assignee: { select: { id: true, nameAr: true } } } },
-            checklistItems: true,
-          },
-        },
         files: {
           include: { uploadedBy: { select: { id: true, name: true, nameAr: true } } },
         },
@@ -450,7 +430,7 @@ export class SystemExportService {
     return this.prisma.track.findMany({
       include: {
         permissions: { include: { user: { select: { id: true, name: true, nameAr: true, role: true } } } },
-        _count: { select: { records: true, employees: true, tasks: true, files: true, dailyUpdates: true, kpiEntries: true } },
+        _count: { select: { employees: true, tasks: true, files: true, dailyUpdates: true, kpiEntries: true } },
       },
       orderBy: { sortOrder: 'asc' },
     });
@@ -520,17 +500,6 @@ export class SystemExportService {
       include: {
         task: { select: { id: true, titleAr: true } },
         uploadedBy: { select: { id: true, nameAr: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  private async exportRecords() {
-    return this.prisma.record.findMany({
-      include: {
-        track: { select: { id: true, nameAr: true } },
-        createdBy: { select: { id: true, nameAr: true } },
-        _count: { select: { subtasks: true, checklistItems: true } },
       },
       orderBy: { createdAt: 'desc' },
     });

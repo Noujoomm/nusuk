@@ -2,22 +2,20 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { tracksApi, recordsApi, employeesApi, deliverablesApi, scopesApi, penaltiesApi, trackKpisApi, dailyUpdatesApi, filesApi, tasksApi, usersApi, commentsApi } from '@/lib/api';
+import { tracksApi, employeesApi, deliverablesApi, scopesApi, penaltiesApi, trackKpisApi, dailyUpdatesApi, filesApi, tasksApi, usersApi, commentsApi } from '@/lib/api';
 import { useAuth } from '@/stores/auth';
 import { getSocket, joinTrack, leaveTrack } from '@/lib/socket';
-import { STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS, PRIORITY_COLORS, CONTRACT_TYPE_LABELS, formatDate, formatNumber, TASK_STATUS_LABELS, TASK_STATUS_COLORS, cn } from '@/lib/utils';
+import { CONTRACT_TYPE_LABELS, formatDate, formatNumber, TASK_STATUS_LABELS, TASK_STATUS_COLORS, cn } from '@/lib/utils';
 import {
-  Plus, Search, Edit3, Trash2, ChevronLeft, ChevronRight, X,
+  Plus, Search, Trash2, X, Edit3,
   Users, Package, Target, AlertTriangle, ClipboardList, ChevronDown,
   BarChart3, FileText, TrendingUp, Upload, Paperclip, Clock, CheckCircle2, AlertCircle, XCircle, Send,
   Download, MessageCircle,
 } from 'lucide-react';
-import RecordModal from '@/components/record-modal';
-import RecordDetailPanel from '@/components/record-detail-panel';
 import ScopeBlocksPanel from '@/components/scope-blocks-panel';
 import InlineEdit from '@/components/inline-edit';
 import toast from 'react-hot-toast';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis } from 'recharts';
+import { ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, Cell } from 'recharts';
 import TaskCard from '@/components/tasks/task-card';
 import TaskModal from '@/components/tasks/task-modal';
 import TaskDetailPanel from '@/components/tasks/task-detail-panel';
@@ -38,57 +36,12 @@ interface Track {
   _count?: any;
 }
 
-interface RecordItem {
-  id: string;
-  title: string;
-  titleAr: string;
-  status: string;
-  priority: string;
-  owner: string;
-  progress: number;
-  version: number;
-  dueDate: string;
-  extraFields: any;
-  createdBy: { id: string; name: string; nameAr: string };
-  createdAt: string;
-}
-
-interface TrackStats {
-  total: number;
-  byStatus: Record<string, number>;
-  byPriority: Record<string, number>;
-}
-
-const STATUS_CHART_COLORS: Record<string, string> = {
-  draft: '#6b7280',
-  active: '#3b82f6',
-  in_progress: '#f59e0b',
-  completed: '#10b981',
-  cancelled: '#ef4444',
-};
-
-const PRIORITY_CHART_COLORS: Record<string, string> = {
-  low: '#6b7280',
-  medium: '#3b82f6',
-  high: '#f59e0b',
-  critical: '#ef4444',
-};
-
 export default function TrackDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user, hasPermission } = useAuth();
   const [track, setTrack] = useState<Track | null>(null);
-  const [records, setRecords] = useState<RecordItem[]>([]);
-  const [stats, setStats] = useState<TrackStats | null>(null);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editRecord, setEditRecord] = useState<RecordItem | null>(null);
-  const [selectedRecord, setSelectedRecord] = useState<RecordItem | null>(null);
-  const [activeTab, setActiveTab] = useState<'records' | 'tasks' | 'details' | 'stats' | 'scope' | 'updates' | 'comments' | 'attachments'>('records');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'details' | 'scope' | 'updates' | 'comments' | 'attachments'>('tasks');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   // Daily updates state
@@ -129,8 +82,6 @@ export default function TrackDetailPage() {
   const canCreate = hasPermission(id, 'create');
   const canDelete = hasPermission(id, 'delete');
   const isAdmin = user?.role === 'admin' || user?.role === 'pm';
-  const pageSize = 20;
-
   const loadTrack = useCallback(async () => {
     try {
       const res = await tracksApi.get(id);
@@ -140,53 +91,24 @@ export default function TrackDetailPage() {
     }
   }, [id]);
 
-  const loadRecords = useCallback(async () => {
-    try {
-      const { data } = await recordsApi.listByTrack(id, {
-        page,
-        pageSize,
-        search: search || undefined,
-        status: statusFilter || undefined,
-      });
-      setRecords(data.data);
-      setTotal(data.total);
-    } catch {}
-  }, [id, page, search, statusFilter]);
-
   useEffect(() => {
     const init = async () => {
       try {
-        const [trackRes, statsRes] = await Promise.all([
-          tracksApi.get(id),
-          recordsApi.stats(id).catch(() => ({ data: null })),
-        ]);
+        const trackRes = await tracksApi.get(id);
         setTrack(trackRes.data);
-        setStats(statsRes.data);
       } catch {
         toast.error('فشل تحميل المسار');
       }
       setLoading(false);
     };
     init();
-    loadRecords();
 
     joinTrack(id);
-    const socket = getSocket();
-    socket.on('track.record.created', () => loadRecords());
-    socket.on('track.record.updated', () => loadRecords());
-    socket.on('track.record.deleted', () => loadRecords());
 
     return () => {
       leaveTrack(id);
-      socket.off('track.record.created');
-      socket.off('track.record.updated');
-      socket.off('track.record.deleted');
     };
-  }, [id, loadRecords]);
-
-  useEffect(() => {
-    loadRecords();
-  }, [loadRecords]);
+  }, [id]);
 
   const loadDailyUpdates = useCallback(async () => {
     setUpdatesLoading(true);
@@ -366,17 +288,6 @@ export default function TrackDetailPage() {
     }
   };
 
-  const handleDeleteRecord = async (recordId: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا السجل؟')) return;
-    try {
-      await recordsApi.delete(recordId);
-      toast.success('تم حذف السجل');
-      loadRecords();
-    } catch {
-      toast.error('فشل حذف السجل');
-    }
-  };
-
   // Generic entity delete
   const handleEntityDelete = async () => {
     if (!deleteConfirm) return;
@@ -422,22 +333,6 @@ export default function TrackDetailPage() {
     }
   };
 
-  const totalPages = Math.ceil(total / pageSize);
-
-  // Stats calculations
-  const completedCount = stats?.byStatus?.completed || 0;
-  const inProgressCount = stats?.byStatus?.in_progress || 0;
-  const totalStats = stats?.total || 0;
-  const completionRate = totalStats > 0 ? Math.round((completedCount / totalStats) * 100) : 0;
-
-  const statusChartData = stats?.byStatus
-    ? Object.entries(stats.byStatus).filter(([, v]) => v > 0).map(([k, v]) => ({ name: STATUS_LABELS[k] || k, value: v, key: k }))
-    : [];
-
-  const priorityChartData = stats?.byPriority
-    ? Object.entries(stats.byPriority).filter(([, v]) => v > 0).map(([k, v]) => ({ name: PRIORITY_LABELS[k] || k, value: v, key: k }))
-    : [];
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -459,53 +354,19 @@ export default function TrackDetailPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold">{track?.nameAr}</h1>
-            <p className="text-gray-400 text-sm">{track?.name} · {total} سجل</p>
+            <p className="text-gray-400 text-sm">{track?.name}</p>
           </div>
         </div>
-        {canCreate && (
-          <button
-            onClick={() => { setEditRecord(null); setModalOpen(true); }}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            سجل جديد
-          </button>
-        )}
       </div>
-
-      {/* Quick Stats Bar */}
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {[
-            { label: 'إجمالي', value: totalStats, icon: FileText, color: 'text-blue-400', bg: 'bg-blue-500/20' },
-            { label: 'مكتمل', value: completedCount, icon: Target, color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
-            { label: 'قيد التنفيذ', value: inProgressCount, icon: TrendingUp, color: 'text-amber-400', bg: 'bg-amber-500/20' },
-            { label: 'الموظفين', value: track?._count?.employees || 0, icon: Users, color: 'text-violet-400', bg: 'bg-violet-500/20' },
-            { label: 'الإنجاز', value: `${completionRate}%`, icon: BarChart3, color: 'text-teal-400', bg: 'bg-teal-500/20' },
-          ].map((s) => (
-            <div key={s.label} className="glass p-3 flex items-center gap-2.5">
-              <div className={`p-2 rounded-lg ${s.bg}`}>
-                <s.icon className={`w-4 h-4 ${s.color}`} />
-              </div>
-              <div>
-                <p className="text-lg font-bold">{typeof s.value === 'number' ? formatNumber(s.value) : s.value}</p>
-                <p className="text-xs text-gray-500">{s.label}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Tabs */}
       <div className="flex gap-2">
         {[
-          { key: 'records' as const, label: `السجلات (${total})` },
           { key: 'tasks' as const, label: 'المهام' },
           { key: 'updates' as const, label: 'التحديثات اليومية' },
           { key: 'attachments' as const, label: 'المرفقات' },
           { key: 'comments' as const, label: 'التعليقات' },
           { key: 'scope' as const, label: 'نطاق العمل' },
-          { key: 'stats' as const, label: 'الإحصائيات' },
           { key: 'details' as const, label: 'تفاصيل المسار' },
         ].map((tab) => (
           <button
@@ -517,98 +378,6 @@ export default function TrackDetailPage() {
           </button>
         ))}
       </div>
-
-      {/* Stats Tab */}
-      {activeTab === 'stats' && stats && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Status Chart */}
-            <div className="glass p-5">
-              <h3 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-blue-400" />
-                توزيع الحالات
-              </h3>
-              {statusChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie data={statusChartData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value">
-                      {statusChartData.map((entry) => (
-                        <Cell key={entry.key} fill={STATUS_CHART_COLORS[entry.key] || '#6b7280'} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', direction: 'rtl' }} />
-                    <Legend formatter={(value) => <span className="text-xs text-gray-400">{value}</span>} iconSize={8} />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[250px] flex items-center justify-center text-gray-500 text-sm">لا توجد بيانات</div>
-              )}
-            </div>
-
-            {/* Priority Chart */}
-            <div className="glass p-5">
-              <h3 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400" />
-                توزيع الأولويات
-              </h3>
-              {priorityChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie data={priorityChartData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value">
-                      {priorityChartData.map((entry) => (
-                        <Cell key={entry.key} fill={PRIORITY_CHART_COLORS[entry.key] || '#6b7280'} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', direction: 'rtl' }} />
-                    <Legend formatter={(value) => <span className="text-xs text-gray-400">{value}</span>} iconSize={8} />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[250px] flex items-center justify-center text-gray-500 text-sm">لا توجد بيانات</div>
-              )}
-            </div>
-          </div>
-
-          {/* Completion Progress */}
-          <div className="glass p-5">
-            <h3 className="text-sm font-semibold text-gray-300 mb-4">تقدم الإنجاز</h3>
-            <div className="flex items-center gap-6">
-              <div className="relative w-28 h-28 flex-shrink-0">
-                <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                  <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
-                  <circle
-                    cx="50" cy="50" r="40" fill="none"
-                    stroke={track?.color || '#14b8a6'} strokeWidth="8"
-                    strokeLinecap="round"
-                    strokeDasharray={`${completionRate * 2.51} 251`}
-                    className="transition-all duration-1000"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-bold" style={{ color: track?.color }}>{completionRate}%</span>
-                </div>
-              </div>
-              <div className="flex-1 space-y-3">
-                {Object.entries(stats.byStatus || {}).map(([key, value]) => (
-                  <div key={key} className="flex items-center gap-3">
-                    <span className="text-xs text-gray-400 w-20">{STATUS_LABELS[key] || key}</span>
-                    <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${totalStats > 0 ? (value / totalStats) * 100 : 0}%`,
-                          backgroundColor: STATUS_CHART_COLORS[key] || '#6b7280',
-                        }}
-                      />
-                    </div>
-                    <span className="text-xs text-gray-300 w-8 text-left">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Tasks Tab */}
       {activeTab === 'tasks' && (
@@ -1400,163 +1169,6 @@ export default function TrackDetailPage() {
           </DetailSection>
         </div>
       )}
-
-      {/* Records Tab */}
-      {activeTab === 'records' && <>
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-          <input
-            type="text"
-            placeholder="بحث..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="input-field pr-10"
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className="input-field w-auto"
-        >
-          <option value="">كل الحالات</option>
-          {Object.entries(STATUS_LABELS).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Records Table */}
-      <div className="glass overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-white/10">
-                <th className="text-right p-4 text-sm font-medium text-gray-400">العنوان</th>
-                <th className="text-right p-4 text-sm font-medium text-gray-400">الحالة</th>
-                <th className="text-right p-4 text-sm font-medium text-gray-400">الأولوية</th>
-                <th className="text-right p-4 text-sm font-medium text-gray-400">المسؤول</th>
-                <th className="text-right p-4 text-sm font-medium text-gray-400">التقدم</th>
-                <th className="text-right p-4 text-sm font-medium text-gray-400">التاريخ</th>
-                {(canEdit || canDelete) && (
-                  <th className="text-right p-4 text-sm font-medium text-gray-400">إجراءات</th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((record) => (
-                <tr key={record.id} className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer" onClick={() => setSelectedRecord(record)}>
-                  <td className="p-4">
-                    <p className="font-medium">{record.titleAr || record.title}</p>
-                    <p className="text-xs text-gray-500">{record.createdBy?.nameAr}</p>
-                  </td>
-                  <td className="p-4">
-                    <span className={`badge ${STATUS_COLORS[record.status] || ''}`}>
-                      {STATUS_LABELS[record.status] || record.status}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <span className={`badge ${PRIORITY_COLORS[record.priority] || ''}`}>
-                      {PRIORITY_LABELS[record.priority] || record.priority}
-                    </span>
-                  </td>
-                  <td className="p-4 text-sm text-gray-300">{record.owner || '-'}</td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${record.progress}%`, backgroundColor: track?.color || '#6366f1' }}
-                        />
-                      </div>
-                      <span className="text-xs text-gray-400">{record.progress}%</span>
-                    </div>
-                  </td>
-                  <td className="p-4 text-sm text-gray-400">{formatDate(record.createdAt)}</td>
-                  {(canEdit || canDelete) && (
-                    <td className="p-4">
-                      <div className="flex items-center gap-1">
-                        {canEdit && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setEditRecord(record); setModalOpen(true); }}
-                            className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDeleteRecord(record.id); }}
-                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-              {records.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-gray-500">
-                    لا توجد سجلات
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between p-4 border-t border-white/10">
-            <span className="text-sm text-gray-400">
-              صفحة {page} من {totalPages}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page === 1}
-                className="p-1.5 rounded-lg hover:bg-white/10 disabled:opacity-30"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setPage(Math.min(totalPages, page + 1))}
-                disabled={page === totalPages}
-                className="p-1.5 rounded-lg hover:bg-white/10 disabled:opacity-30"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Record Modal */}
-      {modalOpen && (
-        <RecordModal
-          trackId={id}
-          record={editRecord}
-          fieldSchema={track?.fieldSchema}
-          onClose={() => { setModalOpen(false); setEditRecord(null); }}
-          onSave={() => { setModalOpen(false); setEditRecord(null); loadRecords(); }}
-        />
-      )}
-
-      {/* Record Detail Panel */}
-      {selectedRecord && (
-        <RecordDetailPanel
-          record={selectedRecord}
-          trackId={id}
-          canEdit={canEdit}
-          onClose={() => setSelectedRecord(null)}
-          onUpdate={() => { loadRecords(); }}
-        />
-      )}
-      </>}
 
       {/* Entity CRUD Modal */}
       {entityModal && (

@@ -15,18 +15,6 @@ export class AIAnalysisService {
     const track = await this.prisma.track.findUnique({
       where: { id: trackId },
       include: {
-        records: {
-          select: {
-            title: true,
-            titleAr: true,
-            status: true,
-            priority: true,
-            progress: true,
-            dueDate: true,
-          },
-          take: 100,
-          orderBy: { updatedAt: 'desc' },
-        },
         tasks: {
           select: {
             title: true,
@@ -87,8 +75,6 @@ export class AIAnalysisService {
 
     const trackData = {
       name: track.nameAr || track.name,
-      recordsCount: track.records.length,
-      recordsByStatus: this.groupByField(track.records, 'status'),
       tasksCount: track.tasks.length,
       tasksByStatus: this.groupByField(track.tasks, 'status'),
       overdueTasksCount: overdueTasks.length,

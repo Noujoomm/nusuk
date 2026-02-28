@@ -26,7 +26,7 @@ export class SearchService {
     role: string,
     params: { limit?: number; types?: string[] },
   ): Promise<SearchResponse> {
-    const { limit = 20, types = ['record', 'track', 'employee', 'report', 'file', 'user'] } = params;
+    const { limit = 20, types = ['track', 'employee', 'report', 'file', 'user'] } = params;
     const perType = Math.ceil(limit / types.length);
 
     // Determine accessible trackIds for non-admin/pm users
@@ -44,9 +44,6 @@ export class SearchService {
     // Build search promises for each requested type
     const searches: Promise<SearchResult[]>[] = [];
 
-    if (types.includes('record')) {
-      searches.push(this.searchRecords(query, allowedTrackIds, perType));
-    }
     if (types.includes('track')) {
       searches.push(this.searchTracks(query, allowedTrackIds, perType));
     }
@@ -67,44 +64,6 @@ export class SearchService {
     const results = searchResults.flat();
 
     return { results, total: results.length };
-  }
-
-  private async searchRecords(
-    query: string,
-    allowedTrackIds: string[] | null,
-    limit: number,
-  ): Promise<SearchResult[]> {
-    const where: any = {
-      OR: [
-        { title: { contains: query, mode: 'insensitive' } },
-        { titleAr: { contains: query } },
-        { notes: { contains: query, mode: 'insensitive' } },
-        { owner: { contains: query, mode: 'insensitive' } },
-      ],
-    };
-
-    if (allowedTrackIds) {
-      where.trackId = { in: allowedTrackIds };
-    }
-
-    const records = await this.prisma.record.findMany({
-      where,
-      include: {
-        track: { select: { name: true, nameAr: true } },
-      },
-      take: limit,
-      orderBy: { updatedAt: 'desc' },
-    });
-
-    return records.map((r) => ({
-      type: 'record',
-      id: r.id,
-      title: r.title,
-      titleAr: r.titleAr ?? undefined,
-      subtitle: r.owner ?? undefined,
-      trackName: r.track.nameAr,
-      trackId: r.trackId,
-    }));
   }
 
   private async searchTracks(

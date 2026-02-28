@@ -103,17 +103,6 @@ export const tracksApi = {
   delete: (id: string) => api.delete(`/tracks/${id}`),
 };
 
-// ─── Records ───
-export const recordsApi = {
-  listByTrack: (trackId: string, params?: any) =>
-    api.get(`/records/track/${trackId}`, { params }),
-  stats: (trackId: string) => api.get(`/records/track/${trackId}/stats`),
-  get: (id: string) => api.get(`/records/${id}`),
-  create: (data: any) => api.post('/records', data),
-  update: (id: string, data: any) => api.patch(`/records/${id}`, data),
-  delete: (id: string) => api.delete(`/records/${id}`),
-};
-
 // ─── Progress & Achievements ───
 export const progressApi = {
   globalStats: () => api.get('/progress/global-stats'),
@@ -272,18 +261,6 @@ export const dailyUpdatesApi = {
 // ─── Audit ───
 export const auditApi = {
   list: (params?: any) => api.get('/audit', { params }),
-};
-
-// ─── Subtasks & Checklists ───
-export const subtasksApi = {
-  listByRecord: (recordId: string) => api.get(`/subtasks/record/${recordId}`),
-  create: (data: any) => api.post('/subtasks', data),
-  update: (id: string, data: any) => api.patch(`/subtasks/${id}`, data),
-  delete: (id: string) => api.delete(`/subtasks/${id}`),
-  getChecklist: (recordId: string) => api.get(`/subtasks/${recordId}/checklist`),
-  createChecklistItem: (data: any) => api.post('/subtasks/checklist', data),
-  updateChecklistItem: (id: string, data: any) => api.patch(`/subtasks/checklist/${id}`, data),
-  deleteChecklistItem: (id: string) => api.delete(`/subtasks/checklist/${id}`),
 };
 
 // ─── Comments ───

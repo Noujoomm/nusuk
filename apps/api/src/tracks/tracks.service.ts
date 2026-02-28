@@ -27,7 +27,7 @@ export class TracksService {
         include: {
           _count: {
             select: {
-              records: true,
+              tasks: true,
               employees: { where: { isDeleted: false } },
               deliverables: { where: { isDeleted: false } },
             },
@@ -48,7 +48,7 @@ export class TracksService {
       include: {
         _count: {
           select: {
-            records: true,
+            tasks: true,
             employees: { where: { isDeleted: false } },
             deliverables: { where: { isDeleted: false } },
           },
@@ -64,7 +64,7 @@ export class TracksService {
       include: {
         _count: {
           select: {
-            records: true,
+            tasks: true,
             employees: { where: { isDeleted: false } },
             deliverables: { where: { isDeleted: false } },
             kpis: { where: { isDeleted: false } },

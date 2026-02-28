@@ -7,22 +7,22 @@ export class InsightsService {
 
   async getExecutiveSummary() {
     const [
-      tracks, totalRecords, recordsByStatus, kpiStats,
+      tracks, totalTasks, tasksByStatus, kpiStats,
       penaltyCount, reportCount, employeeCount,
     ] = await Promise.all([
       this.prisma.track.findMany({ where: { isActive: true }, select: { id: true, nameAr: true } }),
-      this.prisma.record.count(),
-      this.prisma.record.groupBy({ by: ['status'], _count: true }),
+      this.prisma.task.count(),
+      this.prisma.task.groupBy({ by: ['status'], _count: true }),
       this.prisma.kPIEntry.aggregate({ _avg: { actualValue: true }, _count: true }),
       this.prisma.penalty.count({ where: { isResolved: false } }),
       this.prisma.report.count(),
       this.prisma.employee.count(),
     ]);
 
-    const statusMap = recordsByStatus.reduce((acc, r) => ({ ...acc, [r.status]: r._count }), {} as Record<string, number>);
+    const statusMap = tasksByStatus.reduce((acc, r) => ({ ...acc, [r.status]: r._count }), {} as Record<string, number>);
     const completed = statusMap['completed'] || 0;
     const inProgress = statusMap['in_progress'] || 0;
-    const completionRate = totalRecords > 0 ? Math.round((completed / totalRecords) * 100) : 0;
+    const completionRate = totalTasks > 0 ? Math.round((completed / totalTasks) * 100) : 0;
 
     // Generate insights
     const alerts: Array<{ type: string; message: string; severity: string }> = [];
@@ -47,8 +47,8 @@ export class InsightsService {
     }
 
     // Generate summary
-    insights.push(`يشمل النظام ${tracks.length} مسار عمل و${totalRecords} سجل`);
-    insights.push(`${completed} سجل مكتمل (${completionRate}%) و${inProgress} قيد التنفيذ`);
+    insights.push(`يشمل النظام ${tracks.length} مسار عمل و${totalTasks} مهمة`);
+    insights.push(`${completed} مهمة مكتملة (${completionRate}%) و${inProgress} قيد التنفيذ`);
     insights.push(`${employeeCount} موظف مسجل في النظام`);
     if (kpiStats._count > 0) {
       insights.push(`${kpiStats._count} مؤشر أداء بمتوسط إنجاز ${avgKPI}%`);
@@ -57,7 +57,7 @@ export class InsightsService {
 
     // Risk detection
     const risks: Array<{ area: string; level: string; description: string }> = [];
-    if (completionRate < 50 && totalRecords > 10) {
+    if (completionRate < 50 && totalTasks > 10) {
       risks.push({ area: 'التنفيذ', level: 'high', description: 'تأخر ملحوظ في تنفيذ المهام قد يؤثر على الجدول الزمني' });
     }
     if (penaltyCount > 3) {
@@ -70,7 +70,7 @@ export class InsightsService {
     return {
       summary: {
         tracksCount: tracks.length,
-        totalRecords,
+        totalTasks,
         completionRate,
         employeeCount,
         kpiCount: kpiStats._count,
@@ -86,19 +86,19 @@ export class InsightsService {
   }
 
   async getTrackInsights(trackId: string) {
-    const [track, records, kpis, penalties, reports] = await Promise.all([
+    const [track, taskStatuses, kpis, penalties, reports] = await Promise.all([
       this.prisma.track.findUnique({
         where: { id: trackId },
-        include: { _count: { select: { records: true, employees: true, deliverables: true, kpis: true, penalties: true } } },
+        include: { _count: { select: { tasks: true, employees: true, deliverables: true, kpis: true, penalties: true } } },
       }),
-      this.prisma.record.groupBy({ where: { trackId }, by: ['status'], _count: true }),
+      this.prisma.task.groupBy({ where: { trackId }, by: ['status'], _count: true }),
       this.prisma.kPIEntry.findMany({ where: { trackId }, select: { status: true, actualValue: true, targetValue: true } }),
       this.prisma.penalty.findMany({ where: { trackId }, select: { isResolved: true, severity: true } }),
       this.prisma.report.count({ where: { trackId } }),
     ]);
 
-    const statusMap = records.reduce((acc, r) => ({ ...acc, [r.status]: r._count }), {} as Record<string, number>);
-    const total = Object.values(statusMap).reduce((a, b) => a + b, 0);
+    const statusMap = taskStatuses.reduce((acc: Record<string, number>, r) => ({ ...acc, [r.status]: r._count }), {} as Record<string, number>);
+    const total = Object.values(statusMap).reduce((a: number, b: number) => a + b, 0);
     const completed = statusMap['completed'] || 0;
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 

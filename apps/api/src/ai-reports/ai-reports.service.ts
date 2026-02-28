@@ -80,8 +80,6 @@ export class AIReportsService {
       case 'executive': {
         const [
           tracksCount,
-          totalRecords,
-          recordsByStatus,
           kpiEntries,
           unresolvedPenalties,
           totalTasks,
@@ -91,8 +89,6 @@ export class AIReportsService {
           reportsCount,
         ] = await Promise.all([
           this.prisma.track.count({ where: { isActive: true } }),
-          this.prisma.record.count(),
-          this.prisma.record.groupBy({ by: ['status'], _count: true }),
           this.prisma.kPIEntry.findMany({
             select: { name: true, nameAr: true, targetValue: true, actualValue: true, status: true },
           }),
@@ -117,11 +113,6 @@ export class AIReportsService {
 
         return {
           tracksCount,
-          totalRecords,
-          recordsByStatus: recordsByStatus.reduce(
-            (acc, r) => ({ ...acc, [r.status]: r._count }),
-            {},
-          ),
           kpiAvgTarget: avgTarget.toFixed(1),
           kpiAvgActual: avgActual.toFixed(1),
           kpiEntries: kpiEntries.slice(0, 20),
@@ -148,11 +139,7 @@ export class AIReportsService {
         const daysBack = dateRanges[type] || 1;
         const since = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
 
-        const [records, tasks, kpiEntries] = await Promise.all([
-          this.prisma.record.findMany({
-            where: { updatedAt: { gte: since } },
-            select: { title: true, titleAr: true, status: true, progress: true },
-          }),
+        const [tasks, kpiEntries] = await Promise.all([
           this.prisma.task.findMany({
             where: { updatedAt: { gte: since } },
             select: { title: true, titleAr: true, status: true, progress: true },
@@ -169,7 +156,7 @@ export class AIReportsService {
           }),
         ]);
 
-        return { period: type, since: since.toISOString(), records, tasks, kpiEntries };
+        return { period: type, since: since.toISOString(), tasks, kpiEntries };
       }
 
       case 'track_performance': {
@@ -178,10 +165,6 @@ export class AIReportsService {
         const track = await this.prisma.track.findUnique({
           where: { id: trackId },
           include: {
-            records: {
-              select: { title: true, status: true, progress: true, priority: true },
-              take: 50,
-            },
             tasks: {
               select: { title: true, titleAr: true, status: true, progress: true, dueDate: true },
               take: 50,
@@ -207,7 +190,6 @@ export class AIReportsService {
 
         return {
           trackName: track?.nameAr || track?.name,
-          records: track?.records || [],
           tasks: track?.tasks || [],
           kpis: track?.kpis || [],
           kpiEntries: track?.kpiEntries || [],
