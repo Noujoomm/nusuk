@@ -523,14 +523,43 @@ export class TasksService {
     return updated;
   }
 
+  // Auto-progress mapping by status
+  private readonly STATUS_PROGRESS: Record<string, number> = {
+    pending: 0,
+    in_progress: 50,
+    under_review: 80,
+    completed: 100,
+  };
+
   async updateStatus(id: string, status: string, userId: string) {
     const existing = await this.findById(id);
 
-    // Verify user is assigned to this task OR is the assignee user OR admin/pm
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    const isAdminOrPm = user?.role === 'admin' || user?.role === 'pm';
+    // ─── Enhanced RBAC ───
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { trackPermissions: { select: { trackId: true } } },
+    });
+    const role = user?.role || '';
 
-    if (!isAdminOrPm) {
+    if (role === 'admin') {
+      // Admin can do everything
+    } else if (role === 'pm') {
+      // PM can do everything except cancel
+      if (status === 'cancelled') {
+        throw new ForbiddenException('مدير المشروع لا يملك صلاحية إلغاء المهام');
+      }
+    } else if (role === 'track_lead') {
+      // Track lead can only update tasks in their own tracks
+      const userTrackIds = (user?.trackPermissions || []).map((tp) => tp.trackId);
+      const taskTrackId = existing.trackId || existing.assigneeTrackId;
+      if (!taskTrackId || !userTrackIds.includes(taskTrackId)) {
+        throw new ForbiddenException('لا يمكنك تحديث مهام خارج مساراتك');
+      }
+    } else {
+      // Employee: can only set in_progress or completed on tasks assigned to them
+      if (!['in_progress', 'under_review', 'completed'].includes(status)) {
+        throw new ForbiddenException('يمكنك فقط تحديث الحالة إلى قيد التنفيذ أو تحت المراجعة أو مكتملة');
+      }
       const assignment = await this.prisma.taskAssignment.findFirst({
         where: { taskId: id, userId },
       });
@@ -540,9 +569,12 @@ export class TasksService {
       }
     }
 
+    // ─── Auto-progress based on status ───
     const data: any = { status };
+    if (status in this.STATUS_PROGRESS) {
+      data.progress = this.STATUS_PROGRESS[status];
+    }
     if (status === 'completed') {
-      data.progress = 100;
       data.completionDate = new Date();
     }
     if (status !== 'completed' && existing.status === 'completed') {
@@ -555,7 +587,7 @@ export class TasksService {
       include: this.detailIncludes,
     });
 
-    await this.writeTaskAudit(id, 'STATUS_CHANGED', { status: existing.status }, { status: task.status }, userId);
+    await this.writeTaskAudit(id, 'STATUS_CHANGED', { status: existing.status, progress: existing.progress }, { status: task.status, progress: task.progress }, userId);
 
     await this.audit.log({
       actorId: userId,

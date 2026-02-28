@@ -64,6 +64,7 @@ export const PRIORITY_COLORS: Record<string, string> = {
 export const TASK_STATUS_LABELS: Record<string, string> = {
   pending: 'قيد الانتظار',
   in_progress: 'قيد التنفيذ',
+  under_review: 'تحت المراجعة',
   completed: 'مكتملة',
   delayed: 'متأخرة',
   cancelled: 'ملغاة',
@@ -71,7 +72,8 @@ export const TASK_STATUS_LABELS: Record<string, string> = {
 
 export const TASK_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-gray-500/20 text-gray-300',
-  in_progress: 'bg-amber-500/20 text-amber-300',
+  in_progress: 'bg-blue-500/20 text-blue-300',
+  under_review: 'bg-orange-500/20 text-orange-300',
   completed: 'bg-emerald-500/20 text-emerald-300',
   delayed: 'bg-red-500/20 text-red-300',
   cancelled: 'bg-zinc-500/20 text-zinc-400',

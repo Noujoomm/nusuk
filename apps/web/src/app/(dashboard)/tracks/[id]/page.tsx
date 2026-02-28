@@ -17,7 +17,7 @@ import RecordDetailPanel from '@/components/record-detail-panel';
 import ScopeBlocksPanel from '@/components/scope-blocks-panel';
 import InlineEdit from '@/components/inline-edit';
 import toast from 'react-hot-toast';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import TaskCard from '@/components/tasks/task-card';
 import TaskModal from '@/components/tasks/task-modal';
 import TaskDetailPanel from '@/components/tasks/task-detail-panel';
@@ -662,6 +662,9 @@ export default function TrackDetailPage() {
                   {trackProgress.byStatus?.completed > 0 && (
                     <div className="bg-emerald-500 h-full" style={{ width: `${(trackProgress.byStatus.completed / trackProgress.totalTasks) * 100}%` }} />
                   )}
+                  {trackProgress.byStatus?.under_review > 0 && (
+                    <div className="bg-orange-500 h-full" style={{ width: `${(trackProgress.byStatus.under_review / trackProgress.totalTasks) * 100}%` }} />
+                  )}
                   {trackProgress.byStatus?.in_progress > 0 && (
                     <div className="bg-blue-500 h-full" style={{ width: `${(trackProgress.byStatus.in_progress / trackProgress.totalTasks) * 100}%` }} />
                   )}
@@ -676,6 +679,9 @@ export default function TrackDetailPage() {
                   {trackProgress.byStatus?.completed > 0 && (
                     <span className="flex items-center gap-1.5 text-[10px] text-gray-400"><span className="w-2 h-2 rounded-full bg-emerald-500" />مكتملة: {trackProgress.byStatus.completed}</span>
                   )}
+                  {trackProgress.byStatus?.under_review > 0 && (
+                    <span className="flex items-center gap-1.5 text-[10px] text-gray-400"><span className="w-2 h-2 rounded-full bg-orange-500" />تحت المراجعة: {trackProgress.byStatus.under_review}</span>
+                  )}
                   {trackProgress.byStatus?.in_progress > 0 && (
                     <span className="flex items-center gap-1.5 text-[10px] text-gray-400"><span className="w-2 h-2 rounded-full bg-blue-500" />قيد التنفيذ: {trackProgress.byStatus.in_progress}</span>
                   )}
@@ -687,6 +693,42 @@ export default function TrackDetailPage() {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Status Distribution Chart */}
+          {trackProgress && trackProgress.totalTasks > 0 && (
+            <div className="bg-white/5 rounded-xl p-4">
+              <h4 className="text-sm font-semibold text-gray-300 mb-3">توزيع حالات المهام</h4>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={[
+                  { name: 'معلقة', value: trackProgress.byStatus?.pending || 0, fill: '#6b7280' },
+                  { name: 'قيد التنفيذ', value: trackProgress.byStatus?.in_progress || 0, fill: '#3b82f6' },
+                  { name: 'تحت المراجعة', value: trackProgress.byStatus?.under_review || 0, fill: '#f97316' },
+                  { name: 'مكتملة', value: trackProgress.byStatus?.completed || 0, fill: '#10b981' },
+                  { name: 'متأخرة', value: trackProgress.byStatus?.delayed || 0, fill: '#ef4444' },
+                  { name: 'ملغاة', value: trackProgress.byStatus?.cancelled || 0, fill: '#71717a' },
+                ].filter(d => d.value > 0)} layout="vertical">
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="name" width={90} tick={{ fill: '#9ca3af', fontSize: 12 }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }} />
+                  <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
+                    {[
+                      { name: 'معلقة', fill: '#6b7280' },
+                      { name: 'قيد التنفيذ', fill: '#3b82f6' },
+                      { name: 'تحت المراجعة', fill: '#f97316' },
+                      { name: 'مكتملة', fill: '#10b981' },
+                      { name: 'متأخرة', fill: '#ef4444' },
+                      { name: 'ملغاة', fill: '#71717a' },
+                    ].filter((_, i) => {
+                      const vals = [trackProgress.byStatus?.pending, trackProgress.byStatus?.in_progress, trackProgress.byStatus?.under_review, trackProgress.byStatus?.completed, trackProgress.byStatus?.delayed, trackProgress.byStatus?.cancelled];
+                      return (vals[i] || 0) > 0;
+                    }).map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           )}
 
@@ -727,7 +769,7 @@ export default function TrackDetailPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {trackTasks.map((task) => (
-                <TaskCard key={task.id} task={task} onClick={setSelectedTask} />
+                <TaskCard key={task.id} task={task} onClick={setSelectedTask} onStatusChange={loadTrackTasks} />
               ))}
             </div>
           )}

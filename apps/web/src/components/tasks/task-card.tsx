@@ -1,12 +1,25 @@
 'use client';
 
+import { useState } from 'react';
 import { cn, formatDate, TASK_STATUS_LABELS, TASK_STATUS_COLORS, PRIORITY_LABELS, PRIORITY_COLORS, ASSIGNEE_TYPE_LABELS, ASSIGNEE_TYPE_COLORS } from '@/lib/utils';
-import { Calendar, Users, User, Building2, Globe, Hash, CheckSquare, RefreshCw, Paperclip } from 'lucide-react';
+import { Calendar, Users, User, Building2, Globe, Hash, CheckSquare, RefreshCw, Paperclip, ChevronDown, Loader2 } from 'lucide-react';
 import { Task } from '@/stores/tasks';
+import { tasksApi } from '@/lib/api';
+import toast from 'react-hot-toast';
+
+const STATUS_FLOW: Record<string, string[]> = {
+  pending: ['in_progress'],
+  in_progress: ['under_review', 'completed', 'delayed'],
+  under_review: ['completed', 'in_progress'],
+  delayed: ['in_progress', 'completed'],
+  completed: [],
+  cancelled: [],
+};
 
 interface Props {
   task: Task;
   onClick: (task: Task) => void;
+  onStatusChange?: () => void;
 }
 
 const ASSIGNEE_TYPE_ICONS: Record<string, typeof Users> = {
@@ -16,9 +29,33 @@ const ASSIGNEE_TYPE_ICONS: Record<string, typeof Users> = {
   GLOBAL: Globe,
 };
 
-export default function TaskCard({ task, onClick }: Props) {
-  const statusLabel = TASK_STATUS_LABELS[task.status] || task.status;
-  const statusColor = TASK_STATUS_COLORS[task.status] || 'bg-gray-500/20 text-gray-300';
+export default function TaskCard({ task, onClick, onStatusChange }: Props) {
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null);
+
+  const currentStatus = optimisticStatus || task.status;
+  const nextStatuses = STATUS_FLOW[currentStatus] || [];
+
+  const handleStatusChange = async (e: React.MouseEvent, newStatus: string) => {
+    e.stopPropagation();
+    setStatusOpen(false);
+    setUpdating(true);
+    setOptimisticStatus(newStatus);
+    try {
+      await tasksApi.updateStatus(task.id, newStatus);
+      toast.success('تم تحديث الحالة');
+      onStatusChange?.();
+    } catch {
+      setOptimisticStatus(null);
+      toast.error('فشل تحديث الحالة');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const statusLabel = TASK_STATUS_LABELS[currentStatus] || currentStatus;
+  const statusColor = TASK_STATUS_COLORS[currentStatus] || 'bg-gray-500/20 text-gray-300';
   const priorityLabel = PRIORITY_LABELS[task.priority] || task.priority;
   const priorityColor = PRIORITY_COLORS[task.priority] || 'bg-gray-500/20 text-gray-300';
   const progress = task.progress ?? 0;
@@ -30,8 +67,8 @@ export default function TaskCard({ task, onClick }: Props) {
   const isOverdue =
     task.dueDate &&
     new Date(task.dueDate) < new Date() &&
-    task.status !== 'completed' &&
-    task.status !== 'cancelled';
+    currentStatus !== 'completed' &&
+    currentStatus !== 'cancelled';
 
   // Determine assignee display name
   let assigneeName = '';
@@ -55,9 +92,41 @@ export default function TaskCard({ task, onClick }: Props) {
           {task.titleAr || task.title}
         </h3>
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={cn('rounded-full px-3 py-1 text-xs font-medium', statusColor)}>
-            {statusLabel}
-          </span>
+          {/* Inline status dropdown */}
+          <div className="relative">
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                if (nextStatuses.length > 0) setStatusOpen(!statusOpen);
+              }}
+              className={cn(
+                'rounded-full px-3 py-1 text-xs font-medium inline-flex items-center gap-1 transition-all duration-200',
+                statusColor,
+                nextStatuses.length > 0 && 'cursor-pointer hover:opacity-80',
+              )}
+            >
+              {updating && <Loader2 className="h-3 w-3 animate-spin" />}
+              {statusLabel}
+              {nextStatuses.length > 0 && !updating && <ChevronDown className="h-3 w-3" />}
+            </span>
+            {statusOpen && nextStatuses.length > 0 && (
+              <div className="absolute top-full right-0 mt-1 z-20 bg-gray-900 border border-white/10 rounded-xl overflow-hidden shadow-xl min-w-[140px]">
+                {nextStatuses.map((s) => (
+                  <button
+                    key={s}
+                    onClick={(e) => handleStatusChange(e, s)}
+                    className={cn(
+                      'w-full text-right px-3 py-2 text-xs font-medium hover:bg-white/10 transition-colors flex items-center gap-2',
+                      TASK_STATUS_COLORS[s]?.replace(/bg-\S+/, ''),
+                    )}
+                  >
+                    <span className={cn('w-2 h-2 rounded-full', TASK_STATUS_COLORS[s]?.split(' ')[0]?.replace('/20', ''))} />
+                    {TASK_STATUS_LABELS[s] || s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <span className={cn('rounded-full px-3 py-1 text-xs font-medium', priorityColor)}>
             {priorityLabel}
           </span>

@@ -707,6 +707,7 @@ enum NotificationType {
 enum TaskStatus {
   pending
   in_progress
+  under_review
   completed
   delayed
   cancelled
@@ -737,6 +738,7 @@ model Task {
   createdById   String       @map("created_by_id")
   isDeleted     Boolean      @default(false) @map("is_deleted")
   deletedAt     DateTime?    @map("deleted_at")
+  lastOverdueNotifiedAt DateTime? @map("last_overdue_notified_at")
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 

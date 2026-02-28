@@ -26,7 +26,8 @@ interface Props {
 
 const STATUS_FLOW: Record<string, string[]> = {
   pending: ['in_progress'],
-  in_progress: ['completed', 'delayed'],
+  in_progress: ['under_review', 'completed', 'delayed'],
+  under_review: ['completed', 'in_progress'],
   delayed: ['in_progress', 'completed'],
   completed: [],
   cancelled: [],

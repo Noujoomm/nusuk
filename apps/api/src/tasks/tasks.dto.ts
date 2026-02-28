@@ -18,7 +18,7 @@ export class CreateTaskDto {
   descriptionAr?: string;
 
   @IsOptional()
-  @IsEnum(['pending', 'in_progress', 'completed', 'delayed', 'cancelled'])
+  @IsEnum(['pending', 'in_progress', 'under_review', 'completed', 'delayed', 'cancelled'])
   status?: string;
 
   @IsOptional()
@@ -83,7 +83,7 @@ export class UpdateTaskDto {
   descriptionAr?: string;
 
   @IsOptional()
-  @IsEnum(['pending', 'in_progress', 'completed', 'delayed', 'cancelled'])
+  @IsEnum(['pending', 'in_progress', 'under_review', 'completed', 'delayed', 'cancelled'])
   status?: string;
 
   @IsOptional()
@@ -138,7 +138,7 @@ export class UpdateTaskDto {
 }
 
 export class UpdateTaskStatusDto {
-  @IsEnum(['pending', 'in_progress', 'completed', 'delayed', 'cancelled'])
+  @IsEnum(['pending', 'in_progress', 'under_review', 'completed', 'delayed', 'cancelled'])
   status: string;
 }
 
