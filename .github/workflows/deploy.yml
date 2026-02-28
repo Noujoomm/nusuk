@@ -1,0 +1,34 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via Render API
+        if: ${{ secrets.RENDER_API_KEY != '' }}
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": "do_not_clear"}')
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -n -1)
+          echo "Response: $body"
+          echo "Status: $http_code"
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "Deploy triggered successfully!"
+          else
+            echo "Deploy trigger failed"
+            exit 1
+          fi
+
+      - name: Deploy via Hook (fallback)
+        if: ${{ secrets.RENDER_API_KEY == '' && secrets.RENDER_DEPLOY_HOOK != '' }}
+        run: |
+          curl -s "${{ secrets.RENDER_DEPLOY_HOOK }}"
+          echo "Deploy hook triggered!"
