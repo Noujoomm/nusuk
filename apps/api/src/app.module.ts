@@ -27,6 +27,7 @@ import { StorageModule } from './storage/storage.module';
 import { DailyUpdatesModule } from './daily-updates/daily-updates.module';
 import { ImportsModule } from './imports/imports.module';
 import { SystemExportModule } from './system-export/system-export.module';
+import { GanttModule } from './gantt/gantt.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -58,6 +59,7 @@ import { HealthController } from './health.controller';
     DailyUpdatesModule,
     ImportsModule,
     SystemExportModule,
+    GanttModule,
   ],
   controllers: [HealthController],
   providers: [

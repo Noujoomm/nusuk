@@ -55,6 +55,9 @@ model User {
   dailyUpdateAttachments DailyUpdateAttachment[]    @relation("DailyUpdateAttachmentUploader")
   importHistory          ImportHistory[]             @relation("ImportHistoryAuthor")
 
+  // Gantt: Resource Assignments
+  resourceAssignments ResourceAssignment[]
+
   @@map("users")
 }
 
@@ -659,17 +662,47 @@ model Task {
   assigneeTrackId String?      @map("assignee_track_id")
   assigneeUserId  String?      @map("assignee_user_id")
 
+  // ─── GANTT / SCHEDULING FIELDS ───
+  startDate       DateTime?    @map("start_date")
+  duration        Float?       // working days
+  isMilestone     Boolean      @default(false) @map("is_milestone")
+  isSummary       Boolean      @default(false) @map("is_summary")
+  parentTaskId    String?      @map("parent_task_id")
+  wbs             String?      // e.g. "1.2.3"
+  sortOrder       Int          @default(0) @map("sort_order")
+  outlineLevel    Int          @default(1) @map("outline_level")
+  // Baselines
+  baselineStart   DateTime?    @map("baseline_start")
+  baselineFinish  DateTime?    @map("baseline_finish")
+  baselineDuration Float?      @map("baseline_duration")
+  // Constraints
+  constraintType  ConstraintType? @map("constraint_type")
+  constraintDate  DateTime?    @map("constraint_date")
+  // Slack
+  freeSlack       Float?       @map("free_slack")  // days
+  totalSlack      Float?       @map("total_slack")  // days
+  isCritical      Boolean      @default(false) @map("is_critical")
+  // Calendar
+  calendarId      String?      @map("calendar_id")
+  tags            String[]     @default([])
+
   track         Track?           @relation(fields: [trackId], references: [id], onDelete: SetNull)
   scopeBlock    ScopeBlock?      @relation("TaskScopeBlock", fields: [scopeBlockId], references: [id], onDelete: SetNull)
   createdBy     User             @relation("TaskCreator", fields: [createdById], references: [id])
   assigneeTrack Track?           @relation("TaskAssigneeTrack", fields: [assigneeTrackId], references: [id], onDelete: SetNull)
   assigneeUser  User?            @relation("TaskAssigneeUser", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  parentTask    Task?            @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  childTasks    Task[]           @relation("TaskHierarchy")
+  calendar      WorkCalendar?    @relation(fields: [calendarId], references: [id], onDelete: SetNull)
   assignments   TaskAssignment[]
   files         TaskFile[]
   auditLogs     TaskAuditLog[]
   checklist     TaskChecklist[]
   adminNotes    AdminNote[]
   taskUpdates   TaskUpdate[]
+  predecessors  TaskDependency[] @relation("DependencySuccessor")
+  successors    TaskDependency[] @relation("DependencyPredecessor")
+  resourceAssignments ResourceAssignment[]
 
   @@index([trackId])
   @@index([scopeBlockId])
@@ -680,7 +713,94 @@ model Task {
   @@index([assigneeTrackId])
   @@index([assigneeUserId])
   @@index([isDeleted])
+  @@index([parentTaskId])
+  @@index([startDate])
+  @@index([isMilestone])
+  @@index([isCritical])
   @@map("tasks")
+}
+
+// ─── GANTT: CONSTRAINT TYPES ───
+
+enum ConstraintType {
+  ASAP          // As Soon As Possible (default)
+  ALAP          // As Late As Possible
+  MSO           // Must Start On
+  MFO           // Must Finish On
+  SNET          // Start No Earlier Than
+  SNLT          // Start No Later Than
+  FNET          // Finish No Earlier Than
+  FNLT          // Finish No Later Than
+}
+
+// ─── GANTT: DEPENDENCY TYPES ───
+
+enum DependencyType {
+  FS  // Finish-to-Start (default)
+  SS  // Start-to-Start
+  FF  // Finish-to-Finish
+  SF  // Start-to-Finish
+}
+
+// ─── GANTT: TASK DEPENDENCIES ───
+
+model TaskDependency {
+  id              String         @id @default(cuid())
+  predecessorId   String         @map("predecessor_id")
+  successorId     String         @map("successor_id")
+  type            DependencyType @default(FS)
+  lag             Float          @default(0) // working days (+lead / -lag)
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  predecessor Task @relation("DependencyPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successor   Task @relation("DependencySuccessor", fields: [successorId], references: [id], onDelete: Cascade)
+
+  @@unique([predecessorId, successorId])
+  @@index([predecessorId])
+  @@index([successorId])
+  @@map("task_dependencies")
+}
+
+// ─── GANTT: WORK CALENDARS ───
+
+model WorkCalendar {
+  id          String   @id @default(cuid())
+  name        String
+  nameAr      String   @map("name_ar")
+  isDefault   Boolean  @default(false) @map("is_default")
+  // Working days: array of day numbers (0=Sun, 1=Mon, ... 6=Sat)
+  // Saudi default: [0,1,2,3,4] = Sun-Thu
+  workDays    Int[]    @default([0, 1, 2, 3, 4]) @map("work_days")
+  workStartHour Int    @default(9) @map("work_start_hour")
+  workEndHour   Int    @default(17) @map("work_end_hour")
+  // Holidays as JSON array of {date, name, nameAr}
+  holidays    Json     @default("[]")
+  timezone    String   @default("Asia/Riyadh")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tasks Task[]
+
+  @@map("work_calendars")
+}
+
+// ─── GANTT: RESOURCE ASSIGNMENTS ───
+
+model ResourceAssignment {
+  id          String   @id @default(cuid())
+  taskId      String   @map("task_id")
+  userId      String   @map("user_id")
+  units       Float    @default(100) // allocation percentage (100 = full-time)
+  costRate    Float?   @map("cost_rate")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+  @@map("resource_assignments")
 }
 
 model TaskAuditLog {

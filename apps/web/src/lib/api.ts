@@ -357,6 +357,40 @@ export const searchApi = {
   search: (q: string, params?: any) => api.get('/search', { params: { q, ...params } }),
 };
 
+// ─── Gantt / Timeline ───
+export const ganttApi = {
+  // Tasks
+  tasks: (params?: any) => api.get('/gantt/tasks', { params }),
+  task: (id: string) => api.get(`/gantt/tasks/${id}`),
+  createTask: (data: any) => api.post('/gantt/tasks', data),
+  updateTask: (id: string, data: any) => api.patch(`/gantt/tasks/${id}`, data),
+  bulkUpdate: (tasks: any[]) => api.post('/gantt/tasks/bulk-update', { tasks }),
+  deleteTask: (id: string) => api.delete(`/gantt/tasks/${id}`),
+  // Auto-schedule
+  autoSchedule: (trackId: string) => api.post(`/gantt/auto-schedule/${trackId}`),
+  // Dependencies
+  dependencies: (taskId: string) => api.get(`/gantt/dependencies/${taskId}`),
+  createDependency: (data: any) => api.post('/gantt/dependencies', data),
+  updateDependency: (id: string, data: any) => api.patch(`/gantt/dependencies/${id}`, data),
+  deleteDependency: (id: string) => api.delete(`/gantt/dependencies/${id}`),
+  // Calendars
+  calendars: () => api.get('/gantt/calendars'),
+  createCalendar: (data: any) => api.post('/gantt/calendars', data),
+  updateCalendar: (id: string, data: any) => api.patch(`/gantt/calendars/${id}`, data),
+  deleteCalendar: (id: string) => api.delete(`/gantt/calendars/${id}`),
+  // Resources
+  createResource: (data: any) => api.post('/gantt/resources', data),
+  deleteResource: (id: string) => api.delete(`/gantt/resources/${id}`),
+  resourceLoad: (userId: string, params?: any) => api.get(`/gantt/resource-load/${userId}`, { params }),
+  // Baseline
+  setBaseline: (data?: any, trackId?: string) => api.post('/gantt/baseline', data || {}, { params: { trackId } }),
+  // Stats
+  stats: (trackId?: string) => api.get('/gantt/stats', { params: { trackId } }),
+  // Export/Import
+  exportXML: (trackId?: string) => api.get('/gantt/export/msproject.xml', { params: { trackId }, responseType: 'blob' }),
+  importXML: (xmlContent: string, trackId: string) => api.post('/gantt/import/msproject', { xmlContent, trackId }),
+};
+
 // ─── Admin System Export ───
 export const adminExportApi = {
   systemStats: () => api.get('/admin/system-stats'),
