@@ -8,13 +8,17 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
     steps:
       - name: Deploy via Render API
-        if: ${{ secrets.RENDER_API_KEY != '' }}
+        if: env.RENDER_API_KEY != ''
         run: |
           response=$(curl -s -w "\n%{http_code}" -X POST \
-            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
             -H "Content-Type: application/json" \
             -d '{"clearCache": "do_not_clear"}')
           http_code=$(echo "$response" | tail -1)
@@ -29,7 +33,7 @@ jobs:
           fi
 
       - name: Deploy via Hook (fallback)
-        if: ${{ secrets.RENDER_API_KEY == '' && secrets.RENDER_DEPLOY_HOOK != '' }}
+        if: env.RENDER_API_KEY == '' && env.RENDER_DEPLOY_HOOK != ''
         run: |
-          curl -s "${{ secrets.RENDER_DEPLOY_HOOK }}"
+          curl -s "${RENDER_DEPLOY_HOOK}"
           echo "Deploy hook triggered!"
