@@ -1,3 +1,10 @@
+// Polyfill crypto for Node.js < 19 (required by @nestjs/schedule)
+if (typeof globalThis.crypto === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { webcrypto } = require('crypto');
+  globalThis.crypto = webcrypto as Crypto;
+}
+
 // Application Insights must be initialized before any other imports
 if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
