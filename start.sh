@@ -37,20 +37,21 @@ echo "[2/4] Running seed..."
 node dist/prisma/seed.js 2>&1 || echo "!! Seed skipped or failed (continuing...)"
 
 echo "[3/4] Starting API on port $API_PORT..."
-API_PORT=$API_PORT node dist/src/main.js 2>&1 &
+API_PORT=$API_PORT node dist/src/main.js > /tmp/api.log 2>&1 &
 API_PID=$!
 
 # Wait for API to be ready (up to 20 seconds)
 echo "Waiting for API (PID $API_PID)..."
 API_READY=false
 for i in $(seq 1 20); do
-  if curl -sf "http://0.0.0.0:${API_PORT}/health" > /dev/null 2>&1; then
+  if curl -sf "http://127.0.0.1:${API_PORT}/health" > /dev/null 2>&1; then
     echo "API is healthy! (took ${i}s)"
     API_READY=true
     break
   fi
   if ! kill -0 $API_PID 2>/dev/null; then
-    echo "!! API process exited (PID $API_PID)"
+    echo "!! API process CRASHED (PID $API_PID). Logs:"
+    cat /tmp/api.log
     break
   fi
   sleep 1
@@ -58,12 +59,15 @@ done
 
 if [ "$API_READY" = true ]; then
   echo "=========================================="
-  echo "  API: RUNNING on 0.0.0.0:$API_PORT"
+  echo "  API: RUNNING on 127.0.0.1:$API_PORT"
   echo "=========================================="
+  # Stream API logs to stdout in background
+  tail -f /tmp/api.log &
 else
   echo "=========================================="
-  echo "  !! API: NOT RUNNING — check logs above"
+  echo "  !! API: NOT RUNNING — crash logs:"
   echo "=========================================="
+  cat /tmp/api.log
 fi
 
 # Navigate to web directory
