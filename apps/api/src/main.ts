@@ -21,12 +21,26 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 
+// Global unhandled error handlers
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err.message);
+  console.error(err.stack);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED REJECTION:', reason);
+});
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['log', 'error', 'warn', 'debug'],
   });
   const config = app.get(ConfigService);
-  const port = parseInt(config.get<string>('API_PORT', '4000'), 10);
+
+  // Port: API_PORT (single-service) > PORT (standalone) > 4000 (default)
+  const port = parseInt(
+    config.get<string>('API_PORT') || config.get<string>('PORT') || '4000',
+    10,
+  );
   const origins = config.get<string>('CORS_ORIGINS', 'http://localhost:3000');
   const isProduction = config.get<string>('NODE_ENV') === 'production';
 
@@ -36,7 +50,10 @@ async function bootstrap() {
   if (missing.length) {
     Logger.warn(`Missing env vars: ${missing.join(', ')}`, 'Bootstrap');
   }
-  Logger.log(`CORS_ORIGINS=${origins}`, 'Bootstrap');
+  Logger.log(`Environment: ${isProduction ? 'production' : 'development'}`, 'Bootstrap');
+  Logger.log(`Port: ${port}`, 'Bootstrap');
+  Logger.log(`CORS_ORIGINS: ${origins}`, 'Bootstrap');
+  Logger.log(`DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'MISSING'}`, 'Bootstrap');
 
   // Trust proxy for Railway / Render / reverse proxies
   const expressApp = app.getHttpAdapter().getInstance();
@@ -80,8 +97,12 @@ async function bootstrap() {
 
   await app.listen(port, '0.0.0.0');
   Logger.log(
-    `API running on port ${port} [${isProduction ? 'production' : 'development'}]`,
+    `API running on http://0.0.0.0:${port} [${isProduction ? 'production' : 'development'}]`,
     'Bootstrap',
   );
 }
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('BOOTSTRAP FAILED:', err.message);
+  console.error(err.stack);
+  process.exit(1);
+});

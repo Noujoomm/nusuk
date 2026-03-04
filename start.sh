@@ -3,16 +3,16 @@
 echo "=========================================="
 echo "  NUSUK PLATFORM - STARTUP"
 echo "=========================================="
-echo "NODE_ENV: ${NODE_ENV:-development}"
-echo "PORT (web): ${PORT:-3000}"
-echo "API_PORT: 4000"
-echo "DATABASE_URL: ${DATABASE_URL:+SET (${DATABASE_URL:0:30}...)}"
-echo "DATABASE_URL: ${DATABASE_URL:-!! MISSING !!}"
-echo "JWT_SECRET: ${JWT_SECRET:+SET}"
-echo "JWT_SECRET: ${JWT_SECRET:-!! MISSING !!}"
-echo "JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:+SET}"
-echo "JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-!! MISSING !!}"
-echo ""
+echo "NODE_ENV:          ${NODE_ENV:-development}"
+echo "PORT (public):     ${PORT:-3000}"
+echo "API_PORT:          ${API_PORT:-4000}"
+echo "DATABASE_URL:      ${DATABASE_URL:+SET}${DATABASE_URL:-MISSING}"
+echo "JWT_SECRET:        ${JWT_SECRET:+SET}${JWT_SECRET:-MISSING}"
+echo "JWT_REFRESH_SECRET:${JWT_REFRESH_SECRET:+SET}${JWT_REFRESH_SECRET:-MISSING}"
+echo "=========================================="
+
+# Determine API port
+API_PORT="${API_PORT:-4000}"
 
 # Check required env vars
 MISSING=""
@@ -21,57 +21,71 @@ MISSING=""
 [ -z "$JWT_REFRESH_SECRET" ] && MISSING="$MISSING JWT_REFRESH_SECRET"
 
 if [ -n "$MISSING" ]; then
-  echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-  echo "!! MISSING ENV VARS:$MISSING"
+  echo ""
+  echo "!! CRITICAL: MISSING ENV VARS:$MISSING"
   echo "!! API WILL CRASH WITHOUT THESE!"
-  echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
   echo ""
 fi
 
+# Navigate to API directory
+cd apps/api || { echo "!! apps/api not found"; exit 1; }
+
 echo "[1/4] Running Prisma db push..."
-cd apps/api
 npx prisma db push --accept-data-loss 2>&1 || echo "!! Prisma db push failed (continuing...)"
 
 echo "[2/4] Running seed..."
 node dist/prisma/seed.js 2>&1 || echo "!! Seed skipped or failed (continuing...)"
 
-echo "[3/4] Starting API on port 4000..."
-API_PORT=4000 node dist/src/main.js &
+echo "[3/4] Starting API on port $API_PORT..."
+API_PORT=$API_PORT node dist/src/main.js 2>&1 &
 API_PID=$!
 
-# Wait for API to be ready
-echo "Waiting for API to start..."
-for i in $(seq 1 15); do
-  if curl -sf http://localhost:4000/health > /dev/null 2>&1; then
+# Wait for API to be ready (up to 20 seconds)
+echo "Waiting for API (PID $API_PID)..."
+API_READY=false
+for i in $(seq 1 20); do
+  if curl -sf "http://0.0.0.0:${API_PORT}/health" > /dev/null 2>&1; then
     echo "API is healthy! (took ${i}s)"
+    API_READY=true
     break
   fi
   if ! kill -0 $API_PID 2>/dev/null; then
-    echo "!! API process crashed (PID $API_PID). Check logs above."
+    echo "!! API process exited (PID $API_PID)"
     break
   fi
   sleep 1
 done
 
-# Final API check
-if curl -sf http://localhost:4000/health > /dev/null 2>&1; then
+if [ "$API_READY" = true ]; then
   echo "=========================================="
-  echo "  API: RUNNING on port 4000"
+  echo "  API: RUNNING on 0.0.0.0:$API_PORT"
   echo "=========================================="
 else
   echo "=========================================="
-  echo "  !! API: NOT RUNNING - login will fail"
+  echo "  !! API: NOT RUNNING — check logs above"
   echo "=========================================="
 fi
 
-echo "[4/4] Starting Next.js on port ${PORT:-3000}..."
-cd ../web
+# Navigate to web directory
+cd ../web || { echo "!! apps/web not found"; exit 1; }
 
-# Use standalone server if available, otherwise fall back to next start
-if [ -f .next/standalone/server.js ]; then
-  echo "Using standalone server..."
-  PORT=${PORT:-3000} HOSTNAME=0.0.0.0 exec node .next/standalone/server.js
+echo "[4/4] Starting Next.js on port ${PORT:-3000}..."
+
+# Standalone server (required for output: 'standalone')
+# Try monorepo path first, then flat path
+if [ -f ".next/standalone/apps/web/server.js" ]; then
+  echo "Using standalone server (monorepo path)..."
+  cp -r .next/static .next/standalone/apps/web/.next/static 2>/dev/null || true
+  cp -r public .next/standalone/apps/web/public 2>/dev/null || true
+  cd .next/standalone/apps/web
+  PORT=${PORT:-3000} HOSTNAME=0.0.0.0 exec node server.js
+elif [ -f ".next/standalone/server.js" ]; then
+  echo "Using standalone server (flat path)..."
+  cp -r .next/static .next/standalone/.next/static 2>/dev/null || true
+  cp -r public .next/standalone/public 2>/dev/null || true
+  cd .next/standalone
+  PORT=${PORT:-3000} HOSTNAME=0.0.0.0 exec node server.js
 else
-  echo "Using next start..."
+  echo "!! No standalone server found, falling back to next start..."
   exec npx next start -p ${PORT:-3000} -H 0.0.0.0
 fi
