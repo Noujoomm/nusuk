@@ -22,9 +22,19 @@ export default function LoginPage() {
       await login(email, password);
       router.push('/');
     } catch (err: any) {
-      const message = err.code === 'ECONNABORTED'
-        ? 'انتهت مهلة الاتصال - يرجى المحاولة مرة أخرى'
-        : err.response?.data?.message || 'فشل تسجيل الدخول - تأكد من تشغيل الخادم';
+      let message: string;
+      if (err.code === 'ECONNABORTED') {
+        message = 'انتهت مهلة الاتصال - يرجى المحاولة مرة أخرى';
+      } else if (err.response?.data?.message) {
+        message = err.response.data.message;
+      } else if (err.response?.status) {
+        message = `خطأ من الخادم: ${err.response.status}`;
+      } else if (err.code === 'ERR_NETWORK') {
+        message = 'لا يمكن الاتصال بالخادم - تحقق من اتصال الشبكة';
+      } else {
+        message = 'فشل تسجيل الدخول - تأكد من تشغيل الخادم';
+      }
+      console.error('Login error:', err.code, err.message, err.response?.status);
       toast.error(message);
     } finally {
       setLoading(false);

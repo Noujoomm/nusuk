@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const API_DEST = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+const API_INTERNAL = 'http://localhost:4000';
 
 const nextConfig = {
   output: 'standalone',
@@ -16,11 +16,11 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: `${API_DEST}/api/:path*`,
+        destination: `${API_INTERNAL}/api/:path*`,
       },
       {
         source: '/socket.io/:path*',
-        destination: `${API_DEST}/socket.io/:path*`,
+        destination: `${API_INTERNAL}/socket.io/:path*`,
       },
     ];
   },
