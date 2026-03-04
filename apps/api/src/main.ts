@@ -30,7 +30,15 @@ async function bootstrap() {
   const origins = config.get<string>('CORS_ORIGINS', 'http://localhost:3000');
   const isProduction = config.get<string>('NODE_ENV') === 'production';
 
-  // Trust proxy for Azure App Service / reverse proxies
+  // Startup env validation (no secrets leaked)
+  const requiredVars = ['DATABASE_URL', 'JWT_SECRET', 'JWT_REFRESH_SECRET'];
+  const missing = requiredVars.filter((v) => !process.env[v]);
+  if (missing.length) {
+    Logger.warn(`Missing env vars: ${missing.join(', ')}`, 'Bootstrap');
+  }
+  Logger.log(`CORS_ORIGINS=${origins}`, 'Bootstrap');
+
+  // Trust proxy for Railway / Render / reverse proxies
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', 1);
 
@@ -43,10 +51,13 @@ async function bootstrap() {
   );
   app.use(cookieParser());
 
-  // CORS
+  // CORS — handle '*' correctly with credentials
   const allowedOrigins = origins.split(',').map((o) => o.trim());
+  const corsOrigin = allowedOrigins.includes('*')
+    ? true // reflect request origin (required when credentials: true)
+    : allowedOrigins;
   app.enableCors({
-    origin: allowedOrigins,
+    origin: corsOrigin,
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

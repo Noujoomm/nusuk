@@ -7,6 +7,18 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuditService } from '../audit/audit.service';
 import { LoginDto, RefreshDto, RegisterDto } from './auth.dto';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+function setRefreshCookie(res: Response, token: string) {
+  res.cookie('refresh_token', token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: '/api/auth',
+  });
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -24,13 +36,7 @@ export class AuthController {
   async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.register(dto);
 
-    res.cookie('refresh_token', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/api/auth/refresh',
-    });
+    setRefreshCookie(res, result.refreshToken);
 
     await this.audit.log({
       actorId: result.user.id,
@@ -50,14 +56,7 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.login(dto.email, dto.password);
 
-    // Set refresh token as httpOnly cookie
-    res.cookie('refresh_token', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: '/api/auth/refresh',
-    });
+    setRefreshCookie(res, result.refreshToken);
 
     await this.audit.log({
       actorId: result.user.id,
@@ -80,13 +79,7 @@ export class AuthController {
 
     const result = await this.auth.refresh(token);
 
-    res.cookie('refresh_token', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/api/auth/refresh',
-    });
+    setRefreshCookie(res, result.refreshToken);
 
     return { accessToken: result.accessToken, user: result.user };
   }
@@ -96,7 +89,12 @@ export class AuthController {
   @HttpCode(200)
   async logout(@CurrentUser() user: any, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     await this.auth.logout(user.id);
-    res.clearCookie('refresh_token', { path: '/api/auth/refresh' });
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/api/auth',
+    });
 
     await this.audit.log({
       actorId: user.id,
