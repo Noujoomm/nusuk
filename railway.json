@@ -5,8 +5,7 @@
     "buildCommand": "npm install && cd apps/api && npx prisma generate && npm run build && cd ../web && npm run build"
   },
   "deploy": {
-    "startCommand": "cd apps/api && (npx prisma db push --accept-data-loss || echo 'DB push skipped') && (node dist/prisma/seed.js || true) && API_PORT=4000 node dist/src/main.js & sleep 5 && cd apps/web && npx next start -p ${PORT:-3000}",
-    "healthcheckPath": "/health",
+    "startCommand": "bash start.sh",
     "restartPolicyType": "ON_FAILURE"
   }
 }
