@@ -6,7 +6,7 @@ import GanttChart, { GanttTask } from '@/components/gantt/gantt-chart';
 import toast from 'react-hot-toast';
 import {
   X, Save, Trash2, Plus, Link2, Calendar, Users,
-  ChevronDown, FileText, Download, Upload,
+  ChevronDown, FileText, Download, Upload, AlertTriangle, Undo2,
 } from 'lucide-react';
 
 export default function GanttPage() {
@@ -17,6 +17,19 @@ export default function GanttPage() {
   const [selectedTask, setSelectedTask] = useState<GanttTask | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [detailTab, setDetailTab] = useState<'info' | 'deps' | 'resources'>('info');
+
+  // Delete confirmation state
+  const [deleteTarget, setDeleteTarget] = useState<GanttTask | null>(null);
+  const [deleteInfo, setDeleteInfo] = useState<{
+    hasDependencies: boolean; hasChildren: boolean;
+    dependencyCount: number; childCount: number;
+  } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Undo state
+  const [undoState, setUndoState] = useState<{
+    taskId: string; taskTitle: string; timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
 
   // Form state for create/edit
   const [form, setForm] = useState({
@@ -158,6 +171,63 @@ export default function GanttPage() {
     }
   };
 
+  // ─── DELETE FLOW ───
+
+  // Step 1: User clicks delete → fetch dependency info → show confirmation
+  const handleDeleteRequest = async (task: GanttTask) => {
+    setDeleteTarget(task);
+    setDeleteInfo(null);
+    try {
+      const { data } = await ganttApi.deleteInfo(task.id);
+      setDeleteInfo(data);
+    } catch {
+      // If we can't get info, still allow deletion with basic confirmation
+      setDeleteInfo({ hasDependencies: false, hasChildren: false, dependencyCount: 0, childCount: 0 });
+    }
+  };
+
+  // Step 2: User confirms deletion
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    const taskId = deleteTarget.id;
+    const taskTitle = deleteTarget.titleAr || deleteTarget.title;
+
+    // Optimistic UI: remove from local state immediately
+    setTasks((prev) => prev.filter((t) => t.id !== taskId && t.parentTaskId !== taskId));
+    if (selectedTask?.id === taskId) setSelectedTask(null);
+    setDeleteTarget(null);
+    setDeleteInfo(null);
+    setDeleteLoading(false);
+
+    try {
+      await ganttApi.deleteTask(taskId);
+
+      // Show undo snackbar
+      const timer = setTimeout(() => setUndoState(null), 5000);
+      setUndoState({ taskId, taskTitle, timer });
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'فشل حذف المهمة');
+      loadTasks(); // Revert optimistic update
+    }
+  };
+
+  // Step 3: User clicks undo
+  const handleUndo = async () => {
+    if (!undoState) return;
+    clearTimeout(undoState.timer);
+    const { taskId, taskTitle } = undoState;
+    setUndoState(null);
+
+    try {
+      await ganttApi.undoDelete(taskId);
+      toast.success(`تم استعادة "${taskTitle}"`);
+      loadTasks();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'فشل التراجع عن الحذف');
+    }
+  };
+
   // Save detail edits
   const handleDetailSave = async (field: string, value: any) => {
     if (!selectedTask) return;
@@ -201,6 +271,7 @@ export default function GanttPage() {
               tasks={tasks}
               onTaskClick={handleTaskClick}
               onTaskUpdate={(id, data) => handleTaskUpdate(id, data)}
+              onTaskDelete={handleDeleteRequest}
               onExportXML={handleExport}
               onImportXML={handleImport}
               onAutoSchedule={handleAutoSchedule}
@@ -218,9 +289,18 @@ export default function GanttPage() {
                 <h3 className="font-semibold text-sm truncate flex-1">
                   {selectedTask.titleAr || selectedTask.title}
                 </h3>
-                <button onClick={() => setSelectedTask(null)} className="text-gray-400 hover:text-white">
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleDeleteRequest(selectedTask)}
+                    className="text-gray-400 hover:text-red-400 p-1 rounded hover:bg-red-500/10"
+                    title="حذف المهمة"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => setSelectedTask(null)} className="text-gray-400 hover:text-white p-1">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
               {/* Tabs */}
               <div className="flex gap-2 mt-2">
@@ -396,6 +476,87 @@ export default function GanttPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setDeleteTarget(null); setDeleteInfo(null); }}>
+          <div className="bg-gray-900 border border-white/10 rounded-xl p-6 w-[420px]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-red-400" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold">حذف المهمة</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{deleteTarget.titleAr || deleteTarget.title}</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-300 mb-3">
+              هل أنت متأكد من حذف هذه المهمة؟ لا يمكن التراجع عن هذا الإجراء.
+            </p>
+
+            {/* Dependency / children warnings */}
+            {deleteInfo && deleteInfo.hasDependencies && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-3 text-xs">
+                <div className="flex items-center gap-2 text-amber-400 font-medium mb-1">
+                  <Link2 className="h-3.5 w-3.5" />
+                  هذه المهمة مرتبطة بمهام أخرى
+                </div>
+                <p className="text-gray-400">
+                  سيتم إزالة {deleteInfo.dependencyCount} ارتباط(ات) عند الحذف.
+                </p>
+              </div>
+            )}
+            {deleteInfo && deleteInfo.hasChildren && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-3 text-xs">
+                <div className="flex items-center gap-2 text-amber-400 font-medium mb-1">
+                  <FileText className="h-3.5 w-3.5" />
+                  هذه المهمة تحتوي على مهام فرعية
+                </div>
+                <p className="text-gray-400">
+                  سيتم حذف {deleteInfo.childCount} مهمة فرعية أيضاً.
+                </p>
+              </div>
+            )}
+
+            {!deleteInfo && (
+              <div className="text-center text-xs text-gray-500 py-2">جاري التحقق...</div>
+            )}
+
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleteLoading || !deleteInfo}
+                className="flex-1 py-2 text-sm font-medium rounded-lg bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 transition-colors"
+              >
+                {deleteLoading ? 'جاري الحذف...' : 'حذف'}
+              </button>
+              <button
+                onClick={() => { setDeleteTarget(null); setDeleteInfo(null); }}
+                className="flex-1 py-2 text-sm font-medium rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 transition-colors"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Undo Snackbar */}
+      {undoState && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-gray-800 border border-white/10 rounded-lg shadow-xl px-4 py-3 animate-in slide-in-from-bottom-4">
+          <span className="text-sm text-gray-300">
+            تم حذف &quot;{undoState.taskTitle}&quot;
+          </span>
+          <button
+            onClick={handleUndo}
+            className="flex items-center gap-1 text-sm font-medium text-emerald-400 hover:text-emerald-300"
+          >
+            <Undo2 className="h-4 w-4" />
+            تراجع
+          </button>
+        </div>
+      )}
 
       {/* Create Task Modal */}
       {showCreate && (

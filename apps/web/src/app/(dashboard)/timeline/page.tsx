@@ -5,7 +5,8 @@ import { ganttApi, tracksApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import {
   Calendar, ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
-  Milestone, FolderOpen, Download,
+  Milestone, FolderOpen, Download, Trash2, AlertTriangle,
+  Link2, Undo2,
 } from 'lucide-react';
 
 interface TimelineTask {
@@ -66,6 +67,17 @@ export default function TimelinePage() {
   const [zoom, setZoom] = useState<ZoomLevel>('week');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [selectedTask, setSelectedTask] = useState<TimelineTask | null>(null);
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<TimelineTask | null>(null);
+  const [deleteInfo, setDeleteInfo] = useState<{
+    hasDependencies: boolean; hasChildren: boolean;
+    dependencyCount: number; childCount: number;
+  } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [undoState, setUndoState] = useState<{
+    taskId: string; taskTitle: string; timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -163,6 +175,54 @@ export default function TimelinePage() {
     const left = daysBetween(dateStart, start) * cellWidth;
     const width = Math.max((daysBetween(start, end) + 1) * cellWidth, task.isMilestone ? 16 : 24);
     return { left, width };
+  };
+
+  // ─── DELETE FLOW ───
+  const handleDeleteRequest = async (task: TimelineTask) => {
+    setDeleteTarget(task);
+    setDeleteInfo(null);
+    try {
+      const { data } = await ganttApi.deleteInfo(task.id);
+      setDeleteInfo(data);
+    } catch {
+      setDeleteInfo({ hasDependencies: false, hasChildren: false, dependencyCount: 0, childCount: 0 });
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    const taskId = deleteTarget.id;
+    const taskTitle = deleteTarget.titleAr || deleteTarget.title;
+
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    if (selectedTask?.id === taskId) setSelectedTask(null);
+    setDeleteTarget(null);
+    setDeleteInfo(null);
+    setDeleteLoading(false);
+
+    try {
+      await ganttApi.deleteTask(taskId);
+      const timer = setTimeout(() => setUndoState(null), 5000);
+      setUndoState({ taskId, taskTitle, timer });
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'فشل حذف المهمة');
+      loadData();
+    }
+  };
+
+  const handleUndo = async () => {
+    if (!undoState) return;
+    clearTimeout(undoState.timer);
+    const { taskId, taskTitle } = undoState;
+    setUndoState(null);
+    try {
+      await ganttApi.undoDelete(taskId);
+      toast.success(`تم استعادة "${taskTitle}"`);
+      loadData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'فشل التراجع');
+    }
   };
 
   const getResources = (task: TimelineTask): string => {
@@ -335,8 +395,71 @@ export default function TimelinePage() {
               </span>
               <span className="text-xs text-gray-400">{selectedTask.progress}%</span>
             </div>
-            <button onClick={() => setSelectedTask(null)} className="text-gray-400 hover:text-white text-xs">✕</button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleDeleteRequest(selectedTask)}
+                className="text-gray-400 hover:text-red-400 p-1 rounded hover:bg-red-500/10"
+                title="حذف المهمة"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+              <button onClick={() => setSelectedTask(null)} className="text-gray-400 hover:text-white text-xs">✕</button>
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setDeleteTarget(null); setDeleteInfo(null); }}>
+          <div className="bg-gray-900 border border-white/10 rounded-xl p-6 w-[420px]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-red-400" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold">حذف المهمة</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{deleteTarget.titleAr || deleteTarget.title}</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-300 mb-3">
+              هل أنت متأكد من حذف هذه المهمة؟ لا يمكن التراجع عن هذا الإجراء.
+            </p>
+            {deleteInfo && deleteInfo.hasDependencies && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-3 text-xs">
+                <div className="flex items-center gap-2 text-amber-400 font-medium mb-1">
+                  <Link2 className="h-3.5 w-3.5" />
+                  هذه المهمة مرتبطة بمهام أخرى
+                </div>
+                <p className="text-gray-400">سيتم إزالة {deleteInfo.dependencyCount} ارتباط(ات) عند الحذف.</p>
+              </div>
+            )}
+            {deleteInfo && deleteInfo.hasChildren && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-3 text-xs">
+                <p className="text-amber-400 font-medium">سيتم حذف {deleteInfo.childCount} مهمة فرعية أيضاً.</p>
+              </div>
+            )}
+            {!deleteInfo && <div className="text-center text-xs text-gray-500 py-2">جاري التحقق...</div>}
+            <div className="flex gap-2 mt-4">
+              <button onClick={handleDeleteConfirm} disabled={deleteLoading || !deleteInfo} className="flex-1 py-2 text-sm font-medium rounded-lg bg-red-500 hover:bg-red-600 text-white disabled:opacity-50">
+                {deleteLoading ? 'جاري الحذف...' : 'حذف'}
+              </button>
+              <button onClick={() => { setDeleteTarget(null); setDeleteInfo(null); }} className="flex-1 py-2 text-sm font-medium rounded-lg bg-white/5 hover:bg-white/10 text-gray-300">
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Undo Snackbar */}
+      {undoState && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-gray-800 border border-white/10 rounded-lg shadow-xl px-4 py-3">
+          <span className="text-sm text-gray-300">تم حذف &quot;{undoState.taskTitle}&quot;</span>
+          <button onClick={handleUndo} className="flex items-center gap-1 text-sm font-medium text-emerald-400 hover:text-emerald-300">
+            <Undo2 className="h-4 w-4" />
+            تراجع
+          </button>
         </div>
       )}
     </div>

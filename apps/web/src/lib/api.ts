@@ -366,6 +366,8 @@ export const ganttApi = {
   updateTask: (id: string, data: any) => api.patch(`/gantt/tasks/${id}`, data),
   bulkUpdate: (tasks: any[]) => api.post('/gantt/tasks/bulk-update', { tasks }),
   deleteTask: (id: string) => api.delete(`/gantt/tasks/${id}`),
+  deleteInfo: (id: string) => api.get(`/gantt/tasks/${id}/delete-info`),
+  undoDelete: (id: string) => api.post(`/gantt/tasks/${id}/undo-delete`),
   // Auto-schedule
   autoSchedule: (trackId: string) => api.post(`/gantt/auto-schedule/${trackId}`),
   // Dependencies

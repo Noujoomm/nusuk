@@ -57,11 +57,23 @@ export class GanttController {
     return this.ganttService.bulkUpdate(dto.tasks, user.sub);
   }
 
+  @Get('tasks/:id/delete-info')
+  async getDeleteInfo(@Param('id') id: string) {
+    return this.ganttService.getDeleteInfo(id);
+  }
+
   @Delete('tasks/:id')
   @UseGuards(RolesGuard)
   @Roles('admin', 'pm')
   async deleteTask(@Param('id') id: string, @CurrentUser() user: any) {
     return this.ganttService.deleteTask(id, user.sub);
+  }
+
+  @Post('tasks/:id/undo-delete')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm')
+  async undoDeleteTask(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.ganttService.undoDeleteTask(id, user.sub);
   }
 
   // ─── AUTO-SCHEDULE ───

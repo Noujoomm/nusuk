@@ -293,14 +293,151 @@ export class GanttService {
   }
 
   async deleteTask(id: string, userId: string) {
-    await this.prisma.task.update({
+    const task = await this.prisma.task.findUnique({
       where: { id },
-      data: { isDeleted: true, deletedAt: new Date() },
+      include: {
+        track: { select: { id: true, name: true, nameAr: true } },
+        predecessors: true,
+        successors: true,
+        childTasks: { where: { isDeleted: false }, select: { id: true } },
+        resourceAssignments: true,
+      },
     });
-    await this.prisma.taskAuditLog.create({
-      data: { taskId: id, action: 'DELETED', actorUserId: userId },
-    }).catch(() => {});
-    return { success: true };
+    if (!task) throw new NotFoundException('المهمة غير موجودة');
+
+    // Collect dependency info for the response
+    const dependencyCount = task.predecessors.length + task.successors.length;
+    const childCount = task.childTasks.length;
+
+    // Use a transaction for safe, atomic deletion
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Remove all dependencies (predecessors + successors)
+      if (task.predecessors.length > 0 || task.successors.length > 0) {
+        await tx.taskDependency.deleteMany({
+          where: { OR: [{ predecessorId: id }, { successorId: id }] },
+        });
+      }
+
+      // 2. Remove resource assignments
+      if (task.resourceAssignments.length > 0) {
+        await tx.resourceAssignment.deleteMany({ where: { taskId: id } });
+      }
+
+      // 3. Soft-delete child tasks (cascade)
+      if (childCount > 0) {
+        await tx.task.updateMany({
+          where: { parentTaskId: id, isDeleted: false },
+          data: { isDeleted: true, deletedAt: new Date() },
+        });
+      }
+
+      // 4. Soft-delete the task itself
+      await tx.task.update({
+        where: { id },
+        data: { isDeleted: true, deletedAt: new Date() },
+      });
+
+      // 5. Audit log
+      await tx.taskAuditLog.create({
+        data: {
+          taskId: id,
+          action: 'DELETED',
+          actorUserId: userId,
+          beforeJson: {
+            title: task.title,
+            titleAr: task.titleAr,
+            trackName: task.track?.nameAr || task.track?.name,
+            status: task.status,
+            progress: task.progress,
+            dependenciesRemoved: dependencyCount,
+            childrenCascaded: childCount,
+          },
+        },
+      }).catch(() => {});
+    });
+
+    return {
+      success: true,
+      taskId: id,
+      taskTitle: task.titleAr || task.title,
+      trackName: task.track?.nameAr || task.track?.name || '',
+      dependenciesRemoved: dependencyCount,
+      childrenCascaded: childCount,
+    };
+  }
+
+  async undoDeleteTask(id: string, userId: string) {
+    const task = await this.prisma.task.findUnique({ where: { id } });
+    if (!task || !task.isDeleted) throw new NotFoundException('المهمة غير موجودة أو غير محذوفة');
+
+    // Only allow undo within 30 seconds
+    if (task.deletedAt && Date.now() - task.deletedAt.getTime() > 30000) {
+      throw new BadRequestException('انتهت فترة التراجع عن الحذف');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Restore the task
+      await tx.task.update({
+        where: { id },
+        data: { isDeleted: false, deletedAt: null },
+      });
+
+      // Restore child tasks that were deleted at the same time (within 2 seconds)
+      if (task.deletedAt) {
+        await tx.task.updateMany({
+          where: {
+            parentTaskId: id,
+            isDeleted: true,
+            deletedAt: {
+              gte: new Date(task.deletedAt.getTime() - 2000),
+              lte: new Date(task.deletedAt.getTime() + 2000),
+            },
+          },
+          data: { isDeleted: false, deletedAt: null },
+        });
+      }
+
+      // Audit
+      await tx.taskAuditLog.create({
+        data: { taskId: id, action: 'RESTORED', actorUserId: userId },
+      }).catch(() => {});
+    });
+
+    return this.findOne(id);
+  }
+
+  async getDeleteInfo(id: string) {
+    const task = await this.prisma.task.findUnique({
+      where: { id },
+      include: {
+        predecessors: {
+          include: { predecessor: { select: { id: true, title: true, titleAr: true } } },
+        },
+        successors: {
+          include: { successor: { select: { id: true, title: true, titleAr: true } } },
+        },
+        childTasks: { where: { isDeleted: false }, select: { id: true, title: true, titleAr: true } },
+      },
+    });
+    if (!task) throw new NotFoundException('المهمة غير موجودة');
+
+    return {
+      hasDependencies: task.predecessors.length > 0 || task.successors.length > 0,
+      hasChildren: task.childTasks.length > 0,
+      dependencyCount: task.predecessors.length + task.successors.length,
+      childCount: task.childTasks.length,
+      predecessors: task.predecessors.map((d) => ({
+        id: d.id,
+        task: d.predecessor.titleAr || d.predecessor.title,
+        type: d.type,
+      })),
+      successors: task.successors.map((d) => ({
+        id: d.id,
+        task: d.successor.titleAr || d.successor.title,
+        type: d.type,
+      })),
+      children: task.childTasks.map((c) => ({ id: c.id, title: c.titleAr || c.title })),
+    };
   }
 
   // ─── AUTO-SCHEDULE ───

@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   ZoomIn, ZoomOut, Calendar, Download, Upload, Play,
   Milestone, FolderOpen, CheckCircle2, Clock, AlertTriangle,
-  Plus, Link2, Trash2, Settings,
+  Plus, Link2, Trash2, Settings, FileText,
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
@@ -62,6 +62,7 @@ interface GanttChartProps {
   tasks: GanttTask[];
   onTaskClick?: (task: GanttTask) => void;
   onTaskUpdate?: (id: string, data: Partial<GanttTask>) => void;
+  onTaskDelete?: (task: GanttTask) => void;
   onExportXML?: () => void;
   onImportXML?: () => void;
   onAutoSchedule?: () => void;
@@ -234,6 +235,7 @@ export default function GanttChart({
   tasks,
   onTaskClick,
   onTaskUpdate,
+  onTaskDelete,
   onExportXML,
   onImportXML,
   onAutoSchedule,
@@ -244,8 +246,24 @@ export default function GanttChart({
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [gridWidth, setGridWidth] = useState(GRID_MIN_WIDTH);
   const [draggingTask, setDraggingTask] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; task: GanttTask } | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handler = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handler);
+      return () => document.removeEventListener('click', handler);
+    }
+  }, [contextMenu]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, task: GanttTask) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, task });
+  }, []);
 
   // Process tasks into visible tree
   const visibleTasks = useMemo(() => {
@@ -375,13 +393,25 @@ export default function GanttChart({
           {visibleTasks.map((task, idx) => (
             <div
               key={task.id}
-              className={`flex items-center border-b border-white/5 hover:bg-white/5 cursor-pointer text-xs ${
+              className={`flex items-center border-b border-white/5 hover:bg-white/5 cursor-pointer text-xs group/row ${
                 task.isCritical ? 'bg-red-500/5' : ''
               }`}
               style={{ height: ROW_HEIGHT }}
               onClick={() => onTaskClick?.(task)}
+              onContextMenu={(e) => handleContextMenu(e, task)}
             >
-              <div className="w-12 text-center text-gray-500">{idx + 1}</div>
+              <div className="w-12 text-center text-gray-500 relative">
+                <span className="group-hover/row:hidden">{idx + 1}</span>
+                {onTaskDelete && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onTaskDelete(task); }}
+                    className="hidden group-hover/row:inline-flex items-center justify-center text-red-400 hover:text-red-300"
+                    title="حذف المهمة"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
               <div className="flex-1 flex items-center gap-1 pr-2 truncate" style={{ paddingRight: (task._indent || 0) * 16 + 8 }}>
                 {task.isSummary && (
                   <button
@@ -566,6 +596,7 @@ export default function GanttChart({
                           className="absolute cursor-pointer group"
                           style={{ right: bar.left, width: bar.width, top: (ROW_HEIGHT - 18) / 2, height: 18 }}
                           onClick={() => onTaskClick?.(task)}
+                          onContextMenu={(e) => handleContextMenu(e, task)}
                         >
                           {/* Bar bg */}
                           <div
@@ -627,6 +658,32 @@ export default function GanttChart({
           {tasks.filter((t) => t.status === 'delayed').length} متأخرة
         </span>
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-gray-800 border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full text-right px-3 py-1.5 text-xs text-gray-300 hover:bg-white/10 flex items-center gap-2"
+            onClick={() => { onTaskClick?.(contextMenu.task); setContextMenu(null); }}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            تعديل المهمة
+          </button>
+          {onTaskDelete && (
+            <button
+              className="w-full text-right px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+              onClick={() => { onTaskDelete(contextMenu.task); setContextMenu(null); }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              حذف المهمة
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
