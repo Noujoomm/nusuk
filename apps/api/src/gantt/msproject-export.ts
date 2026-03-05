@@ -300,7 +300,9 @@ export function generateMSProjectXML(
 }
 
 /**
- * Parse MS Project XML and return structured data
+ * Parse MS Project XML and return structured data.
+ * Handles namespaced XML (xmlns="http://schemas.microsoft.com/project")
+ * by stripping namespaces before regex parsing for reliability.
  */
 export function parseMSProjectXML(xmlContent: string): {
   projectName: string;
@@ -321,32 +323,37 @@ export function parseMSProjectXML(xmlContent: string): {
   resources: Array<{ uid: number; name: string; email?: string }>;
   assignments: Array<{ taskUID: number; resourceUID: number; units: number }>;
 } {
-  // Simple XML parser using regex for MS Project format
-  const getTag = (xml: string, tag: string): string => {
-    const match = xml.match(new RegExp(`<${tag}>(.*?)</${tag}>`, 's'));
+  // Strip XML namespaces so regex parsing works on all MS Project files
+  let xml = xmlContent
+    .replace(/\s+xmlns(?::\w+)?="[^"]*"/g, '')  // remove xmlns declarations
+    .replace(/<(\/?)\w+:/g, '<$1');                // remove namespace prefixes like <ms:Task> → <Task>
+
+  const getTag = (block: string, tag: string): string => {
+    const match = block.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
     return match ? match[1].trim() : '';
   };
 
-  const getAllTags = (xml: string, tag: string): string[] => {
+  const getAllTags = (block: string, tag: string): string[] => {
     const results: string[] = [];
-    const regex = new RegExp(`<${tag}>(.*?)</${tag}>`, 'gs');
+    const regex = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'g');
     let match;
-    while ((match = regex.exec(xml)) !== null) {
+    while ((match = regex.exec(block)) !== null) {
       results.push(match[1].trim());
     }
     return results;
   };
 
-  const projectName = getTag(xmlContent, 'Name') || 'Imported Project';
+  const projectName = getTag(xml, 'Name') || 'Imported Project';
 
   // Parse tasks
-  const taskBlocks = getAllTags(xmlContent, 'Task');
+  const taskBlocks = getAllTags(xml, 'Task');
   const depTypeReverse: Record<string, string> = { '0': 'FF', '1': 'FS', '2': 'SF', '3': 'SS' };
 
   const tasks = taskBlocks
     .filter((block) => {
       const uid = parseInt(getTag(block, 'UID'), 10);
-      return uid > 0;
+      const isNull = getTag(block, 'IsNull') === '1';
+      return uid > 0 && !isNull;
     })
     .map((block) => {
       const predBlocks = getAllTags(block, 'PredecessorLink');
@@ -380,7 +387,7 @@ export function parseMSProjectXML(xmlContent: string): {
     });
 
   // Parse resources
-  const resourceBlocks = getAllTags(xmlContent, 'Resource');
+  const resourceBlocks = getAllTags(xml, 'Resource');
   const resources = resourceBlocks
     .filter((block) => {
       const uid = parseInt(getTag(block, 'UID'), 10);
@@ -393,7 +400,7 @@ export function parseMSProjectXML(xmlContent: string): {
     }));
 
   // Parse assignments
-  const assignBlocks = getAllTags(xmlContent, 'Assignment');
+  const assignBlocks = getAllTags(xml, 'Assignment');
   const assignments = assignBlocks.map((block) => ({
     taskUID: parseInt(getTag(block, 'TaskUID'), 10),
     resourceUID: parseInt(getTag(block, 'ResourceUID'), 10),
