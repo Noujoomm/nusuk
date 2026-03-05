@@ -389,8 +389,8 @@ export const ganttApi = {
   // Stats
   stats: (trackId?: string) => api.get('/gantt/stats', { params: { trackId } }),
   // Export/Import
-  exportXML: (trackId?: string) => api.get('/gantt/export/msproject.xml', { params: { trackId }, responseType: 'blob' }),
-  importXML: (xmlContent: string, trackId: string) => api.post('/gantt/import/msproject', { xmlContent, trackId }),
+  exportXML: (trackId?: string) => api.get('/gantt/export/msproject.xml', { params: { trackId }, responseType: 'blob', timeout: 120000 }),
+  importXML: (xmlContent: string, trackId: string) => api.post('/gantt/import/msproject', { xmlContent, trackId }, { timeout: 120000, maxBodyLength: 50 * 1024 * 1024, maxContentLength: 50 * 1024 * 1024 }),
 };
 
 // ─── Admin System Export ───
