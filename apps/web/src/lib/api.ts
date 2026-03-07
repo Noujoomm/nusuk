@@ -101,6 +101,11 @@ export const tracksApi = {
   create: (data: any) => api.post('/tracks', data),
   update: (id: string, data: any) => api.patch(`/tracks/${id}`, data),
   delete: (id: string) => api.delete(`/tracks/${id}`),
+  // PPTX Import
+  pptxExtract: (content: string, trackId: string) =>
+    api.post('/tracks/pptx-extract', { content, trackId }, { timeout: 120000, maxBodyLength: 50 * 1024 * 1024, maxContentLength: 50 * 1024 * 1024 }),
+  pptxApply: (trackId: string, updates: any[]) =>
+    api.post('/tracks/pptx-apply', { trackId, updates }, { timeout: 60000 }),
 };
 
 // ─── Progress & Achievements ───

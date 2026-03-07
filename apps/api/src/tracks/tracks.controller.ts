@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req, HttpCode } from '@nestjs/common';
 import { Request } from 'express';
 import { TracksService } from './tracks.service';
 import { PrismaService } from '../common/prisma.service';
@@ -7,6 +7,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuditService } from '../audit/audit.service';
+import { PptxImportService, ExtractedUpdate } from './pptx-import.service';
 import {
   CreateTrackDto,
   UpdateTrackDto,
@@ -29,6 +30,7 @@ export class TracksController {
     private tracks: TracksService,
     private audit: AuditService,
     private prisma: PrismaService,
+    private pptxImport: PptxImportService,
   ) {}
 
   @Get()
@@ -373,6 +375,30 @@ export class TracksController {
       ip: req.ip,
     });
     return result;
+  }
+
+  // ─── PPTX IMPORT ───
+
+  @Post('pptx-extract')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'track_lead')
+  @HttpCode(200)
+  async extractPptx(
+    @Body() body: { content: string; trackId: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.pptxImport.extractFromPptx(body.content, body.trackId);
+  }
+
+  @Post('pptx-apply')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'track_lead')
+  @HttpCode(200)
+  async applyPptxUpdates(
+    @Body() body: { trackId: string; updates: ExtractedUpdate[] },
+    @CurrentUser() user: any,
+  ) {
+    return this.pptxImport.applyUpdates(body.trackId, body.updates, user.sub);
   }
 
   @Get(':id')
