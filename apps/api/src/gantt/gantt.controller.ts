@@ -25,8 +25,8 @@ export class GanttController {
   // ─── TASKS ───
 
   @Get('tasks')
-  async findAll(@Query() query: GanttQueryDto) {
-    return this.ganttService.findAll(query);
+  async findAll(@Query() query: GanttQueryDto, @CurrentUser() user: any) {
+    return this.ganttService.findAll(query, user ? { sub: user.sub, role: user.role } : undefined);
   }
 
   @Get('tasks/:id')
@@ -195,8 +195,20 @@ export class GanttController {
     res.send(xml);
   }
 
-  // ─── MS PROJECT IMPORT ───
+  // ─── SMART IMPORT (XML / CSV / JSON) ───
 
+  @Post('import')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm')
+  @HttpCode(200)
+  async smartImport(
+    @Body() body: { content: string; trackId: string; format?: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.ganttService.smartImport(body.content, body.trackId, user.sub, body.format);
+  }
+
+  // Legacy endpoint for backward compatibility
   @Post('import/msproject')
   @UseGuards(RolesGuard)
   @Roles('admin', 'pm')
@@ -206,5 +218,18 @@ export class GanttController {
     @CurrentUser() user: any,
   ) {
     return this.ganttService.importMSProject(body.xmlContent, body.trackId, user.sub);
+  }
+
+  // ─── CSV EXPORT ───
+
+  @Get('export/csv')
+  async exportCSV(
+    @Query('trackId') trackId: string | undefined,
+    @Res() res: Response,
+  ) {
+    const csv = await this.ganttService.exportCSV(trackId);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="nusuk-tasks.csv"');
+    res.send(csv);
   }
 }

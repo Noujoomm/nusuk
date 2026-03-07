@@ -106,8 +106,8 @@ export default function GanttPage() {
     }
   };
 
-  // Export MS Project XML
-  const handleExport = async () => {
+  // Export handlers
+  const handleExportXML = async () => {
     try {
       const { data } = await ganttApi.exportXML(selectedTrack || undefined);
       const url = URL.createObjectURL(data);
@@ -116,17 +116,32 @@ export default function GanttPage() {
       a.download = 'nusuk-project.xml';
       a.click();
       URL.revokeObjectURL(url);
-      toast.success('تم تصدير المشروع بنجاح');
+      toast.success('تم تصدير المشروع بنجاح (XML)');
     } catch {
       toast.error('فشل التصدير');
     }
   };
 
-  // Import MS Project XML
+  const handleExportCSV = async () => {
+    try {
+      const { data } = await ganttApi.exportCSV(selectedTrack || undefined);
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'nusuk-tasks.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('تم تصدير المشروع بنجاح (CSV)');
+    } catch {
+      toast.error('فشل التصدير');
+    }
+  };
+
+  // Smart Import (XML / CSV / JSON)
   const handleImport = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.xml';
+    input.accept = '.xml,.csv,.json,.txt';
     input.onchange = async (e: any) => {
       const file = e.target.files?.[0];
       if (!file || !selectedTrack) {
@@ -135,8 +150,15 @@ export default function GanttPage() {
       }
       const text = await file.text();
       try {
-        const { data } = await ganttApi.importXML(text, selectedTrack);
-        toast.success(`تم استيراد ${data.imported} مهمة`);
+        const { data } = await ganttApi.smartImport(text, selectedTrack);
+        const msg = `تم استيراد ${data.imported} مهمة` +
+          (data.dependencies ? ` و ${data.dependencies} ارتباط` : '') +
+          (data.skipped ? ` (تم تخطي ${data.skipped})` : '') +
+          ` — الصيغة: ${data.format?.toUpperCase() || 'XML'}`;
+        toast.success(msg);
+        if (data.errors?.length) {
+          console.warn('Import errors:', data.errors);
+        }
         loadTasks();
       } catch (err: any) {
         toast.error(err.response?.data?.message || 'فشل الاستيراد');
@@ -272,7 +294,8 @@ export default function GanttPage() {
               onTaskClick={handleTaskClick}
               onTaskUpdate={(id, data) => handleTaskUpdate(id, data)}
               onTaskDelete={handleDeleteRequest}
-              onExportXML={handleExport}
+              onExportXML={handleExportXML}
+              onExportCSV={handleExportCSV}
               onImportXML={handleImport}
               onAutoSchedule={handleAutoSchedule}
               onSetBaseline={handleSetBaseline}

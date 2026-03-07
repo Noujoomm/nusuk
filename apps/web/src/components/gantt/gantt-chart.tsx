@@ -64,6 +64,7 @@ interface GanttChartProps {
   onTaskUpdate?: (id: string, data: Partial<GanttTask>) => void;
   onTaskDelete?: (task: GanttTask) => void;
   onExportXML?: () => void;
+  onExportCSV?: () => void;
   onImportXML?: () => void;
   onAutoSchedule?: () => void;
   onSetBaseline?: () => void;
@@ -237,6 +238,7 @@ export default function GanttChart({
   onTaskUpdate,
   onTaskDelete,
   onExportXML,
+  onExportCSV,
   onImportXML,
   onAutoSchedule,
   onSetBaseline,
@@ -366,10 +368,13 @@ export default function GanttChart({
           <Settings className="h-3.5 w-3.5" /> خط الأساس
         </button>
         <button onClick={onExportXML} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 px-2 py-1">
-          <Download className="h-3.5 w-3.5" /> تصدير XML
+          <Download className="h-3.5 w-3.5" /> XML
+        </button>
+        <button onClick={onExportCSV} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 px-2 py-1">
+          <Download className="h-3.5 w-3.5" /> CSV
         </button>
         <button onClick={onImportXML} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 px-2 py-1">
-          <Upload className="h-3.5 w-3.5" /> استيراد
+          <Upload className="h-3.5 w-3.5" /> استيراد (XML/CSV/JSON)
         </button>
       </div>
 
@@ -593,14 +598,41 @@ export default function GanttChart({
                         </div>
                       ) : (
                         <div
-                          className="absolute cursor-pointer group"
+                          className="absolute cursor-grab active:cursor-grabbing group"
                           style={{ right: bar.left, width: bar.width, top: (ROW_HEIGHT - 18) / 2, height: 18 }}
                           onClick={() => onTaskClick?.(task)}
                           onContextMenu={(e) => handleContextMenu(e, task)}
+                          draggable
+                          onDragStart={(e) => {
+                            setDraggingTask(task.id);
+                            e.dataTransfer.setData('text/plain', task.id);
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onDragEnd={(e) => {
+                            if (draggingTask && onTaskUpdate) {
+                              const chartRect = scrollRef.current?.getBoundingClientRect();
+                              if (chartRect) {
+                                const pxPerDay = cellWidth / (zoom === 'week' ? 7 : zoom === 'month' ? 30 : zoom === 'quarter' ? 90 : zoom === 'year' ? 365 : 1);
+                                const deltaX = e.clientX - (chartRect.right - bar.left - bar.width / 2);
+                                const deltaDays = Math.round(deltaX / pxPerDay);
+                                if (Math.abs(deltaDays) >= 1 && task.startDate && task.dueDate) {
+                                  const newStart = new Date(task.startDate);
+                                  newStart.setDate(newStart.getDate() + deltaDays);
+                                  const newEnd = new Date(task.dueDate);
+                                  newEnd.setDate(newEnd.getDate() + deltaDays);
+                                  onTaskUpdate(task.id, {
+                                    startDate: newStart.toISOString(),
+                                    dueDate: newEnd.toISOString(),
+                                  } as any);
+                                }
+                              }
+                            }
+                            setDraggingTask(null);
+                          }}
                         >
                           {/* Bar bg */}
                           <div
-                            className="h-full rounded-md relative overflow-hidden"
+                            className={`h-full rounded-md relative overflow-hidden transition-shadow ${draggingTask === task.id ? 'shadow-lg shadow-emerald-500/30 ring-1 ring-emerald-500/50' : ''}`}
                             style={{
                               backgroundColor: `${task.track?.color || '#10B981'}30`,
                               border: task.isCritical ? '1px solid rgba(239,68,68,0.5)' : '1px solid transparent',

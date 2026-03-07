@@ -58,8 +58,35 @@ export class GanttService {
     priority?: string;
     assigneeId?: string;
     tags?: string;
-  }) {
+  }, user?: { sub: string; role: string }) {
     const where: any = { isDeleted: false };
+
+    // ── RBAC: Track-level filtering ──
+    if (user) {
+      if (user.role === 'admin' || user.role === 'pm') {
+        // Admin/PM see everything — no filter
+      } else if (user.role === 'track_lead') {
+        // Track lead sees only their permitted tracks
+        const perms = await this.prisma.trackPermission.findMany({
+          where: { userId: user.sub },
+          select: { trackId: true },
+        });
+        const trackIds = perms.map((p) => p.trackId);
+        if (trackIds.length > 0) {
+          where.trackId = { in: trackIds };
+        } else {
+          where.trackId = '__none__'; // No access
+        }
+      } else {
+        // Employee sees only tasks assigned to them
+        where.OR = [
+          { assigneeUserId: user.sub },
+          { assignments: { some: { userId: user.sub } } },
+          { resourceAssignments: { some: { userId: user.sub } } },
+          { createdById: user.sub },
+        ];
+      }
+    }
 
     if (query.trackId) where.trackId = query.trackId;
     if (query.status) where.status = query.status;
@@ -871,37 +898,105 @@ export class GanttService {
     );
   }
 
-  // ─── MS PROJECT IMPORT ───
+  // ─── SMART IMPORT ENGINE ───
+
+  detectFileFormat(content: string): 'xml' | 'csv' | 'json' | 'unknown' {
+    const trimmed = content.trim();
+    if (trimmed.startsWith('<?xml') || trimmed.startsWith('<Project') || trimmed.startsWith('<project')) {
+      return 'xml';
+    }
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try { JSON.parse(trimmed); return 'json'; } catch { /* not json */ }
+    }
+    const lines = trimmed.split('\n');
+    if (lines.length >= 2 && (lines[0].includes(',') || lines[0].includes('\t'))) {
+      return 'csv';
+    }
+    return 'unknown';
+  }
+
+  async smartImport(content: string, trackId: string, userId: string, formatHint?: string) {
+    const format = formatHint || this.detectFileFormat(content);
+    this.logger.log(`Smart import: detected format=${format}, trackId=${trackId}`);
+
+    switch (format) {
+      case 'xml':
+        return this.importMSProject(content, trackId, userId);
+      case 'csv':
+        return this.importCSV(content, trackId, userId);
+      case 'json':
+        return this.importJSON(content, trackId, userId);
+      default:
+        throw new BadRequestException('صيغة الملف غير مدعومة. الصيغ المدعومة: XML, CSV, JSON');
+    }
+  }
+
+  // ─── MS PROJECT XML IMPORT ───
 
   async importMSProject(xmlContent: string, trackId: string, userId: string) {
     const parsed = parseMSProjectXML(xmlContent);
-    const results = { imported: 0, skipped: 0, errors: [] as string[] };
+    const results = { imported: 0, skipped: 0, dependencies: 0, errors: [] as string[], format: 'xml' as const };
 
-    // Create tasks
+    if (parsed.tasks.length === 0) {
+      results.errors.push('لم يتم العثور على مهام في الملف. تأكد من أن الملف بصيغة MS Project XML.');
+      return results;
+    }
+
     const uidToId = new Map<number, string>();
+    let sortIndex = 0;
 
     for (const pt of parsed.tasks) {
-      if (pt.isSummary && pt.outlineLevel <= 1) {
+      if (pt.isSummary && pt.outlineLevel === 0) {
         results.skipped++;
-        continue; // Skip top-level summary (it's the track)
+        continue;
+      }
+      if (!pt.name || !pt.name.trim()) {
+        results.skipped++;
+        continue;
       }
 
+      sortIndex++;
+
       try {
+        let startDate = pt.start ? new Date(pt.start) : null;
+        let dueDate = pt.finish ? new Date(pt.finish) : null;
+        let duration = pt.duration || 1;
+
+        if (!startDate && !dueDate) {
+          startDate = new Date(); startDate.setHours(8, 0, 0, 0);
+          dueDate = new Date(startDate);
+          dueDate.setDate(dueDate.getDate() + Math.max(1, Math.ceil(duration)));
+          dueDate.setHours(17, 0, 0, 0);
+        } else if (startDate && !dueDate) {
+          dueDate = new Date(startDate);
+          dueDate.setDate(dueDate.getDate() + Math.max(1, Math.ceil(duration)));
+          dueDate.setHours(17, 0, 0, 0);
+        } else if (!startDate && dueDate) {
+          startDate = new Date(dueDate);
+          startDate.setDate(startDate.getDate() - Math.max(1, Math.ceil(duration)));
+          startDate.setHours(8, 0, 0, 0);
+        }
+
+        if (!pt.duration && startDate && dueDate) {
+          const diffMs = dueDate.getTime() - startDate.getTime();
+          duration = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+        }
+
         const task = await this.prisma.task.create({
           data: {
             title: pt.name,
             titleAr: pt.name,
             trackId,
-            startDate: pt.start ? new Date(pt.start) : undefined,
-            dueDate: pt.finish ? new Date(pt.finish) : undefined,
-            duration: pt.duration,
+            startDate,
+            dueDate,
+            duration,
             isMilestone: pt.isMilestone,
             isSummary: pt.isSummary,
             progress: pt.percentComplete,
             notes: pt.notes || undefined,
             wbs: pt.wbs,
-            outlineLevel: pt.outlineLevel,
-            sortOrder: pt.uid,
+            outlineLevel: pt.outlineLevel || 1,
+            sortOrder: sortIndex,
             status: pt.percentComplete >= 100 ? 'completed' : pt.percentComplete > 0 ? 'in_progress' : 'pending',
             createdById: userId,
             assigneeType: 'TRACK',
@@ -911,11 +1006,10 @@ export class GanttService {
         uidToId.set(pt.uid, task.id);
         results.imported++;
       } catch (err: any) {
-        results.errors.push(`Task "${pt.name}": ${err.message}`);
+        results.errors.push(`"${pt.name}": ${err.message}`);
       }
     }
 
-    // Create dependencies
     for (const pt of parsed.tasks) {
       const succId = uidToId.get(pt.uid);
       if (!succId) continue;
@@ -924,21 +1018,228 @@ export class GanttService {
         if (!predId) continue;
         try {
           await this.prisma.taskDependency.create({
-            data: {
-              predecessorId: predId,
-              successorId: succId,
-              type: (pred.type as any) || 'FS',
-              lag: pred.lag || 0,
-            },
+            data: { predecessorId: predId, successorId: succId, type: (pred.type as any) || 'FS', lag: pred.lag || 0 },
           });
-        } catch {
-          // Skip duplicate dependencies
-        }
+          results.dependencies++;
+        } catch { /* skip duplicates */ }
       }
     }
 
     return results;
   }
+
+  // ─── CSV IMPORT ───
+
+  async importCSV(csvContent: string, trackId: string, userId: string) {
+    const results = { imported: 0, skipped: 0, dependencies: 0, errors: [] as string[], format: 'csv' as const };
+    const lines = csvContent.trim().split('\n');
+    if (lines.length < 2) {
+      results.errors.push('الملف فارغ أو لا يحتوي على بيانات');
+      return results;
+    }
+
+    const delimiter = lines[0].includes('\t') ? '\t' : ',';
+    const headers = this.parseCSVLine(lines[0], delimiter).map((h) => h.toLowerCase().trim().replace(/['"]/g, ''));
+
+    const findCol = (aliases: string[]) => {
+      for (const a of aliases) { const i = headers.indexOf(a); if (i >= 0) return i; }
+      return -1;
+    };
+
+    const nameCol = findCol(['name', 'task', 'task name', 'taskname', 'title', 'اسم المهمة', 'المهمة']);
+    const startCol = findCol(['start', 'start date', 'startdate', 'begin', 'from', 'تاريخ البداية', 'البداية']);
+    const endCol = findCol(['finish', 'end', 'end date', 'enddate', 'due', 'to', 'تاريخ النهاية', 'النهاية']);
+    const durationCol = findCol(['duration', 'days', 'مدة', 'المدة']);
+    const progressCol = findCol(['progress', 'percent', '%complete', 'percentcomplete', 'التقدم']);
+    const priorityCol = findCol(['priority', 'الأولوية']);
+
+    if (nameCol < 0) {
+      results.errors.push('لم يتم العثور على عمود اسم المهمة. الأعمدة المدعومة: Name, Task, Title');
+      return results;
+    }
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = this.parseCSVLine(lines[i], delimiter);
+      const name = cols[nameCol]?.trim().replace(/^["']|["']$/g, '');
+      if (!name) { results.skipped++; continue; }
+
+      const startStr = startCol >= 0 ? cols[startCol]?.trim().replace(/^["']|["']$/g, '') : '';
+      const endStr = endCol >= 0 ? cols[endCol]?.trim().replace(/^["']|["']$/g, '') : '';
+      const durationStr = durationCol >= 0 ? cols[durationCol]?.trim().replace(/^["']|["']$/g, '') : '';
+      const progressStr = progressCol >= 0 ? cols[progressCol]?.trim().replace(/^["']|["']$/g, '') : '0';
+      const priorityStr = priorityCol >= 0 ? cols[priorityCol]?.trim().replace(/^["']|["']$/g, '').toLowerCase() : 'medium';
+
+      let startDate = this.parseFlexDate(startStr);
+      let dueDate = this.parseFlexDate(endStr);
+      const duration = parseFloat(durationStr) || 1;
+      const progress = Math.min(100, Math.max(0, parseInt(progressStr) || 0));
+
+      if (!startDate && !dueDate) {
+        startDate = new Date(); dueDate = new Date(); dueDate.setDate(dueDate.getDate() + Math.ceil(duration));
+      } else if (startDate && !dueDate) {
+        dueDate = new Date(startDate); dueDate.setDate(dueDate.getDate() + Math.ceil(duration));
+      } else if (!startDate && dueDate) {
+        startDate = new Date(dueDate); startDate.setDate(startDate.getDate() - Math.ceil(duration));
+      }
+
+      try {
+        await this.prisma.task.create({
+          data: {
+            title: name, titleAr: name, trackId, startDate, dueDate, duration, progress,
+            priority: (['low', 'medium', 'high', 'critical'].includes(priorityStr) ? priorityStr : 'medium') as any,
+            outlineLevel: 1, sortOrder: i,
+            status: progress >= 100 ? 'completed' : progress > 0 ? 'in_progress' : 'pending',
+            createdById: userId, assigneeType: 'TRACK', assigneeTrackId: trackId,
+          },
+        });
+        results.imported++;
+      } catch (err: any) {
+        results.errors.push(`سطر ${i + 1} "${name}": ${err.message}`);
+      }
+    }
+
+    return results;
+  }
+
+  // ─── JSON IMPORT ───
+
+  async importJSON(jsonContent: string, trackId: string, userId: string) {
+    const results = { imported: 0, skipped: 0, dependencies: 0, errors: [] as string[], format: 'json' as const };
+
+    let data: any;
+    try { data = JSON.parse(jsonContent); } catch {
+      results.errors.push('ملف JSON غير صالح');
+      return results;
+    }
+
+    const taskList: any[] = Array.isArray(data) ? data : (data.tasks || data.Tasks || []);
+    if (taskList.length === 0) {
+      results.errors.push('لم يتم العثور على مهام في ملف JSON');
+      return results;
+    }
+
+    for (let i = 0; i < taskList.length; i++) {
+      const item = taskList[i];
+      const name = item.name || item.Name || item.title || item.Title || item.taskName;
+      if (!name) { results.skipped++; continue; }
+
+      const startStr = item.start || item.Start || item.startDate || item.start_date;
+      const endStr = item.finish || item.Finish || item.end || item.End || item.dueDate || item.due_date;
+      const duration = item.duration || item.Duration || item.days || 1;
+      const progress = item.progress || item.Progress || item.percentComplete || 0;
+
+      let startDate = startStr ? new Date(startStr) : null;
+      let dueDate = endStr ? new Date(endStr) : null;
+      if (startDate && isNaN(startDate.getTime())) startDate = null;
+      if (dueDate && isNaN(dueDate.getTime())) dueDate = null;
+
+      if (!startDate && !dueDate) {
+        startDate = new Date(); dueDate = new Date(); dueDate.setDate(dueDate.getDate() + Math.ceil(duration));
+      } else if (startDate && !dueDate) {
+        dueDate = new Date(startDate); dueDate.setDate(dueDate.getDate() + Math.ceil(duration));
+      } else if (!startDate && dueDate) {
+        startDate = new Date(dueDate); startDate.setDate(startDate.getDate() - Math.ceil(duration));
+      }
+
+      try {
+        await this.prisma.task.create({
+          data: {
+            title: name, titleAr: item.titleAr || item.nameAr || name, trackId, startDate, dueDate,
+            duration: typeof duration === 'number' ? duration : parseFloat(duration) || 1,
+            progress: Math.min(100, Math.max(0, parseInt(progress) || 0)),
+            isMilestone: item.isMilestone || item.milestone || false,
+            isSummary: item.isSummary || item.summary || false,
+            priority: item.priority || 'medium',
+            outlineLevel: item.outlineLevel || item.outline_level || 1,
+            notes: item.notes || item.description || undefined,
+            sortOrder: i + 1,
+            status: progress >= 100 ? 'completed' : progress > 0 ? 'in_progress' : 'pending',
+            createdById: userId, assigneeType: 'TRACK', assigneeTrackId: trackId,
+          },
+        });
+        results.imported++;
+      } catch (err: any) {
+        results.errors.push(`"${name}": ${err.message}`);
+      }
+    }
+
+    return results;
+  }
+
+  // ─── CSV EXPORT ───
+
+  async exportCSV(trackId?: string) {
+    const where: any = { isDeleted: false };
+    if (trackId) where.trackId = trackId;
+
+    const tasks = await this.prisma.task.findMany({
+      where,
+      include: {
+        track: { select: { name: true, nameAr: true } },
+        assigneeUser: { select: { name: true, nameAr: true } },
+        resourceAssignments: { include: { user: { select: { name: true, nameAr: true } } } },
+      },
+      orderBy: [{ trackId: 'asc' }, { sortOrder: 'asc' }],
+    });
+
+    let csv = '\uFEFF';
+    csv += 'ID,اسم المهمة,المسار,تاريخ البداية,تاريخ النهاية,المدة (أيام),التقدم %,الحالة,الأولوية,المسؤول,WBS,المستوى\n';
+
+    for (const t of tasks) {
+      const resources = t.resourceAssignments?.map((ra) => ra.user.nameAr || ra.user.name).join('; ') || t.assigneeUser?.nameAr || '';
+      const row = [
+        t.id,
+        `"${(t.titleAr || t.title).replace(/"/g, '""')}"`,
+        `"${(t.track?.nameAr || t.track?.name || '').replace(/"/g, '""')}"`,
+        t.startDate ? t.startDate.toISOString().split('T')[0] : '',
+        t.dueDate ? t.dueDate.toISOString().split('T')[0] : '',
+        t.duration || '',
+        t.progress,
+        t.status,
+        t.priority,
+        `"${resources.replace(/"/g, '""')}"`,
+        t.wbs || '',
+        t.outlineLevel,
+      ];
+      csv += row.join(',') + '\n';
+    }
+
+    return csv;
+  }
+
+  // ─── HELPERS: CSV Parsing ───
+
+  private parseCSVLine(line: string, delimiter: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; } else { inQuotes = !inQuotes; }
+      } else if (ch === delimiter && !inQuotes) {
+        result.push(current); current = '';
+      } else {
+        current += ch;
+      }
+    }
+    result.push(current);
+    return result;
+  }
+
+  private parseFlexDate(str: string): Date | null {
+    if (!str) return null;
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) return d;
+    const parts = str.split(/[\/\-\.]/);
+    if (parts.length === 3) {
+      const [a, b, c] = parts.map(Number);
+      if (a > 31) return new Date(a, b - 1, c);
+      if (c > 31) return new Date(c, b - 1, a);
+    }
+    return null;
+  }
+
 
   // ─── STATS ───
 

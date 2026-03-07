@@ -390,7 +390,9 @@ export const ganttApi = {
   stats: (trackId?: string) => api.get('/gantt/stats', { params: { trackId } }),
   // Export/Import
   exportXML: (trackId?: string) => api.get('/gantt/export/msproject.xml', { params: { trackId }, responseType: 'blob', timeout: 120000 }),
+  exportCSV: (trackId?: string) => api.get('/gantt/export/csv', { params: { trackId }, responseType: 'blob', timeout: 120000 }),
   importXML: (xmlContent: string, trackId: string) => api.post('/gantt/import/msproject', { xmlContent, trackId }, { timeout: 120000, maxBodyLength: 50 * 1024 * 1024, maxContentLength: 50 * 1024 * 1024 }),
+  smartImport: (content: string, trackId: string, format?: string) => api.post('/gantt/import', { content, trackId, format }, { timeout: 120000, maxBodyLength: 50 * 1024 * 1024, maxContentLength: 50 * 1024 * 1024 }),
 };
 
 // ─── Admin System Export ───
