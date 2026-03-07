@@ -1233,7 +1233,7 @@ export default function TrackDetailPage() {
                       <div className="flex flex-col items-center gap-3">
                         <Upload className="w-8 h-8 text-gray-500" />
                         <p className="text-sm text-gray-400">اضغط لاختيار ملف PPTX</p>
-                        <p className="text-xs text-gray-600">الحد الأقصى: 50 ميجابايت</p>
+                        <p className="text-xs text-gray-600">بدون حد لحجم الملف</p>
                       </div>
                     )}
                     <input
@@ -1244,8 +1244,8 @@ export default function TrackDetailPage() {
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        if (file.size > 50 * 1024 * 1024) {
-                          toast.error('الملف كبير جداً (الحد الأقصى 50 ميجابايت)');
+                        if (file.size > 500 * 1024 * 1024) {
+                          toast.error('الملف كبير جداً (الحد الأقصى 500 ميجابايت)');
                           return;
                         }
                         setPptxExtracting(true);

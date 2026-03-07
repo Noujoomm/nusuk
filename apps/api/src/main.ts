@@ -67,9 +67,9 @@ async function bootstrap() {
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', 1);
 
-  // Increase body size limit for MS Project XML import and large payloads
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ extended: true, limit: '50mb' }));
+  // Increase body size limit for large file imports (PPTX, XML, etc.)
+  app.use(json({ limit: '500mb' }));
+  app.use(urlencoded({ extended: true, limit: '500mb' }));
 
   // Security
   app.use(

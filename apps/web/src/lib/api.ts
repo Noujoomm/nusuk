@@ -103,7 +103,7 @@ export const tracksApi = {
   delete: (id: string) => api.delete(`/tracks/${id}`),
   // PPTX Import
   pptxExtract: (content: string, trackId: string) =>
-    api.post('/tracks/pptx-extract', { content, trackId }, { timeout: 120000, maxBodyLength: 50 * 1024 * 1024, maxContentLength: 50 * 1024 * 1024 }),
+    api.post('/tracks/pptx-extract', { content, trackId }, { timeout: 300000, maxBodyLength: 500 * 1024 * 1024, maxContentLength: 500 * 1024 * 1024 }),
   pptxApply: (trackId: string, updates: any[]) =>
     api.post('/tracks/pptx-apply', { trackId, updates }, { timeout: 60000 }),
 };
@@ -396,8 +396,8 @@ export const ganttApi = {
   // Export/Import
   exportXML: (trackId?: string) => api.get('/gantt/export/msproject.xml', { params: { trackId }, responseType: 'blob', timeout: 120000 }),
   exportCSV: (trackId?: string) => api.get('/gantt/export/csv', { params: { trackId }, responseType: 'blob', timeout: 120000 }),
-  importXML: (xmlContent: string, trackId: string) => api.post('/gantt/import/msproject', { xmlContent, trackId }, { timeout: 120000, maxBodyLength: 50 * 1024 * 1024, maxContentLength: 50 * 1024 * 1024 }),
-  smartImport: (content: string, trackId: string, format?: string) => api.post('/gantt/import', { content, trackId, format }, { timeout: 120000, maxBodyLength: 50 * 1024 * 1024, maxContentLength: 50 * 1024 * 1024 }),
+  importXML: (xmlContent: string, trackId: string) => api.post('/gantt/import/msproject', { xmlContent, trackId }, { timeout: 300000, maxBodyLength: 500 * 1024 * 1024, maxContentLength: 500 * 1024 * 1024 }),
+  smartImport: (content: string, trackId: string, format?: string) => api.post('/gantt/import', { content, trackId, format }, { timeout: 300000, maxBodyLength: 500 * 1024 * 1024, maxContentLength: 500 * 1024 * 1024 }),
 };
 
 // ─── Admin System Export ───
