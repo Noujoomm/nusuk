@@ -409,7 +409,7 @@ export class TracksController {
     @CurrentUser() user: any,
   ) {
     this.ensureTrackAccess(user, body.trackId);
-    return this.pptxImport.applyUpdates(body.trackId, body.updates, user.sub);
+    return this.pptxImport.applyUpdates(body.trackId, body.updates, user.id);
   }
 
   @Post('file-extract')
