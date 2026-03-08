@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req, HttpCode } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req, HttpCode, ForbiddenException } from '@nestjs/common';
 import { Request } from 'express';
 import { TracksService } from './tracks.service';
 import { PrismaService } from '../common/prisma.service';
@@ -377,7 +377,16 @@ export class TracksController {
     return result;
   }
 
-  // ─── PPTX IMPORT ───
+  // ─── FILE IMPORT (Preview-Only → Manual Confirm) ───
+
+  /** Ensure track_lead can only access their own tracks */
+  private ensureTrackAccess(user: any, trackId: string) {
+    if (['admin', 'pm'].includes(user.role)) return; // admin/pm see all
+    const userTrackIds = (user.trackPermissions || []).map((tp: any) => tp.trackId);
+    if (!userTrackIds.includes(trackId)) {
+      throw new ForbiddenException('لا تملك صلاحية الوصول لهذا المسار');
+    }
+  }
 
   @Post('pptx-extract')
   @UseGuards(RolesGuard)
@@ -387,6 +396,7 @@ export class TracksController {
     @Body() body: { content: string; trackId: string },
     @CurrentUser() user: any,
   ) {
+    this.ensureTrackAccess(user, body.trackId);
     return this.pptxImport.extractFromPptx(body.content, body.trackId);
   }
 
@@ -398,6 +408,7 @@ export class TracksController {
     @Body() body: { trackId: string; updates: ExtractedUpdate[] },
     @CurrentUser() user: any,
   ) {
+    this.ensureTrackAccess(user, body.trackId);
     return this.pptxImport.applyUpdates(body.trackId, body.updates, user.sub);
   }
 
@@ -409,6 +420,7 @@ export class TracksController {
     @Body() body: { content: string; trackId: string; fileName: string },
     @CurrentUser() user: any,
   ) {
+    this.ensureTrackAccess(user, body.trackId);
     return this.pptxImport.extractFromFile(body.content, body.trackId, body.fileName);
   }
 

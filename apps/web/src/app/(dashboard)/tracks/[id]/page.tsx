@@ -1199,14 +1199,14 @@ export default function TrackDetailPage() {
         />
       )}
 
-      {/* PPTX Import Modal */}
+      {/* File Import Modal — Preview Only, No Auto-Create */}
       {pptxModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => { if (!pptxExtracting && !pptxApplying) { setPptxModalOpen(false); setPptxResult(null); setPptxUpdates([]); } }}>
-          <div className="glass p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="glass p-6 w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <FileText className="w-5 h-5 text-orange-400" />
-                استيراد تحديثات من ملف
+                {pptxResult ? 'المهام المستخرجة من الملف' : 'استيراد تحديثات من ملف'}
               </h3>
               <button onClick={() => { if (!pptxExtracting && !pptxApplying) { setPptxModalOpen(false); setPptxResult(null); setPptxUpdates([]); } }} className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400">
                 <X className="w-5 h-5" />
@@ -1216,8 +1216,12 @@ export default function TrackDetailPage() {
             {!pptxResult ? (
               <div className="space-y-4">
                 <p className="text-sm text-gray-400">
-                  قم برفع ملف يحتوي على تحديثات المهام (PPTX, XLSX, DOCX, CSV, XML, JSON, TXT). سيتم تحليل المحتوى بالذكاء الاصطناعي ومطابقته مع المهام الحالية.
+                  قم برفع ملف يحتوي على تحديثات المهام (PPTX, XLSX, DOCX, CSV, XML, JSON, TXT). سيتم تحليل المحتوى بالذكاء الاصطناعي وعرض المهام المستخرجة كمعاينة فقط — لن يتم إنشاء أي مهمة تلقائياً.
                 </p>
+
+                <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                  <p className="text-xs text-yellow-400 font-medium">لن يتم حفظ أي بيانات حتى تؤكد الاستيراد يدوياً</p>
+                </div>
 
                 <label className="block">
                   <div className={cn(
@@ -1228,6 +1232,7 @@ export default function TrackDetailPage() {
                       <div className="flex flex-col items-center gap-3">
                         <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
                         <p className="text-sm text-orange-300">جاري تحليل الملف بالذكاء الاصطناعي...</p>
+                        <p className="text-xs text-gray-500">قراءة المحتوى واستخراج المهام...</p>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-3">
@@ -1261,7 +1266,7 @@ export default function TrackDetailPage() {
                           });
                           const res = await tracksApi.fileExtract(base64, id, file.name);
                           setPptxResult(res.data);
-                          setPptxUpdates(res.data.extractedUpdates.map((u: any) => ({ ...u })));
+                          setPptxUpdates(res.data.extractedUpdates.map((u: any) => ({ ...u, selected: u.action !== 'skip' })));
                           const itemCount = res.data.meta?.totalSlides || res.data.meta?.totalRows || res.data.extractedUpdates?.length || 0;
                           toast.success(`تم تحليل الملف: ${itemCount} عنصر - ${res.data.format?.toUpperCase()}`);
                         } catch (err: any) {
@@ -1285,181 +1290,210 @@ export default function TrackDetailPage() {
                   </div>
                 )}
 
-                {/* Stats */}
-                <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl flex-wrap">
+                {/* Preview notice */}
+                <div className="p-2.5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
+                  <p className="text-xs text-yellow-300">هذه معاينة فقط — لم يتم حفظ أي بيانات بعد. اختر المهام التي تريد استيرادها.</p>
+                </div>
+
+                {/* Stats bar */}
+                <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl flex-wrap text-center">
                   {pptxResult.format && (
                     <>
-                      <div className="text-center">
+                      <div>
                         <p className="text-xs font-bold text-orange-400 uppercase">{pptxResult.format}</p>
-                        <p className="text-xs text-gray-500">الصيغة</p>
+                        <p className="text-[10px] text-gray-500">الصيغة</p>
                       </div>
                       <div className="w-px h-8 bg-white/10" />
                     </>
                   )}
-                  {(pptxResult.meta?.totalSlides || pptxResult.meta?.totalRows) && (
-                    <>
-                      <div className="text-center">
-                        <p className="text-xl font-bold text-orange-400">{pptxResult.meta.totalSlides || pptxResult.meta.totalRows}</p>
-                        <p className="text-xs text-gray-500">{pptxResult.meta.totalSlides ? 'شريحة' : 'سطر'}</p>
-                      </div>
-                      <div className="w-px h-8 bg-white/10" />
-                    </>
-                  )}
-                  <div className="text-center">
-                    <p className="text-xl font-bold text-emerald-400">{pptxUpdates.filter((u: any) => u.action === 'update').length}</p>
-                    <p className="text-xs text-gray-500">تحديث</p>
+                  <div>
+                    <p className="text-lg font-bold text-white">{pptxUpdates.length}</p>
+                    <p className="text-[10px] text-gray-500">مهمة مستخرجة</p>
                   </div>
                   <div className="w-px h-8 bg-white/10" />
-                  <div className="text-center">
-                    <p className="text-xl font-bold text-blue-400">{pptxUpdates.filter((u: any) => u.action === 'create').length}</p>
-                    <p className="text-xs text-gray-500">جديد</p>
-                  </div>
-                  <div className="w-px h-8 bg-white/10" />
-                  <div className="text-center">
-                    <p className="text-xl font-bold text-gray-500">{pptxUpdates.filter((u: any) => u.action === 'skip').length}</p>
-                    <p className="text-xs text-gray-500">تخطي</p>
+                  <div>
+                    <p className="text-lg font-bold text-emerald-400">{pptxUpdates.filter((u: any) => u.selected && u.action !== 'skip').length}</p>
+                    <p className="text-[10px] text-gray-500">محددة للاستيراد</p>
                   </div>
                   {pptxResult.meta?.hasImages && (
                     <>
                       <div className="w-px h-8 bg-white/10" />
-                      <div className="text-center">
-                        <p className="text-xs text-violet-400 font-medium">تحليل صور</p>
-                        <p className="text-xs text-gray-500">GPT-4o Vision</p>
+                      <div>
+                        <p className="text-xs text-violet-400 font-medium">GPT-4o Vision</p>
+                        <p className="text-[10px] text-gray-500">تحليل صور</p>
                       </div>
                     </>
                   )}
                 </div>
 
-                {/* Updates list */}
-                <div className="space-y-2 max-h-[40vh] overflow-y-auto">
-                  {pptxUpdates.map((update: any, idx: number) => (
-                    <div key={idx} className={cn(
-                      "p-3 rounded-xl border transition-colors",
-                      update.action === 'update' ? "border-emerald-500/20 bg-emerald-500/5" :
-                      update.action === 'create' ? "border-blue-500/20 bg-blue-500/5" :
-                      "border-white/10 bg-white/5 opacity-50"
-                    )}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium truncate">{update.taskTitle}</p>
-                            {update.slideNumber && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-gray-500 shrink-0">
-                                شريحة {update.slideNumber}
-                              </span>
-                            )}
-                          </div>
-                          {update.matchedTaskTitle && (
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              مطابقة: {update.matchedTaskTitle}
-                            </p>
+                {/* Select all / deselect all */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setPptxUpdates(pptxUpdates.map((u: any) => ({ ...u, selected: true })))}
+                    className="text-xs text-brand-400 hover:underline"
+                  >
+                    تحديد الكل
+                  </button>
+                  <span className="text-gray-600">|</span>
+                  <button
+                    onClick={() => setPptxUpdates(pptxUpdates.map((u: any) => ({ ...u, selected: false })))}
+                    className="text-xs text-gray-500 hover:underline"
+                  >
+                    إلغاء تحديد الكل
+                  </button>
+                </div>
+
+                {/* Extracted tasks table */}
+                <div className="overflow-x-auto max-h-[45vh] overflow-y-auto rounded-xl border border-white/10">
+                  <table className="w-full text-sm">
+                    <thead className="bg-white/5 sticky top-0 z-10">
+                      <tr className="text-right text-xs text-gray-400">
+                        <th className="p-2.5 w-10">
+                          <input
+                            type="checkbox"
+                            checked={pptxUpdates.every((u: any) => u.selected)}
+                            onChange={(e) => setPptxUpdates(pptxUpdates.map((u: any) => ({ ...u, selected: e.target.checked })))}
+                            className="rounded border-gray-600 bg-white/5 text-brand-500 focus:ring-brand-500"
+                          />
+                        </th>
+                        <th className="p-2.5">اسم المهمة</th>
+                        <th className="p-2.5">المسؤول</th>
+                        <th className="p-2.5">تاريخ البدء</th>
+                        <th className="p-2.5">تاريخ الانتهاء</th>
+                        <th className="p-2.5">الحالة</th>
+                        <th className="p-2.5">الشريحة</th>
+                        <th className="p-2.5">النوع</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {pptxUpdates.map((update: any, idx: number) => (
+                        <tr
+                          key={idx}
+                          className={cn(
+                            "transition-colors hover:bg-white/5",
+                            !update.selected && "opacity-40"
                           )}
-                          {update.notes && (
-                            <p className="text-xs text-gray-400 mt-1 line-clamp-2">{update.notes}</p>
-                          )}
-                          {update.challenges && (
-                            <p className="text-xs text-red-400/80 mt-1">
-                              <AlertTriangle className="w-3 h-3 inline ml-1" />
-                              {update.challenges}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                            {update.status && (
-                              <span className={cn("text-xs px-2 py-0.5 rounded-full", TASK_STATUS_COLORS[update.status as keyof typeof TASK_STATUS_COLORS] || 'bg-gray-500/20 text-gray-400')}>
+                        >
+                          <td className="p-2.5">
+                            <input
+                              type="checkbox"
+                              checked={update.selected}
+                              onChange={() => {
+                                const updated = [...pptxUpdates];
+                                updated[idx] = { ...updated[idx], selected: !updated[idx].selected };
+                                setPptxUpdates(updated);
+                              }}
+                              className="rounded border-gray-600 bg-white/5 text-brand-500 focus:ring-brand-500"
+                            />
+                          </td>
+                          <td className="p-2.5">
+                            <div className="max-w-[200px]">
+                              <p className="font-medium truncate text-white" title={update.taskTitle}>{update.taskTitle}</p>
+                              {update.matchedTaskTitle && (
+                                <p className="text-[10px] text-gray-500 truncate" title={update.matchedTaskTitle}>
+                                  مطابقة: {update.matchedTaskTitle}
+                                </p>
+                              )}
+                              {update.notes && (
+                                <p className="text-[10px] text-gray-600 truncate mt-0.5" title={update.notes}>{update.notes}</p>
+                              )}
+                              {update.challenges && (
+                                <p className="text-[10px] text-red-400/70 truncate mt-0.5">
+                                  <AlertTriangle className="w-2.5 h-2.5 inline ml-0.5" />
+                                  {update.challenges}
+                                </p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-2.5 text-xs text-gray-400">{update.responsible || '—'}</td>
+                          <td className="p-2.5 text-xs text-gray-400 whitespace-nowrap">{update.startDate || '—'}</td>
+                          <td className="p-2.5 text-xs text-gray-400 whitespace-nowrap">{update.endDate || update.dueDate || '—'}</td>
+                          <td className="p-2.5">
+                            {update.status ? (
+                              <span className={cn("text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap", TASK_STATUS_COLORS[update.status as keyof typeof TASK_STATUS_COLORS] || 'bg-gray-500/20 text-gray-400')}>
                                 {TASK_STATUS_LABELS[update.status as keyof typeof TASK_STATUS_LABELS] || update.status}
                               </span>
+                            ) : (
+                              <span className="text-xs text-gray-600">—</span>
                             )}
-                            {update.progress !== undefined && (
-                              <span className="text-xs text-gray-500">{update.progress}%</span>
-                            )}
-                            {update.dueDate && (
-                              <span className="text-xs text-gray-500">
-                                <Clock className="w-3 h-3 inline ml-0.5" />
-                                {update.dueDate}
-                              </span>
-                            )}
+                          </td>
+                          <td className="p-2.5 text-xs text-gray-500 text-center">
+                            {update.slideNumber || '—'}
+                          </td>
+                          <td className="p-2.5">
                             <span className={cn(
-                              "text-xs px-1.5 py-0.5 rounded",
-                              update.confidence === 'high' ? 'bg-emerald-500/20 text-emerald-400' :
-                              update.confidence === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                              'bg-red-500/20 text-red-400'
+                              "text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap",
+                              update.action === 'update' ? 'bg-emerald-500/20 text-emerald-400' :
+                              update.action === 'create' ? 'bg-blue-500/20 text-blue-400' :
+                              'bg-gray-500/20 text-gray-500'
                             )}>
-                              {update.confidence === 'high' ? 'دقة عالية' : update.confidence === 'medium' ? 'دقة متوسطة' : 'دقة منخفضة'}
+                              {update.action === 'update' ? 'تحديث' : update.action === 'create' ? 'جديد' : 'تخطي'}
                             </span>
-                          </div>
-                          {update.aiReason && (
-                            <p className="text-[11px] text-gray-600 mt-1 italic">{update.aiReason}</p>
-                          )}
-                        </div>
-
-                        {/* Action toggle */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={() => {
-                              const updated = [...pptxUpdates];
-                              updated[idx] = { ...updated[idx], action: updated[idx].action === 'skip' ? (updated[idx].matchedTaskId ? 'update' : 'create') : 'skip' };
-                              setPptxUpdates(updated);
-                            }}
-                            className={cn(
-                              "p-1.5 rounded-lg transition-colors",
-                              update.action === 'skip' ? "text-gray-600 hover:text-white hover:bg-white/10" : "text-emerald-400 hover:bg-emerald-500/20"
-                            )}
-                            title={update.action === 'skip' ? 'تفعيل' : 'تخطي'}
-                          >
-                            {update.action === 'skip' ? <SkipForward className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                          </td>
+                        </tr>
+                      ))}
+                      {pptxUpdates.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="p-8 text-center text-gray-500 text-sm">
+                            لم يتم اكتشاف مهام في الملف المرفوع
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
 
                 {/* Action buttons */}
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={async () => {
-                      const activeUpdates = pptxUpdates.filter((u: any) => u.action !== 'skip');
-                      if (activeUpdates.length === 0) {
-                        toast.error('لا توجد تحديثات للتطبيق');
+                      const selectedUpdates = pptxUpdates.filter((u: any) => u.selected && u.action !== 'skip');
+                      if (selectedUpdates.length === 0) {
+                        toast.error('لم تحدد أي مهام للاستيراد');
                         return;
                       }
                       setPptxApplying(true);
                       try {
-                        const res = await tracksApi.pptxApply(id, activeUpdates);
+                        const res = await tracksApi.pptxApply(id, selectedUpdates);
                         const r = res.data;
-                        toast.success(`تم تطبيق ${r.updated} تحديث و ${r.created} مهمة جديدة`);
+                        toast.success(`تم استيراد ${r.updated} تحديث و ${r.created} مهمة جديدة`);
                         setPptxModalOpen(false);
                         setPptxResult(null);
                         setPptxUpdates([]);
-                        // Reload tasks
                         loadTrackTasks();
                       } catch (err: any) {
-                        toast.error(err.response?.data?.message || 'فشل تطبيق التحديثات');
+                        toast.error(err.response?.data?.message || 'فشل استيراد المهام');
                       } finally {
                         setPptxApplying(false);
                       }
                     }}
-                    disabled={pptxApplying || pptxUpdates.every((u: any) => u.action === 'skip')}
+                    disabled={pptxApplying || pptxUpdates.every((u: any) => !u.selected)}
                     className="flex-1 btn-primary disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {pptxApplying ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        جاري التطبيق...
+                        جاري الاستيراد...
                       </>
                     ) : (
                       <>
                         <Check className="w-4 h-4" />
-                        تطبيق التحديثات ({pptxUpdates.filter((u: any) => u.action !== 'skip').length})
+                        استيراد المهام المحددة ({pptxUpdates.filter((u: any) => u.selected && u.action !== 'skip').length})
                       </>
                     )}
                   </button>
                   <button
-                    onClick={() => { setPptxResult(null); setPptxUpdates([]); }}
+                    onClick={() => {
+                      setPptxModalOpen(false);
+                      setPptxResult(null);
+                      setPptxUpdates([]);
+                    }}
                     disabled={pptxApplying}
-                    className="px-4 py-2 rounded-xl bg-white/5 text-gray-400 hover:bg-white/10 text-sm font-medium transition-colors"
+                    className="px-6 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm font-medium transition-colors border border-red-500/20"
                   >
-                    رفع ملف آخر
+                    <X className="w-4 h-4 inline ml-1" />
+                    إلغاء الاستيراد
                   </button>
                 </div>
               </div>

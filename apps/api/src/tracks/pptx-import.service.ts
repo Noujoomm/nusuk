@@ -7,6 +7,9 @@ import { PptxParserService, PptxParseResult, SlideImage } from './pptx-parser.se
 export interface ExtractedUpdate {
   taskTitle: string;
   taskTitleAr?: string;
+  responsible?: string;
+  startDate?: string;
+  endDate?: string;
   status?: string;
   progress?: number;
   notes?: string;
@@ -251,6 +254,9 @@ Return ONLY a valid JSON object:
     {
       "taskTitle": "Title in English or original language",
       "taskTitleAr": "Arabic title if available",
+      "responsible": "Person or team responsible (if mentioned)",
+      "startDate": "YYYY-MM-DD if mentioned, null otherwise",
+      "endDate": "YYYY-MM-DD if mentioned, null otherwise",
       "status": "pending|in_progress|under_review|completed|delayed|cancelled",
       "progress": 0-100,
       "notes": "Key details from the file",
@@ -259,6 +265,7 @@ Return ONLY a valid JSON object:
       "matchedTaskId": "ID from existing tasks if matched, null otherwise",
       "confidence": "high|medium|low",
       "action": "update|create|skip",
+      "slideNumber": null,
       "aiReason": "Brief explanation"
     }
   ]
@@ -291,7 +298,10 @@ EXTRACTION RULES:
 7. For CSV/Excel: each row may represent a task update.
 8. For JSON: look for task objects with name/status/progress fields.
 9. For Word/Text: look for task mentions, bullet points, status updates.
-10. If data is clearly not task-related, set action to "skip".`,
+10. If data is clearly not task-related, set action to "skip".
+11. Extract responsible person/owner from keywords: "المسؤول", "المكلف", "owner", "responsible", "assigned to", "مسؤول التنفيذ".
+12. Extract start date from: "تاريخ البدء", "start date", "start", "بداية".
+13. Extract end date from: "تاريخ الانتهاء", "end date", "finish", "deadline", "نهاية", "الموعد النهائي".`,
         },
       ], { temperature: 0.1, maxTokens: 8192, model: 'gpt-4o' });
 
@@ -426,6 +436,9 @@ You must return ONLY a valid JSON object with this structure:
     {
       "taskTitle": "Title in English or original language",
       "taskTitleAr": "Arabic title if available",
+      "responsible": "Person or team responsible (if mentioned)",
+      "startDate": "YYYY-MM-DD if mentioned, null otherwise",
+      "endDate": "YYYY-MM-DD if mentioned, null otherwise",
       "status": "pending|in_progress|under_review|completed|delayed|cancelled",
       "progress": 0-100,
       "notes": "Key findings, details, or updates from the slide",
@@ -464,7 +477,10 @@ EXTRACTION RULES:
 9. For confidence: "high" = exact or near-exact title match, "medium" = partial match or context-based, "low" = inferred.
 10. Progress mapping when not explicitly stated: pending=0, in_progress=50, under_review=80, completed=100, delayed=keep current.
 11. If a task is mentioned but isn't in the existing task list, mark action as "create" only if it clearly describes a specific task (not general commentary).
-12. Combine information from slide text, notes, tables, and image analysis for the most complete picture.`,
+12. Combine information from slide text, notes, tables, and image analysis for the most complete picture.
+13. Extract responsible person/owner from keywords: "المسؤول", "المكلف", "owner", "responsible", "assigned to", "مسؤول التنفيذ".
+14. Extract start date from: "تاريخ البدء", "start date", "start", "بداية".
+15. Extract end date from: "تاريخ الانتهاء", "end date", "finish", "deadline", "نهاية", "الموعد النهائي".`,
     });
 
     // Add images directly for GPT-4o vision (up to 5 most relevant)
@@ -789,8 +805,11 @@ Return a brief structured analysis for each image.`,
             data.completionDate = new Date();
           }
 
-          if (update.dueDate) {
-            data.dueDate = new Date(update.dueDate);
+          if (update.dueDate || update.endDate) {
+            data.dueDate = new Date(update.endDate || update.dueDate!);
+          }
+          if (update.startDate) {
+            data.startDate = new Date(update.startDate);
           }
 
           await this.prisma.task.update({
@@ -802,6 +821,7 @@ Return a brief structured analysis for each image.`,
           const updateParts = ['[تحديث من استيراد ملف]'];
           if (update.status) updateParts.push(`الحالة: ${update.status}`);
           if (update.progress !== undefined) updateParts.push(`التقدم: ${update.progress}%`);
+          if (update.responsible) updateParts.push(`المسؤول: ${update.responsible}`);
           if (update.notes) updateParts.push(update.notes);
           if (update.challenges) updateParts.push(`التحديات: ${update.challenges}`);
 
@@ -816,18 +836,19 @@ Return a brief structured analysis for each image.`,
           result.updated++;
           result.details.push({ taskTitle: update.taskTitle, action: 'update', success: true });
         } else if (update.action === 'create') {
-          await this.prisma.task.create({
-            data: {
-              title: update.taskTitle,
-              titleAr: update.taskTitleAr || update.taskTitle,
-              trackId,
-              status: (update.status as any) || 'pending',
-              progress: update.progress || 0,
-              notes: update.notes,
-              dueDate: update.dueDate ? new Date(update.dueDate) : undefined,
-              createdById: userId,
-            },
-          });
+          const createData: any = {
+            title: update.taskTitle,
+            titleAr: update.taskTitleAr || update.taskTitle,
+            trackId,
+            status: (update.status as any) || 'pending',
+            progress: update.progress || 0,
+            notes: [update.notes, update.responsible ? `المسؤول: ${update.responsible}` : ''].filter(Boolean).join(' | ') || undefined,
+            dueDate: update.endDate || update.dueDate ? new Date(update.endDate || update.dueDate!) : undefined,
+            createdById: userId,
+          };
+          if (update.startDate) createData.startDate = new Date(update.startDate);
+
+          await this.prisma.task.create({ data: createData });
 
           result.created++;
           result.details.push({ taskTitle: update.taskTitle, action: 'create', success: true });
