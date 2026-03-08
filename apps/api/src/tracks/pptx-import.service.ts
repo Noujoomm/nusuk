@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import * as JSZip from 'jszip';
 import { PrismaService } from '../common/prisma.service';
 import { OpenAIService } from '../openai/openai.service';
 import { PptxParserService, PptxParseResult, SlideImage } from './pptx-parser.service';
@@ -17,6 +18,16 @@ export interface ExtractedUpdate {
   action: 'update' | 'create' | 'skip';
   slideNumber?: number;
   aiReason?: string;
+}
+
+export interface FileImportResult {
+  format: string;
+  extractedText: string;
+  extractedUpdates: ExtractedUpdate[];
+  trackName: string;
+  trackId: string;
+  aiAnalysis?: string;
+  meta?: { totalSlides?: number; totalRows?: number; hasImages?: boolean; hasTables?: boolean };
 }
 
 export interface PptxImportResult {
@@ -43,6 +54,291 @@ export class PptxImportService {
     private openai: OpenAIService,
     private pptxParser: PptxParserService,
   ) {}
+
+  // ─── Universal File Extraction ───
+
+  async extractFromFile(base64Content: string, trackId: string, fileName: string): Promise<FileImportResult> {
+    const track = await this.prisma.track.findUnique({ where: { id: trackId } });
+    if (!track) throw new BadRequestException('Track not found');
+
+    const buffer = Buffer.from(base64Content, 'base64');
+    const ext = (fileName.split('.').pop() || '').toLowerCase();
+
+    // Detect format and extract text
+    let extractedText = '';
+    let format = ext;
+    let meta: FileImportResult['meta'] = {};
+
+    switch (ext) {
+      case 'pptx': {
+        const parsed = await this.pptxParser.parse(buffer);
+        extractedText = parsed.fullText;
+        meta = { totalSlides: parsed.totalSlides, hasImages: parsed.hasImages, hasTables: parsed.hasTables };
+
+        // For PPTX, use the full multi-pass with images
+        const existingTasks = await this.getExistingTasks(trackId);
+        const taskList = this.buildTaskList(existingTasks);
+
+        let extractedUpdates: ExtractedUpdate[];
+        let aiAnalysis: string | undefined;
+
+        if (this.openai.isAvailable) {
+          const result = await this.aiExtractMultiPass(parsed, taskList, existingTasks, track);
+          extractedUpdates = result.updates;
+          aiAnalysis = result.summary;
+        } else {
+          extractedUpdates = this.heuristicExtract(parsed, existingTasks);
+        }
+
+        return { format: 'pptx', extractedText, extractedUpdates, trackName: track.nameAr || track.name, trackId, aiAnalysis, meta };
+      }
+
+      case 'xml': {
+        extractedText = buffer.toString('utf-8');
+        // Strip XML namespaces for readability
+        extractedText = extractedText
+          .replace(/\s+xmlns(?::\w+)?="[^"]*"/g, '')
+          .replace(/<(\/?)\w+:/g, '<$1');
+        format = 'xml';
+        break;
+      }
+
+      case 'csv':
+      case 'txt': {
+        extractedText = buffer.toString('utf-8').replace(/^\uFEFF/, ''); // strip BOM
+        const lines = extractedText.split('\n').filter(l => l.trim());
+        meta = { totalRows: lines.length };
+        format = ext;
+        break;
+      }
+
+      case 'json': {
+        extractedText = buffer.toString('utf-8');
+        try {
+          const parsed = JSON.parse(extractedText);
+          extractedText = JSON.stringify(parsed, null, 2);
+        } catch { /* keep raw */ }
+        format = 'json';
+        break;
+      }
+
+      case 'xlsx':
+      case 'xls': {
+        try {
+          const ExcelJS = require('exceljs');
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(buffer);
+          const lines: string[] = [];
+          workbook.eachSheet((sheet: any) => {
+            lines.push(`--- Sheet: ${sheet.name} ---`);
+            sheet.eachRow((row: any, rowNum: number) => {
+              const values = row.values?.slice(1) || []; // ExcelJS is 1-indexed
+              lines.push(values.map((v: any) => v?.toString?.() || '').join(' | '));
+            });
+          });
+          extractedText = lines.join('\n');
+          meta = { totalRows: lines.length, hasTables: true };
+        } catch (e) {
+          this.logger.error('Excel parse failed', e);
+          throw new BadRequestException('Failed to parse Excel file');
+        }
+        format = 'xlsx';
+        break;
+      }
+
+      case 'docx': {
+        try {
+          const zip = await JSZip.loadAsync(buffer);
+          const docXml = await zip.file('word/document.xml')?.async('text');
+          if (docXml) {
+            // Strip XML tags, keep text
+            const clean = docXml
+              .replace(/<\/?[a-zA-Z]+:/g, (m) => m.replace(/[a-zA-Z]+:/, ''))
+              .replace(/\s+xmlns(?::\w+)?="[^"]*"/g, '');
+            const texts: string[] = [];
+            const paragraphs = clean.match(/<p[\s>][\s\S]*?<\/p>/g) || [];
+            for (const p of paragraphs) {
+              const tMatches = p.match(/<t[^>]*>([\s\S]*?)<\/t>/g) || [];
+              const lineText = tMatches.map(t => t.replace(/<t[^>]*>([\s\S]*?)<\/t>/, '$1')).join('').trim();
+              if (lineText) texts.push(lineText);
+            }
+            extractedText = texts.join('\n');
+          }
+        } catch (e) {
+          this.logger.error('DOCX parse failed', e);
+          throw new BadRequestException('Failed to parse Word file');
+        }
+        format = 'docx';
+        break;
+      }
+
+      default:
+        // For any other format, try reading as UTF-8 text
+        try {
+          extractedText = buffer.toString('utf-8');
+        } catch {
+          throw new BadRequestException(`Unsupported file format: .${ext}`);
+        }
+        format = ext || 'text';
+    }
+
+    // For non-PPTX formats: use AI to analyze the extracted text
+    const existingTasks = await this.getExistingTasks(trackId);
+    const taskList = this.buildTaskList(existingTasks);
+
+    let extractedUpdates: ExtractedUpdate[];
+    let aiAnalysis: string | undefined;
+
+    if (this.openai.isAvailable) {
+      const result = await this.aiExtractFromText(extractedText, format, taskList, existingTasks, track);
+      extractedUpdates = result.updates;
+      aiAnalysis = result.summary;
+    } else {
+      extractedUpdates = [];
+    }
+
+    return { format, extractedText, extractedUpdates, trackName: track.nameAr || track.name, trackId, aiAnalysis, meta };
+  }
+
+  private async getExistingTasks(trackId: string) {
+    return this.prisma.task.findMany({
+      where: { trackId, isDeleted: false },
+      select: {
+        id: true, title: true, titleAr: true, status: true, progress: true,
+        dueDate: true, notes: true, priority: true,
+      },
+    });
+  }
+
+  private buildTaskList(existingTasks: Array<{ id: string; title: string; titleAr: string; status: string; progress: number; dueDate: Date | null; priority: string }>) {
+    return existingTasks
+      .map(t => `- ID: ${t.id} | "${t.title}" | "${t.titleAr}" | Status: ${t.status} | Progress: ${t.progress}% | Priority: ${t.priority}${t.dueDate ? ` | Due: ${t.dueDate.toISOString().split('T')[0]}` : ''}`)
+      .join('\n');
+  }
+
+  // ─── AI Text Extraction (for non-PPTX formats) ───
+
+  private async aiExtractFromText(
+    text: string,
+    format: string,
+    taskList: string,
+    existingTasks: Array<{ id: string; title: string; titleAr: string; status: string; progress: number }>,
+    track: { name: string; nameAr: string },
+  ): Promise<{ updates: ExtractedUpdate[]; summary: string }> {
+    const formatDescriptions: Record<string, string> = {
+      xml: 'XML document (possibly MS Project, task list, or structured data)',
+      csv: 'CSV spreadsheet with tabular data',
+      xlsx: 'Excel spreadsheet with tabular data',
+      json: 'JSON data file',
+      docx: 'Word document',
+      txt: 'Plain text file',
+    };
+
+    const systemPrompt = `You are an expert project management AI assistant that analyzes files uploaded by Track Leaders.
+The file is a ${formatDescriptions[format] || format + ' file'} containing information about tasks in track "${track.nameAr}" (${track.name}).
+
+Your job is to:
+1. Understand the file content regardless of format
+2. Extract task updates and match them to existing tasks
+3. Detect task names, statuses, progress, dates, and any challenges
+
+You understand Arabic and English perfectly.
+
+Return ONLY a valid JSON object:
+{
+  "summary": "Brief Arabic summary of the file content (2-3 sentences)",
+  "updates": [
+    {
+      "taskTitle": "Title in English or original language",
+      "taskTitleAr": "Arabic title if available",
+      "status": "pending|in_progress|under_review|completed|delayed|cancelled",
+      "progress": 0-100,
+      "notes": "Key details from the file",
+      "challenges": "Any challenges or blockers mentioned",
+      "dueDate": "YYYY-MM-DD if mentioned, null otherwise",
+      "matchedTaskId": "ID from existing tasks if matched, null otherwise",
+      "confidence": "high|medium|low",
+      "action": "update|create|skip",
+      "aiReason": "Brief explanation"
+    }
+  ]
+}`;
+
+    // Truncate very large text to avoid token limits
+    const maxTextLen = 30000;
+    const truncatedText = text.length > maxTextLen
+      ? text.substring(0, maxTextLen) + `\n\n... [truncated, ${text.length - maxTextLen} more characters]`
+      : text;
+
+    try {
+      const response = await this.openai.chat([
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: `EXISTING TASKS IN TRACK "${track.nameAr}":
+${taskList || '(No existing tasks yet)'}
+
+FILE CONTENT (${format.toUpperCase()}):
+${truncatedText}
+
+EXTRACTION RULES:
+1. Match updates to existing tasks using title similarity (Arabic or English).
+2. Extract status keywords: "مكتمل/completed" = completed, "قيد التنفيذ/in progress" = in_progress, "متأخر/delayed" = delayed, "مراجعة/review" = under_review.
+3. Extract progress percentages.
+4. Extract dates and deadlines.
+5. Extract challenges/blockers.
+6. For XML: look for <Task>, <Name>, <PercentComplete>, <Start>, <Finish> elements.
+7. For CSV/Excel: each row may represent a task update.
+8. For JSON: look for task objects with name/status/progress fields.
+9. For Word/Text: look for task mentions, bullet points, status updates.
+10. If data is clearly not task-related, set action to "skip".`,
+        },
+      ], { temperature: 0.1, maxTokens: 8192, model: 'gpt-4o' });
+
+      const jsonStr = response.replace(/```json\n?|\n?```/g, '').trim();
+      const parsed = JSON.parse(jsonStr);
+      const summary = parsed.summary || '';
+      const updates = (parsed.updates || []) as ExtractedUpdate[];
+
+      // Validate task IDs
+      const validUpdates = updates.map(u => {
+        if (u.matchedTaskId) {
+          const matched = existingTasks.find(t => t.id === u.matchedTaskId);
+          if (matched) {
+            u.matchedTaskTitle = `${matched.titleAr} (${matched.title})`;
+          } else {
+            const fuzzyMatch = this.fuzzyMatchTask(u.taskTitle, u.taskTitleAr, existingTasks);
+            if (fuzzyMatch) {
+              u.matchedTaskId = fuzzyMatch.id;
+              u.matchedTaskTitle = `${fuzzyMatch.titleAr} (${fuzzyMatch.title})`;
+              u.confidence = u.confidence === 'high' ? 'medium' : 'low';
+            } else {
+              u.matchedTaskId = undefined;
+              u.confidence = 'low';
+              if (u.action === 'update') u.action = 'create';
+            }
+          }
+        } else if (u.action === 'update') {
+          const fuzzyMatch = this.fuzzyMatchTask(u.taskTitle, u.taskTitleAr, existingTasks);
+          if (fuzzyMatch) {
+            u.matchedTaskId = fuzzyMatch.id;
+            u.matchedTaskTitle = `${fuzzyMatch.titleAr} (${fuzzyMatch.title})`;
+          } else {
+            u.action = 'create';
+            u.confidence = 'low';
+          }
+        }
+        return u;
+      });
+
+      return { updates: validUpdates, summary };
+    } catch (error) {
+      this.logger.error('AI text extraction failed', error);
+      return { updates: [], summary: '' };
+    }
+  }
+
+  // ─── PPTX-specific extraction (backward compat) ───
 
   async extractFromPptx(base64Content: string, trackId: string): Promise<PptxImportResult> {
     const track = await this.prisma.track.findUnique({ where: { id: trackId } });
@@ -503,7 +799,7 @@ Return a brief structured analysis for each image.`,
           });
 
           // Build update content with details
-          const updateParts = ['[تحديث من PowerPoint]'];
+          const updateParts = ['[تحديث من استيراد ملف]'];
           if (update.status) updateParts.push(`الحالة: ${update.status}`);
           if (update.progress !== undefined) updateParts.push(`التقدم: ${update.progress}%`);
           if (update.notes) updateParts.push(update.notes);

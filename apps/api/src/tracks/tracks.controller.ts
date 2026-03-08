@@ -401,6 +401,17 @@ export class TracksController {
     return this.pptxImport.applyUpdates(body.trackId, body.updates, user.sub);
   }
 
+  @Post('file-extract')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'track_lead')
+  @HttpCode(200)
+  async extractFile(
+    @Body() body: { content: string; trackId: string; fileName: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.pptxImport.extractFromFile(body.content, body.trackId, body.fileName);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.tracks.findById(id);

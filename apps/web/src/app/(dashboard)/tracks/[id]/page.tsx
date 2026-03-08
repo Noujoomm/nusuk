@@ -401,8 +401,8 @@ export default function TrackDetailPage() {
                   onClick={() => setPptxModalOpen(true)}
                   className="rounded-xl bg-orange-500/20 px-4 py-2.5 text-sm font-medium text-orange-300 hover:bg-orange-500/30 transition-colors flex items-center gap-2"
                 >
-                  <Presentation className="h-4 w-4" />
-                  استيراد PowerPoint
+                  <FileText className="h-4 w-4" />
+                  استيراد ملف
                 </button>
               )}
               {isAdmin && (
@@ -1205,8 +1205,8 @@ export default function TrackDetailPage() {
           <div className="glass p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold flex items-center gap-2">
-                <Presentation className="w-5 h-5 text-orange-400" />
-                استيراد تحديثات من PowerPoint
+                <FileText className="w-5 h-5 text-orange-400" />
+                استيراد تحديثات من ملف
               </h3>
               <button onClick={() => { if (!pptxExtracting && !pptxApplying) { setPptxModalOpen(false); setPptxResult(null); setPptxUpdates([]); } }} className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400">
                 <X className="w-5 h-5" />
@@ -1216,7 +1216,7 @@ export default function TrackDetailPage() {
             {!pptxResult ? (
               <div className="space-y-4">
                 <p className="text-sm text-gray-400">
-                  قم برفع ملف PowerPoint يحتوي على تحديثات المهام. سيتم تحليل المحتوى تلقائياً ومطابقته مع المهام الحالية.
+                  قم برفع ملف يحتوي على تحديثات المهام (PPTX, XLSX, DOCX, CSV, XML, JSON, TXT). سيتم تحليل المحتوى بالذكاء الاصطناعي ومطابقته مع المهام الحالية.
                 </p>
 
                 <label className="block">
@@ -1227,18 +1227,18 @@ export default function TrackDetailPage() {
                     {pptxExtracting ? (
                       <div className="flex flex-col items-center gap-3">
                         <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
-                        <p className="text-sm text-orange-300">جاري تحليل العرض التقديمي...</p>
+                        <p className="text-sm text-orange-300">جاري تحليل الملف بالذكاء الاصطناعي...</p>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-3">
                         <Upload className="w-8 h-8 text-gray-500" />
-                        <p className="text-sm text-gray-400">اضغط لاختيار ملف PPTX</p>
+                        <p className="text-sm text-gray-400">اضغط لاختيار ملف (PPTX, XLSX, DOCX, CSV, XML, JSON)</p>
                         <p className="text-xs text-gray-600">بدون حد لحجم الملف</p>
                       </div>
                     )}
                     <input
                       type="file"
-                      accept=".pptx"
+                      accept=".pptx,.xlsx,.xls,.docx,.csv,.xml,.json,.txt"
                       className="hidden"
                       disabled={pptxExtracting}
                       onChange={async (e) => {
@@ -1259,10 +1259,11 @@ export default function TrackDetailPage() {
                             reader.onerror = reject;
                             reader.readAsDataURL(file);
                           });
-                          const res = await tracksApi.pptxExtract(base64, id);
+                          const res = await tracksApi.fileExtract(base64, id, file.name);
                           setPptxResult(res.data);
                           setPptxUpdates(res.data.extractedUpdates.map((u: any) => ({ ...u })));
-                          toast.success(`تم تحليل ${res.data.parsed.totalSlides} شريحة`);
+                          const itemCount = res.data.meta?.totalSlides || res.data.meta?.totalRows || res.data.extractedUpdates?.length || 0;
+                          toast.success(`تم تحليل الملف: ${itemCount} عنصر - ${res.data.format?.toUpperCase()}`);
                         } catch (err: any) {
                           toast.error(err.response?.data?.message || 'فشل تحليل الملف');
                         } finally {
@@ -1285,12 +1286,25 @@ export default function TrackDetailPage() {
                 )}
 
                 {/* Stats */}
-                <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl">
-                  <div className="text-center">
-                    <p className="text-xl font-bold text-orange-400">{pptxResult.parsed.totalSlides}</p>
-                    <p className="text-xs text-gray-500">شريحة</p>
-                  </div>
-                  <div className="w-px h-8 bg-white/10" />
+                <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl flex-wrap">
+                  {pptxResult.format && (
+                    <>
+                      <div className="text-center">
+                        <p className="text-xs font-bold text-orange-400 uppercase">{pptxResult.format}</p>
+                        <p className="text-xs text-gray-500">الصيغة</p>
+                      </div>
+                      <div className="w-px h-8 bg-white/10" />
+                    </>
+                  )}
+                  {(pptxResult.meta?.totalSlides || pptxResult.meta?.totalRows) && (
+                    <>
+                      <div className="text-center">
+                        <p className="text-xl font-bold text-orange-400">{pptxResult.meta.totalSlides || pptxResult.meta.totalRows}</p>
+                        <p className="text-xs text-gray-500">{pptxResult.meta.totalSlides ? 'شريحة' : 'سطر'}</p>
+                      </div>
+                      <div className="w-px h-8 bg-white/10" />
+                    </>
+                  )}
                   <div className="text-center">
                     <p className="text-xl font-bold text-emerald-400">{pptxUpdates.filter((u: any) => u.action === 'update').length}</p>
                     <p className="text-xs text-gray-500">تحديث</p>
@@ -1305,7 +1319,7 @@ export default function TrackDetailPage() {
                     <p className="text-xl font-bold text-gray-500">{pptxUpdates.filter((u: any) => u.action === 'skip').length}</p>
                     <p className="text-xs text-gray-500">تخطي</p>
                   </div>
-                  {pptxResult.parsed.hasImages && (
+                  {pptxResult.meta?.hasImages && (
                     <>
                       <div className="w-px h-8 bg-white/10" />
                       <div className="text-center">

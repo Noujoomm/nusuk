@@ -106,6 +106,9 @@ export const tracksApi = {
     api.post('/tracks/pptx-extract', { content, trackId }, { timeout: 300000, maxBodyLength: 500 * 1024 * 1024, maxContentLength: 500 * 1024 * 1024 }),
   pptxApply: (trackId: string, updates: any[]) =>
     api.post('/tracks/pptx-apply', { trackId, updates }, { timeout: 60000 }),
+  // Universal file import (all formats)
+  fileExtract: (content: string, trackId: string, fileName: string) =>
+    api.post('/tracks/file-extract', { content, trackId, fileName }, { timeout: 300000, maxBodyLength: 500 * 1024 * 1024, maxContentLength: 500 * 1024 * 1024 }),
 };
 
 // ─── Progress & Achievements ───
