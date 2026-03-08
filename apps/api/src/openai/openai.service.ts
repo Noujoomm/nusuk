@@ -33,14 +33,14 @@ export class OpenAIService {
   }
 
   async chat(
-    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string | any[] }>,
     options?: { model?: string; temperature?: number; maxTokens?: number },
   ): Promise<string> {
     try {
       const client = this.ensureClient();
       const response = await client.chat.completions.create({
         model: options?.model || this.config.get('OPENAI_MODEL', 'gpt-4o'),
-        messages,
+        messages: messages as any,
         temperature: options?.temperature ?? 0.3,
         max_tokens: options?.maxTokens || 4096,
       });

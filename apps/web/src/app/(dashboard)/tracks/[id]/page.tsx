@@ -1276,7 +1276,15 @@ export default function TrackDetailPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Summary */}
+                {/* AI Summary */}
+                {pptxResult.aiAnalysis && (
+                  <div className="p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+                    <p className="text-xs font-medium text-violet-400 mb-1">تحليل الذكاء الاصطناعي</p>
+                    <p className="text-sm text-gray-300 leading-relaxed">{pptxResult.aiAnalysis}</p>
+                  </div>
+                )}
+
+                {/* Stats */}
                 <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl">
                   <div className="text-center">
                     <p className="text-xl font-bold text-orange-400">{pptxResult.parsed.totalSlides}</p>
@@ -1297,6 +1305,15 @@ export default function TrackDetailPage() {
                     <p className="text-xl font-bold text-gray-500">{pptxUpdates.filter((u: any) => u.action === 'skip').length}</p>
                     <p className="text-xs text-gray-500">تخطي</p>
                   </div>
+                  {pptxResult.parsed.hasImages && (
+                    <>
+                      <div className="w-px h-8 bg-white/10" />
+                      <div className="text-center">
+                        <p className="text-xs text-violet-400 font-medium">تحليل صور</p>
+                        <p className="text-xs text-gray-500">GPT-4o Vision</p>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Updates list */}
@@ -1310,7 +1327,14 @@ export default function TrackDetailPage() {
                     )}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{update.taskTitle}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium truncate">{update.taskTitle}</p>
+                            {update.slideNumber && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-gray-500 shrink-0">
+                                شريحة {update.slideNumber}
+                              </span>
+                            )}
+                          </div>
                           {update.matchedTaskTitle && (
                             <p className="text-xs text-gray-500 mt-0.5">
                               مطابقة: {update.matchedTaskTitle}
@@ -1319,7 +1343,13 @@ export default function TrackDetailPage() {
                           {update.notes && (
                             <p className="text-xs text-gray-400 mt-1 line-clamp-2">{update.notes}</p>
                           )}
-                          <div className="flex items-center gap-2 mt-1.5">
+                          {update.challenges && (
+                            <p className="text-xs text-red-400/80 mt-1">
+                              <AlertTriangle className="w-3 h-3 inline ml-1" />
+                              {update.challenges}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                             {update.status && (
                               <span className={cn("text-xs px-2 py-0.5 rounded-full", TASK_STATUS_COLORS[update.status as keyof typeof TASK_STATUS_COLORS] || 'bg-gray-500/20 text-gray-400')}>
                                 {TASK_STATUS_LABELS[update.status as keyof typeof TASK_STATUS_LABELS] || update.status}
@@ -1327,6 +1357,12 @@ export default function TrackDetailPage() {
                             )}
                             {update.progress !== undefined && (
                               <span className="text-xs text-gray-500">{update.progress}%</span>
+                            )}
+                            {update.dueDate && (
+                              <span className="text-xs text-gray-500">
+                                <Clock className="w-3 h-3 inline ml-0.5" />
+                                {update.dueDate}
+                              </span>
                             )}
                             <span className={cn(
                               "text-xs px-1.5 py-0.5 rounded",
@@ -1337,6 +1373,9 @@ export default function TrackDetailPage() {
                               {update.confidence === 'high' ? 'دقة عالية' : update.confidence === 'medium' ? 'دقة متوسطة' : 'دقة منخفضة'}
                             </span>
                           </div>
+                          {update.aiReason && (
+                            <p className="text-[11px] text-gray-600 mt-1 italic">{update.aiReason}</p>
+                          )}
                         </div>
 
                         {/* Action toggle */}
