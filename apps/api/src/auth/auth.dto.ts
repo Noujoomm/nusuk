@@ -1,7 +1,9 @@
 import { IsEmail, IsString, MinLength, IsOptional, IsIn } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class LoginDto {
   @IsEmail({}, { message: 'البريد الإلكتروني غير صالح' })
+  @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
 
   @IsString()
@@ -17,6 +19,7 @@ export class RefreshDto {
 
 export class RegisterDto {
   @IsEmail({}, { message: 'البريد الإلكتروني غير صالح' })
+  @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
 
   @IsString()

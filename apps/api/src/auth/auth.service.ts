@@ -24,8 +24,9 @@ export class AuthService {
   ) {}
 
   async validateUser(email: string, password: string) {
+    const normalizedEmail = email.toLowerCase().trim();
     const user = await this.prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
       include: { trackPermissions: { include: { track: true } } },
     });
     if (!user) throw new UnauthorizedException('بيانات الدخول غير صحيحة');
@@ -104,7 +105,8 @@ export class AuthService {
       throw new ConflictException('الدور غير مسموح به للتسجيل الذاتي');
     }
 
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const normalizedEmail = dto.email.toLowerCase().trim();
+    const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existing) throw new ConflictException('البريد الإلكتروني مستخدم بالفعل');
 
     const track = await this.prisma.track.findUnique({ where: { id: dto.trackId } });
@@ -121,7 +123,7 @@ export class AuthService {
     const user = await this.prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
-          email: dto.email,
+          email: normalizedEmail,
           name: dto.name,
           nameAr: dto.nameAr,
           passwordHash,

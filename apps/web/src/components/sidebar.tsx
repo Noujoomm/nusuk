@@ -84,7 +84,7 @@ export default function Sidebar() {
               <Shield className="w-5 h-5 text-brand-400" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-white">نسك</h1>
+              <h1 className="text-lg font-bold text-white">رؤية</h1>
               <p className="text-xs text-gray-500">إدارة المشاريع</p>
             </div>
           </div>

@@ -89,7 +89,7 @@ export default function SystemExportPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `nusuk-full-export-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      a.download = `ruya-full-export-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -108,7 +108,7 @@ export default function SystemExportPage() {
       const url = URL.createObjectURL(data);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `nusuk-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+      a.download = `ruya-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

@@ -153,7 +153,7 @@ export default function AdminDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">مرحبا {user?.nameAr || user?.name}</h1>
-          <p className="text-gray-400 mt-1">لوحة تحكم نظام نسك لادارة المشاريع</p>
+          <p className="text-gray-400 mt-1">لوحة تحكم نظام رؤية لإدارة المشاريع</p>
         </div>
         {onlineCount > 0 && (
           <div className="glass rounded-xl border border-white/10 px-4 py-2 flex items-center gap-2">

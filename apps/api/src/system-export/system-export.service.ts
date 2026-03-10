@@ -69,7 +69,7 @@ export class SystemExportService {
     return {
       exportedAt: new Date().toISOString(),
       durationMs: duration,
-      platform: 'Nusuk Platform',
+      platform: 'Ruya Platform',
       version: '1.0',
       data: {
         tracks,
@@ -386,7 +386,7 @@ export class SystemExportService {
     archive.pipe(passThrough);
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `nusuk-backup-${timestamp}.zip`;
+    const filename = `ruya-backup-${timestamp}.zip`;
 
     // Add JSON files
     archive.append(JSON.stringify(exportData, null, 2), { name: 'full-export.json' });

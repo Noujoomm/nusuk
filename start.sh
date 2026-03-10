@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "=========================================="
-echo "  NUSUK PLATFORM - STARTUP"
+echo "  RUYA PLATFORM - STARTUP"
 echo "=========================================="
 echo "NODE_ENV:          ${NODE_ENV:-development}"
 echo "PORT (public):     ${PORT:-3000}"

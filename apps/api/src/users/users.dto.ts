@@ -1,7 +1,9 @@
 import { IsEmail, IsString, MinLength, IsEnum, IsOptional, IsBoolean, IsArray } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class CreateUserDto {
   @IsEmail({}, { message: 'البريد الإلكتروني غير صالح' })
+  @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
 
   @IsString()
@@ -23,6 +25,7 @@ export class CreateUserDto {
 export class UpdateUserDto {
   @IsOptional()
   @IsEmail({}, { message: 'البريد الإلكتروني غير صالح' })
+  @Transform(({ value }) => value?.toLowerCase().trim())
   email?: string;
 
   @IsOptional()

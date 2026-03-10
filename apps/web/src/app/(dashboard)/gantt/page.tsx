@@ -113,7 +113,7 @@ export default function GanttPage() {
       const url = URL.createObjectURL(data);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'nusuk-project.xml';
+      a.download = 'ruya-project.xml';
       a.click();
       URL.revokeObjectURL(url);
       toast.success('تم تصدير المشروع بنجاح (XML)');
@@ -128,7 +128,7 @@ export default function GanttPage() {
       const url = URL.createObjectURL(data);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'nusuk-tasks.csv';
+      a.download = 'ruya-tasks.csv';
       a.click();
       URL.revokeObjectURL(url);
       toast.success('تم تصدير المشروع بنجاح (CSV)');

@@ -54,23 +54,26 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const normalizedEmail = dto.email.toLowerCase().trim();
+    const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existing) throw new ConflictException('البريد الإلكتروني مستخدم بالفعل');
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    const { password, ...rest } = dto;
+    const { password, email, ...rest } = dto;
 
     return this.prisma.user.create({
-      data: { ...rest, passwordHash, role: dto.role as any },
+      data: { ...rest, email: normalizedEmail, passwordHash, role: dto.role as any },
       select: USER_SELECT,
     });
   }
 
   async update(id: string, dto: UpdateUserDto) {
     await this.findById(id);
+    const data: any = { ...dto };
+    if (data.email) data.email = data.email.toLowerCase().trim();
     return this.prisma.user.update({
       where: { id },
-      data: dto as any,
+      data,
       select: USER_SELECT,
     });
   }

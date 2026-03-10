@@ -871,8 +871,8 @@ export class GanttService {
     }
 
     const projectName = trackId
-      ? (tasks[0]?.track?.name || 'مشروع نسك')
-      : 'نسك - جميع المسارات';
+      ? (tasks[0]?.track?.name || 'مشروع رؤية')
+      : 'رؤية - جميع المسارات';
 
     const minDate = tasks.reduce((min, t) => {
       const d = t.startDate;

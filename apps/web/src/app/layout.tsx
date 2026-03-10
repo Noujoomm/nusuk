@@ -3,8 +3,8 @@ import { Toaster } from 'react-hot-toast';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'نسك - نظام إدارة المشاريع',
-  description: 'Nusuk Project Management System',
+  title: 'رؤية - نظام إدارة المشاريع',
+  description: 'Ruya Project Management System',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -360,7 +360,7 @@ ${dataJson}
     const report = await this.findById(id);
 
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'Nusuk Platform';
+    workbook.creator = 'Ruya Platform';
     workbook.created = new Date();
 
     const worksheet = workbook.addWorksheet('التقرير', {

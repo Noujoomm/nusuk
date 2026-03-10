@@ -191,7 +191,7 @@ export class GanttController {
   ) {
     const xml = await this.ganttService.exportMSProject(trackId);
     res.setHeader('Content-Type', 'application/xml');
-    res.setHeader('Content-Disposition', 'attachment; filename="nusuk-project.xml"');
+    res.setHeader('Content-Disposition', 'attachment; filename="ruya-project.xml"');
     res.send(xml);
   }
 
@@ -229,7 +229,7 @@ export class GanttController {
   ) {
     const csv = await this.ganttService.exportCSV(trackId);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="nusuk-tasks.csv"');
+    res.setHeader('Content-Disposition', 'attachment; filename="ruya-tasks.csv"');
     res.send(csv);
   }
 }
