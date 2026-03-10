@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { CreateScopeBlockDto, UpdateScopeBlockDto, UpdateScopeBlockProgressDto } from './scope-blocks.dto';
+import { CreateScopeBlockDto, UpdateScopeBlockDto, UpdateScopeBlockProgressDto, CreateScopeBlockUpdateDto } from './scope-blocks.dto';
 
 @Injectable()
 export class ScopeBlocksService {
@@ -9,12 +9,18 @@ export class ScopeBlocksService {
   constructor(private prisma: PrismaService) {}
 
   async findByTrack(trackId: string) {
+    const includeExtras = {
+      attachments: { include: { uploadedBy: { select: { id: true, name: true, nameAr: true } } }, orderBy: { createdAt: 'desc' as const } },
+      updates: { include: { createdBy: { select: { id: true, name: true, nameAr: true } } }, orderBy: { createdAt: 'desc' as const } },
+    };
     return this.prisma.scopeBlock.findMany({
       where: { trackId, parentId: null },
       include: {
+        ...includeExtras,
         children: {
           include: {
-            children: true,
+            ...includeExtras,
+            children: { include: includeExtras },
           },
           orderBy: { orderIndex: 'asc' },
         },
@@ -202,5 +208,51 @@ export class ScopeBlocksService {
     await this.prisma.$transaction(updates);
 
     return { updated: blocks.length };
+  }
+
+  // ─── ATTACHMENTS ───
+
+  async getAttachments(scopeBlockId: string) {
+    return this.prisma.scopeBlockAttachment.findMany({
+      where: { scopeBlockId },
+      include: { uploadedBy: { select: { id: true, name: true, nameAr: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async addAttachment(data: { scopeBlockId: string; fileName: string; fileUrl: string; fileSize?: number; uploadedById: string }) {
+    return this.prisma.scopeBlockAttachment.create({
+      data,
+      include: { uploadedBy: { select: { id: true, name: true, nameAr: true } } },
+    });
+  }
+
+  async deleteAttachment(id: string) {
+    return this.prisma.scopeBlockAttachment.delete({ where: { id } });
+  }
+
+  // ─── UPDATES ───
+
+  async getUpdates(scopeBlockId: string) {
+    return this.prisma.scopeBlockUpdate.findMany({
+      where: { scopeBlockId },
+      include: { createdBy: { select: { id: true, name: true, nameAr: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async addUpdate(dto: CreateScopeBlockUpdateDto, userId: string) {
+    return this.prisma.scopeBlockUpdate.create({
+      data: {
+        scopeBlockId: dto.scopeBlockId,
+        content: dto.content,
+        createdById: userId,
+      },
+      include: { createdBy: { select: { id: true, name: true, nameAr: true } } },
+    });
+  }
+
+  async deleteUpdate(id: string) {
+    return this.prisma.scopeBlockUpdate.delete({ where: { id } });
   }
 }

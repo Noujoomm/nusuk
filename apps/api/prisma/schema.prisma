@@ -58,6 +58,10 @@ model User {
   // Gantt: Resource Assignments
   resourceAssignments ResourceAssignment[]
 
+  // Scope Block relations
+  scopeBlockAttachments ScopeBlockAttachment[] @relation("ScopeBlockAttachmentUploader")
+  scopeBlockUpdates     ScopeBlockUpdate[]     @relation("ScopeBlockUpdateAuthor")
+
   @@map("users")
 }
 
@@ -250,10 +254,43 @@ model ScopeBlock {
   children ScopeBlock[] @relation("ScopeBlockHierarchy")
   tasks    Task[]       @relation("TaskScopeBlock")
 
+  attachments ScopeBlockAttachment[]
+  updates     ScopeBlockUpdate[]
+
   @@unique([trackId, code])
   @@index([trackId])
   @@index([parentId])
   @@map("scope_blocks")
+}
+
+model ScopeBlockAttachment {
+  id           String     @id @default(cuid())
+  scopeBlockId String     @map("scope_block_id")
+  fileName     String     @map("file_name")
+  fileUrl      String     @map("file_url") @db.Text
+  fileSize     Int?       @map("file_size")
+  uploadedById String     @map("uploaded_by_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  scopeBlock   ScopeBlock @relation(fields: [scopeBlockId], references: [id], onDelete: Cascade)
+  uploadedBy   User       @relation("ScopeBlockAttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([scopeBlockId])
+  @@map("scope_block_attachments")
+}
+
+model ScopeBlockUpdate {
+  id           String     @id @default(cuid())
+  scopeBlockId String     @map("scope_block_id")
+  content      String     @db.Text
+  createdById  String     @map("created_by_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  scopeBlock   ScopeBlock @relation(fields: [scopeBlockId], references: [id], onDelete: Cascade)
+  createdBy    User       @relation("ScopeBlockUpdateAuthor", fields: [createdById], references: [id])
+
+  @@index([scopeBlockId])
+  @@map("scope_block_updates")
 }
 
 // ─── PROGRESS & ACHIEVEMENTS ───

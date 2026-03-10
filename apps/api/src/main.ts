@@ -26,6 +26,8 @@ import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { json, urlencoded } from 'express';
+import express from 'express';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 
@@ -66,6 +68,9 @@ async function bootstrap() {
   // Trust proxy for Railway / Render / reverse proxies
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', 1);
+
+  // Serve uploaded files statically
+  expressApp.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
   // Increase body size limit for large file imports (PPTX, XML, etc.)
   app.use(json({ limit: '500mb' }));

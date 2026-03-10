@@ -140,6 +140,18 @@ export const scopeBlocksApi = {
   delete: (id: string) => api.delete(`/scope-blocks/${id}`),
   importText: (data: { trackId: string; text: string }) => api.post('/scope-blocks/import', data),
   reorder: (blocks: Array<{ id: string; orderIndex: number }>) => api.patch('/scope-blocks/reorder', { blocks }),
+  // Attachments
+  getAttachments: (blockId: string) => api.get(`/scope-blocks/${blockId}/attachments`),
+  uploadAttachment: (blockId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post(`/scope-blocks/${blockId}/attachments`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  deleteAttachment: (attachmentId: string) => api.delete(`/scope-blocks/attachments/${attachmentId}`),
+  // Updates (timeline)
+  getUpdates: (blockId: string) => api.get(`/scope-blocks/${blockId}/updates`),
+  addUpdate: (blockId: string, content: string) => api.post(`/scope-blocks/${blockId}/updates`, { content }),
+  deleteUpdate: (updateId: string) => api.delete(`/scope-blocks/updates/${updateId}`),
 };
 
 // ─── Employees ───

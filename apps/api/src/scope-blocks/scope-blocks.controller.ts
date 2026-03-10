@@ -7,8 +7,14 @@ import {
   Param,
   Body,
   UseGuards,
+  UseInterceptors,
   Req,
+  UploadedFile as UpFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { existsSync, mkdirSync } from 'fs';
+import { join, extname } from 'path';
 import { Request } from 'express';
 import { ScopeBlocksService } from './scope-blocks.service';
 import { AuditService } from '../audit/audit.service';
@@ -23,7 +29,13 @@ import {
   ImportScopeTextDto,
   UpdateScopeBlockProgressDto,
   ReorderBlocksDto,
+  CreateScopeBlockUpdateDto,
 } from './scope-blocks.dto';
+
+const SCOPE_UPLOADS_DIR = join(process.cwd(), 'uploads', 'scope-attachments');
+if (!existsSync(SCOPE_UPLOADS_DIR)) {
+  mkdirSync(SCOPE_UPLOADS_DIR, { recursive: true });
+}
 
 @Controller('scope-blocks')
 @UseGuards(JwtAuthGuard)
@@ -163,5 +175,76 @@ export class ScopeBlocksController {
       ip: req.ip,
     });
     return result;
+  }
+
+  // ─── ATTACHMENTS ───
+
+  @Get(':id/attachments')
+  getAttachments(@Param('id') id: string) {
+    return this.scopeBlocks.getAttachments(id);
+  }
+
+  @Post(':id/attachments')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'track_lead')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: (_req, _file, cb) => {
+        if (!existsSync(SCOPE_UPLOADS_DIR)) mkdirSync(SCOPE_UPLOADS_DIR, { recursive: true });
+        cb(null, SCOPE_UPLOADS_DIR);
+      },
+      filename: (_req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, 'scope-' + uniqueSuffix + extname(file.originalname));
+      },
+    }),
+    limits: { fileSize: 50 * 1024 * 1024 },
+  }))
+  async uploadAttachment(
+    @Param('id') scopeBlockId: string,
+    @UpFile() file: Express.Multer.File,
+    @CurrentUser() user: any,
+  ) {
+    if (!file) return { error: 'لم يتم رفع ملف' };
+    const fileUrl = `/uploads/scope-attachments/${file.filename}`;
+    return this.scopeBlocks.addAttachment({
+      scopeBlockId,
+      fileName: file.originalname,
+      fileUrl,
+      fileSize: file.size,
+      uploadedById: user.id,
+    });
+  }
+
+  @Delete('attachments/:attachmentId')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'track_lead')
+  async deleteAttachment(@Param('attachmentId') id: string) {
+    return this.scopeBlocks.deleteAttachment(id);
+  }
+
+  // ─── UPDATES (TIMELINE) ───
+
+  @Get(':id/updates')
+  getUpdates(@Param('id') id: string) {
+    return this.scopeBlocks.getUpdates(id);
+  }
+
+  @Post(':id/updates')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'track_lead')
+  async addUpdate(
+    @Param('id') scopeBlockId: string,
+    @Body() body: { content: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.scopeBlocks.addUpdate({ scopeBlockId, content: body.content }, user.id);
+  }
+
+  @Delete('updates/:updateId')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm')
+  async deleteUpdate(@Param('updateId') id: string) {
+    return this.scopeBlocks.deleteUpdate(id);
   }
 }

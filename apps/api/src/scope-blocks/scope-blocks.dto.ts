@@ -99,3 +99,11 @@ export class ReorderBlocksDto {
   @Type(() => ReorderBlockItemDto)
   blocks: ReorderBlockItemDto[];
 }
+
+export class CreateScopeBlockUpdateDto {
+  @IsString()
+  scopeBlockId: string;
+
+  @IsString()
+  content: string;
+}
