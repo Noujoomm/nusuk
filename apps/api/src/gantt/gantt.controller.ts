@@ -26,7 +26,7 @@ export class GanttController {
 
   @Get('tasks')
   async findAll(@Query() query: GanttQueryDto, @CurrentUser() user: any) {
-    return this.ganttService.findAll(query, user ? { sub: user.sub, role: user.role } : undefined);
+    return this.ganttService.findAll(query, user ? { sub: user.id, role: user.role } : undefined);
   }
 
   @Get('tasks/:id')
@@ -38,7 +38,7 @@ export class GanttController {
   @UseGuards(RolesGuard)
   @Roles('admin', 'pm')
   async createTask(@Body() dto: CreateGanttTaskDto, @CurrentUser() user: any) {
-    return this.ganttService.createTask(dto, user.sub);
+    return this.ganttService.createTask(dto, user.id);
   }
 
   @Patch('tasks/:id')
@@ -47,14 +47,14 @@ export class GanttController {
     @Body() dto: UpdateGanttTaskDto,
     @CurrentUser() user: any,
   ) {
-    return this.ganttService.updateTask(id, dto, user.sub);
+    return this.ganttService.updateTask(id, dto, user.id);
   }
 
   @Post('tasks/bulk-update')
   @UseGuards(RolesGuard)
   @Roles('admin', 'pm')
   async bulkUpdate(@Body() dto: BulkUpdateDto, @CurrentUser() user: any) {
-    return this.ganttService.bulkUpdate(dto.tasks, user.sub);
+    return this.ganttService.bulkUpdate(dto.tasks, user.id);
   }
 
   @Get('tasks/:id/delete-info')
@@ -66,14 +66,14 @@ export class GanttController {
   @UseGuards(RolesGuard)
   @Roles('admin', 'pm')
   async deleteTask(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.ganttService.deleteTask(id, user.sub);
+    return this.ganttService.deleteTask(id, user.id);
   }
 
   @Post('tasks/:id/undo-delete')
   @UseGuards(RolesGuard)
   @Roles('admin', 'pm')
   async undoDeleteTask(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.ganttService.undoDeleteTask(id, user.sub);
+    return this.ganttService.undoDeleteTask(id, user.id);
   }
 
   // ─── AUTO-SCHEDULE ───
@@ -82,7 +82,7 @@ export class GanttController {
   @UseGuards(RolesGuard)
   @Roles('admin', 'pm')
   async autoSchedule(@Param('trackId') trackId: string, @CurrentUser() user: any) {
-    return this.ganttService.autoSchedule(trackId, user.sub);
+    return this.ganttService.autoSchedule(trackId, user.id);
   }
 
   // ─── DEPENDENCIES ───
@@ -96,7 +96,7 @@ export class GanttController {
   @UseGuards(RolesGuard)
   @Roles('admin', 'pm')
   async createDependency(@Body() dto: CreateDependencyDto, @CurrentUser() user: any) {
-    return this.ganttService.createDependency(dto, user.sub);
+    return this.ganttService.createDependency(dto, user.id);
   }
 
   @Patch('dependencies/:id')
@@ -205,7 +205,7 @@ export class GanttController {
     @Body() body: { content: string; trackId: string; format?: string },
     @CurrentUser() user: any,
   ) {
-    return this.ganttService.smartImport(body.content, body.trackId, user.sub, body.format);
+    return this.ganttService.smartImport(body.content, body.trackId, user.id, body.format);
   }
 
   // Legacy endpoint for backward compatibility
@@ -217,7 +217,7 @@ export class GanttController {
     @Body() body: { xmlContent: string; trackId: string },
     @CurrentUser() user: any,
   ) {
-    return this.ganttService.importMSProject(body.xmlContent, body.trackId, user.sub);
+    return this.ganttService.importMSProject(body.xmlContent, body.trackId, user.id);
   }
 
   // ─── CSV EXPORT ───

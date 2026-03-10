@@ -53,6 +53,7 @@ interface ImportHistoryItem {
 }
 
 const ENTITY_TYPES = [
+  { value: 'task', label: 'المهام' },
   { value: 'employee', label: 'الموظفون' },
   { value: 'deliverable', label: 'المخرجات' },
   { value: 'penalty', label: 'الغرامات' },
@@ -83,7 +84,7 @@ export default function ImportPage() {
   const [loadingSheet, setLoadingSheet] = useState(false);
 
   // Mapping state
-  const [entityType, setEntityType] = useState('employee');
+  const [entityType, setEntityType] = useState('task');
   const [entityFields, setEntityFields] = useState<FieldDef[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [trackId, setTrackId] = useState('');
@@ -128,8 +129,9 @@ export default function ImportPage() {
       setFileName(data.fileName || file.name);
       setSheets(data.sheets);
       setStep(1);
-    } catch {
-      alert('فشل رفع الملف');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'فشل رفع الملف';
+      alert(`فشل رفع الملف: ${msg}`);
     }
     setUploading(false);
   };
@@ -203,8 +205,8 @@ export default function ImportPage() {
       return;
     }
 
-    // Require trackId for non-employee types
-    if (entityType !== 'employee' && !trackId) {
+    // Require trackId for non-employee/non-task types (tasks can resolve from CSV)
+    if (!['employee', 'task'].includes(entityType) && !trackId) {
       alert('يرجى اختيار المسار');
       return;
     }
@@ -243,7 +245,7 @@ export default function ImportPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">استيراد البيانات</h1>
-          <p className="text-gray-400 mt-1">رفع ملفات Excel واستيراد البيانات إلى المنصة</p>
+          <p className="text-gray-400 mt-1">رفع ملفات Excel أو CSV واستيراد المهام والبيانات إلى المنصة</p>
         </div>
       </div>
 
@@ -311,8 +313,8 @@ export default function ImportPage() {
               ) : (
                 <>
                   <FileSpreadsheet className="w-16 h-16 text-brand-400/50 mx-auto mb-4" />
-                  <p className="text-lg font-medium text-white mb-2">اسحب ملف Excel هنا أو اضغط للاختيار</p>
-                  <p className="text-sm text-gray-500">يدعم ملفات .xlsx و .xls و .csv (حد أقصى 50MB)</p>
+                  <p className="text-lg font-medium text-white mb-2">اسحب ملف Excel أو CSV هنا أو اضغط للاختيار</p>
+                  <p className="text-sm text-gray-500">يدعم ملفات .xlsx و .xls و .csv (حد أقصى 100MB)</p>
                 </>
               )}
             </div>
@@ -387,13 +389,15 @@ export default function ImportPage() {
                 </div>
                 {entityType !== 'employee' && (
                   <div>
-                    <label className="text-xs text-gray-400 mb-1 block">المسار <span className="text-red-400">*</span></label>
+                    <label className="text-xs text-gray-400 mb-1 block">
+                      المسار {entityType === 'task' ? '(اختياري إذا محدد بالملف)' : ''} <span className="text-red-400">*</span>
+                    </label>
                     <select
                       value={trackId}
                       onChange={(e) => setTrackId(e.target.value)}
                       className="input-field w-auto"
                     >
-                      <option value="">اختر المسار...</option>
+                      <option value="">{entityType === 'task' ? 'اختيار تلقائي من الملف...' : 'اختر المسار...'}</option>
                       {tracks.map((t: any) => (
                         <option key={t.id} value={t.id}>{t.nameAr}</option>
                       ))}
