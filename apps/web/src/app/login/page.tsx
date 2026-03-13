@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/stores/auth';
-import { LogIn, Eye, EyeOff } from 'lucide-react';
+import { LogIn, Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {
@@ -49,18 +49,21 @@ export default function LoginPage() {
         <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-[128px]" />
       </div>
 
-      <div className="glass p-8 w-full max-w-md relative z-10">
+      <div className="glass p-6 sm:p-8 w-full max-w-md relative z-10">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-500/20 mb-4">
-            <LogIn className="w-8 h-8 text-brand-400" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-500/20 mb-3">
+            <LogIn className="w-7 h-7 text-brand-400" />
           </div>
           <h1 className="text-2xl font-bold text-white">نظام رؤية</h1>
-          <p className="text-gray-400 mt-1">نظام إدارة المشاريع</p>
+          <p className="text-gray-400 mt-1 text-sm">نظام إدارة المشاريع</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1.5">البريد الإلكتروني</label>
+            <label className="flex items-center gap-1.5 text-sm text-gray-400 mb-1.5">
+              <Mail className="w-3.5 h-3.5" />
+              البريد الإلكتروني
+            </label>
             <input
               type="email"
               value={email}
@@ -73,7 +76,10 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1.5">كلمة المرور</label>
+            <label className="flex items-center gap-1.5 text-sm text-gray-400 mb-1.5">
+              <Lock className="w-3.5 h-3.5" />
+              كلمة المرور
+            </label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -87,7 +93,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -97,15 +103,22 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="btn-primary w-full py-3 text-center disabled:opacity-50"
+            className="btn-primary w-full py-3 text-center disabled:opacity-50 text-base font-semibold"
           >
-            {loading ? 'جاري الدخول...' : 'تسجيل الدخول'}
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                جاري الدخول...
+              </span>
+            ) : (
+              'تسجيل الدخول'
+            )}
           </button>
         </form>
 
         <p className="text-center text-gray-400 text-sm mt-6">
           ليس لديك حساب؟{' '}
-          <Link href="/register" className="text-brand-400 hover:text-brand-300">
+          <Link href="/register" className="text-brand-400 hover:text-brand-300 font-medium">
             أنشئ حساب جديد
           </Link>
         </p>
