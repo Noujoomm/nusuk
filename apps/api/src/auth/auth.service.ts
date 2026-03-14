@@ -1,8 +1,10 @@
-import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma.service';
+import { MailService } from '../common/mail.service';
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_DURATION_MINUTES = 30;
@@ -21,6 +23,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private config: ConfigService,
+    private mail: MailService,
   ) {}
 
   async validateUser(email: string, password: string) {
@@ -221,6 +224,106 @@ export class AuthService {
     });
     if (!user) throw new UnauthorizedException();
     return this.sanitizeUser(user);
+  }
+
+  // ─── Forgot / Reset Password ───
+
+  async forgotPassword(email: string): Promise<void> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    // Always return silently to prevent email enumeration
+    if (!user || !user.isActive) {
+      this.logger.log(`Password reset requested for unknown/inactive email: ${normalizedEmail}`);
+      return;
+    }
+
+    // Generate cryptographically secure token
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+
+    // Store hashed token with 30-minute expiry
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetToken: hashedToken,
+        resetTokenExpiry: new Date(Date.now() + 30 * 60 * 1000),
+      },
+    });
+
+    // Build reset link
+    const frontendUrl = this.config.get<string>('FRONTEND_URL')
+      || this.config.get<string>('CORS_ORIGINS')?.split(',')[0]
+      || 'http://localhost:3000';
+    const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
+
+    // Send email (never throws to user)
+    await this.mail.sendPasswordResetEmail(normalizedEmail, resetLink);
+
+    this.logger.log(`Password reset token generated for: ${normalizedEmail}`);
+  }
+
+  async resetPassword(rawToken: string, newPassword: string): Promise<void> {
+    // Hash the incoming token to compare with stored hash
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        resetToken: hashedToken,
+        resetTokenExpiry: { gt: new Date() },
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('رابط إعادة التعيين غير صالح أو انتهت صلاحيته');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        resetToken: null,
+        resetTokenExpiry: null,
+        // Unlock account if it was locked
+        isLocked: false,
+        failedLoginAttempts: 0,
+        lockedAt: null,
+      },
+    });
+
+    // Revoke all existing refresh tokens for security
+    await this.prisma.refreshToken.updateMany({
+      where: { userId: user.id, revoked: false },
+      data: { revoked: true },
+    });
+
+    this.logger.log(`Password reset completed for: ${user.email}`);
+  }
+
+  async validateResetToken(rawToken: string): Promise<boolean> {
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        resetToken: hashedToken,
+        resetTokenExpiry: { gt: new Date() },
+      },
+    });
+
+    return !!user;
   }
 
   private async generateTokens(userId: string, email: string, role: string) {

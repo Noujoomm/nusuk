@@ -78,6 +78,12 @@ export const authApi = {
   logout: () => api.post('/auth/logout'),
   me: () => api.get('/auth/me'),
   getPublicTracks: () => api.get('/auth/public-tracks'),
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+  resetPassword: (token: string, password: string) =>
+    api.post('/auth/reset-password', { token, password }),
+  validateResetToken: (token: string) =>
+    api.get(`/auth/validate-reset-token?token=${token}`),
 };
 
 // ─── Users ───

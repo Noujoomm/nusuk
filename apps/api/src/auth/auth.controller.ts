@@ -1,11 +1,11 @@
-import { Controller, Post, Get, Body, Req, Res, UseGuards, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, Req, Res, UseGuards, HttpCode } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuditService } from '../audit/audit.service';
-import { LoginDto, RefreshDto, RegisterDto } from './auth.dto';
+import { LoginDto, RefreshDto, RegisterDto, ForgotPasswordDto, ResetPasswordDto } from './auth.dto';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -106,6 +106,50 @@ export class AuthController {
     });
 
     return { message: 'تم تسجيل الخروج بنجاح' };
+  }
+
+  // ─── Forgot / Reset Password ───
+
+  @Post('forgot-password')
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @HttpCode(200)
+  async forgotPassword(@Body() dto: ForgotPasswordDto, @Req() req: Request) {
+    await this.auth.forgotPassword(dto.email);
+
+    await this.audit.log({
+      actionType: 'password_reset_request',
+      entityType: 'user',
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    // Always return the same message to prevent email enumeration
+    return {
+      message: 'إذا كان البريد الإلكتروني مسجلاً لدينا فسيتم إرسال رابط إعادة تعيين كلمة المرور.',
+    };
+  }
+
+  @Post('reset-password')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @HttpCode(200)
+  async resetPassword(@Body() dto: ResetPasswordDto, @Req() req: Request) {
+    await this.auth.resetPassword(dto.token, dto.password);
+
+    await this.audit.log({
+      actionType: 'password_reset_complete',
+      entityType: 'user',
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    return { message: 'تم تحديث كلمة المرور بنجاح' };
+  }
+
+  @Get('validate-reset-token')
+  async validateResetToken(@Query('token') token: string) {
+    if (!token) return { valid: false };
+    const valid = await this.auth.validateResetToken(token);
+    return { valid };
   }
 
   @Get('me')

@@ -40,3 +40,18 @@ export class RegisterDto {
   @IsIn(['employee', 'track_lead', 'hr'], { message: 'الدور غير صالح' })
   role: string;
 }
+
+export class ForgotPasswordDto {
+  @IsEmail({}, { message: 'البريد الإلكتروني غير صالح' })
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @IsString({ message: 'رمز إعادة التعيين مطلوب' })
+  token: string;
+
+  @IsString()
+  @MinLength(8, { message: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' })
+  password: string;
+}
