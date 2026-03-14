@@ -20,6 +20,9 @@ export class MailService {
         port,
         secure: port === 465,
         auth: { user, pass },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
       });
       this.logger.log(`Mail transport configured: ${host}:${port}`);
     } else {
@@ -69,7 +72,7 @@ export class MailService {
           </p>
 
           <p style="font-size: 14px; color: #ef4444; margin: 16px 0 0; font-weight: 500;">
-            ⏱ هذا الرابط صالح لمدة 30 دقيقة فقط.
+            ⏱ هذا الرابط صالح لمدة ساعة واحدة فقط. | This link expires in 1 hour.
           </p>
 
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
@@ -96,7 +99,7 @@ export class MailService {
 
 ${resetLink}
 
-هذا الرابط صالح لمدة 30 دقيقة.
+هذا الرابط صالح لمدة ساعة واحدة. This link expires in 1 hour.
 
 إذا لم تقم بطلب هذا الإجراء يمكنك تجاهل هذه الرسالة.
 

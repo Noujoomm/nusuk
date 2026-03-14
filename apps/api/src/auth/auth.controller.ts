@@ -157,6 +157,7 @@ export class AuthController {
   }
 
   @Get('validate-reset-token')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   async validateResetToken(@Query('token') token: string) {
     if (!token) return { valid: false };
     const valid = await this.auth.validateResetToken(token);

@@ -83,7 +83,7 @@ export const authApi = {
   resetPassword: (token: string, password: string) =>
     api.post('/auth/reset-password', { token, password }),
   validateResetToken: (token: string) =>
-    api.get(`/auth/validate-reset-token?token=${token}`),
+    api.get('/auth/validate-reset-token', { params: { token } }),
 };
 
 // ─── Users ───

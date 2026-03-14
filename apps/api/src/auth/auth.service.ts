@@ -247,12 +247,12 @@ export class AuthService {
       .update(rawToken)
       .digest('hex');
 
-    // Store hashed token with 30-minute expiry
+    // Store hashed token with 1-hour expiry
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
         resetToken: hashedToken,
-        resetTokenExpiry: new Date(Date.now() + 30 * 60 * 1000),
+        resetTokenExpiry: new Date(Date.now() + 60 * 60 * 1000),
       },
     });
 
