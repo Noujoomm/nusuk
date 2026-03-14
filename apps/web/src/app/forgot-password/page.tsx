@@ -18,11 +18,18 @@ export default function ForgotPasswordPage() {
       await authApi.forgotPassword(email);
       setSent(true);
     } catch (err: any) {
-      // Rate limit or server error
-      if (err.response?.status === 429) {
+      const status = err.response?.status;
+      const data = err.response?.data;
+      const msg = data?.message;
+      console.error('Forgot password error:', status, data || err.message);
+      if (status === 429) {
         toast.error('تم تجاوز عدد المحاولات المسموحة. حاول مرة أخرى لاحقاً.');
+      } else if (msg) {
+        toast.error(Array.isArray(msg) ? msg[0] : msg);
+      } else if (!err.response) {
+        toast.error('لا يمكن الاتصال بالخادم. تحقق من اتصالك بالإنترنت.');
       } else {
-        toast.error('حدث خطأ في الخادم. حاول مرة أخرى.');
+        toast.error(`خطأ من الخادم (${status || 'غير معروف'}). حاول مرة أخرى.`);
       }
     } finally {
       setLoading(false);

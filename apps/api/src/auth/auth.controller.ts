@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, Req, Res, UseGuards, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, Req, Res, UseGuards, HttpCode, Logger } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
@@ -21,6 +21,8 @@ function setRefreshCookie(res: Response, token: string) {
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private auth: AuthService,
     private audit: AuditService,
@@ -114,14 +116,23 @@ export class AuthController {
   @Throttle({ default: { limit: 3, ttl: 60000 } })
   @HttpCode(200)
   async forgotPassword(@Body() dto: ForgotPasswordDto, @Req() req: Request) {
-    await this.auth.forgotPassword(dto.email);
+    try {
+      await this.auth.forgotPassword(dto.email);
+    } catch (error) {
+      // Never expose internal errors — log and continue silently
+      this.logger.error('forgotPassword internal error:', error);
+    }
 
-    await this.audit.log({
-      actionType: 'password_reset_request',
-      entityType: 'user',
-      ip: req.ip,
-      userAgent: req.headers['user-agent'],
-    });
+    try {
+      await this.audit.log({
+        actionType: 'password_reset_request',
+        entityType: 'user',
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
+    } catch (error) {
+      this.logger.error('forgotPassword audit log error:', error);
+    }
 
     // Always return the same message to prevent email enumeration
     return {
