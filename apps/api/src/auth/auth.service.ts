@@ -262,8 +262,8 @@ export class AuthService {
       || 'http://localhost:3000';
     const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
 
-    // Send email (never throws to user)
-    await this.mail.sendPasswordResetEmail(normalizedEmail, resetLink);
+    // Send email in background (fire-and-forget — never blocks response)
+    this.mail.sendPasswordResetEmail(normalizedEmail, resetLink).catch(() => {});
 
     this.logger.log(`Password reset token generated for: ${normalizedEmail}`);
   }
