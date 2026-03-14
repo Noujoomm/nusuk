@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import * as dns from 'dns';
 import { PLATFORM_NAME } from './platform';
+
+// Force IPv4 DNS resolution — Railway containers lack IPv6 connectivity
+dns.setDefaultResultOrder('ipv4first');
 
 @Injectable()
 export class MailService {
@@ -15,16 +19,16 @@ export class MailService {
     const pass = this.config.get<string>('SMTP_PASS');
 
     if (host && user && pass) {
-      // Use 'service' for known providers (Gmail) to auto-configure IPv4
-      const isGmail = host.includes('gmail');
-      const transportConfig: any = isGmail
-        ? { service: 'gmail', auth: { user, pass } }
-        : { host, port, secure: port === 465, auth: { user, pass } };
-      transportConfig.connectionTimeout = 10000;
-      transportConfig.greetingTimeout = 10000;
-      transportConfig.socketTimeout = 10000;
-      this.transporter = nodemailer.createTransport(transportConfig);
-      this.logger.log(`Mail transport configured: ${host}:${port}`);
+      this.transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        auth: { user, pass },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
+      });
+      this.logger.log(`Mail transport configured: ${host}:${port} (IPv4 forced)`);
     } else {
       // Development fallback: log emails to console
       this.logger.warn(
