@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ganttApi, tracksApi } from '@/lib/api';
+import { useAuth } from '@/stores/auth';
 import GanttChart, { GanttTask } from '@/components/gantt/gantt-chart';
 import toast from 'react-hot-toast';
 import {
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 
 export default function GanttPage() {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState<GanttTask[]>([]);
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +61,26 @@ export default function GanttPage() {
     } catch {}
   }, []);
 
+  const isAdminOrPm = user?.role === 'admin' || user?.role === 'pm';
+  const isTrackLead = user?.role === 'track_lead';
+  const userTrackIds = useMemo(
+    () => new Set(user?.trackPermissions?.map((tp) => tp.trackId) || []),
+    [user],
+  );
+
+  // Filter tracks for create modal: track_lead only sees their own
+  const availableTracks = useMemo(() => {
+    if (isAdminOrPm) return tracks;
+    if (isTrackLead) return tracks.filter((t: any) => userTrackIds.has(t.id));
+    return [];
+  }, [tracks, isAdminOrPm, isTrackLead, userTrackIds]);
+
+  // Can user manage tasks? (create/edit/delete)
+  const canManageTasks = isAdminOrPm || isTrackLead;
+
+  // Can user manage current selected track?
+  const canManageSelectedTrack = isAdminOrPm || (isTrackLead && !!selectedTrack && userTrackIds.has(selectedTrack));
+
   useEffect(() => {
     loadTracks();
   }, []);
@@ -66,6 +88,13 @@ export default function GanttPage() {
   useEffect(() => {
     loadTasks();
   }, [selectedTrack]);
+
+  // Auto-select first available track for track_lead
+  useEffect(() => {
+    if (isTrackLead && !selectedTrack && availableTracks.length > 0) {
+      setSelectedTrack(availableTracks[0].id);
+    }
+  }, [isTrackLead, availableTracks, selectedTrack]);
 
   // Task click → open detail panel
   const handleTaskClick = (task: GanttTask) => {
@@ -275,8 +304,8 @@ export default function GanttPage() {
           onChange={(e) => setSelectedTrack(e.target.value)}
           className="input-field text-sm py-1.5 px-3 w-48"
         >
-          <option value="">جميع المسارات</option>
-          {tracks.map((t: any) => (
+          {isAdminOrPm && <option value="">جميع المسارات</option>}
+          {(isAdminOrPm ? tracks : availableTracks).map((t: any) => (
             <option key={t.id} value={t.id}>{t.nameAr || t.name}</option>
           ))}
         </select>
@@ -292,14 +321,14 @@ export default function GanttPage() {
             <GanttChart
               tasks={tasks}
               onTaskClick={handleTaskClick}
-              onTaskUpdate={(id, data) => handleTaskUpdate(id, data)}
-              onTaskDelete={handleDeleteRequest}
+              onTaskUpdate={canManageSelectedTrack ? (id, data) => handleTaskUpdate(id, data) : undefined}
+              onTaskDelete={canManageSelectedTrack ? handleDeleteRequest : undefined}
               onExportXML={handleExportXML}
               onExportCSV={handleExportCSV}
-              onImportXML={handleImport}
-              onAutoSchedule={handleAutoSchedule}
-              onSetBaseline={handleSetBaseline}
-              onCreateTask={() => { setShowCreate(true); setForm(f => ({ ...f, trackId: selectedTrack })); }}
+              onImportXML={canManageSelectedTrack ? handleImport : undefined}
+              onAutoSchedule={canManageSelectedTrack ? handleAutoSchedule : undefined}
+              onSetBaseline={canManageSelectedTrack ? handleSetBaseline : undefined}
+              onCreateTask={canManageSelectedTrack ? () => { setShowCreate(true); setForm(f => ({ ...f, trackId: selectedTrack || (availableTracks.length === 1 ? availableTracks[0].id : '') })); } : undefined}
             />
           )}
         </div>
@@ -600,8 +629,8 @@ export default function GanttPage() {
               <div>
                 <label className="text-xs text-gray-400 block mb-1">المسار *</label>
                 <select value={form.trackId} onChange={(e) => setForm(f => ({ ...f, trackId: e.target.value }))} className="input-field text-sm w-full">
-                  <option value="">اختر المسار</option>
-                  {tracks.map((t: any) => (
+                  {availableTracks.length > 1 && <option value="">اختر المسار</option>}
+                  {availableTracks.map((t: any) => (
                     <option key={t.id} value={t.id}>{t.nameAr || t.name}</option>
                   ))}
                 </select>

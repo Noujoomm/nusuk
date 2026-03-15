@@ -36,24 +36,37 @@ export class GanttController {
 
   @Post('tasks')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async createTask(@Body() dto: CreateGanttTaskDto, @CurrentUser() user: any) {
+    if (user.role === 'track_lead') {
+      await this.ganttService.assertUserOwnsTrack(user.id, dto.trackId);
+    }
     return this.ganttService.createTask(dto, user.id);
   }
 
   @Patch('tasks/:id')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'track_lead')
   async updateTask(
     @Param('id') id: string,
     @Body() dto: UpdateGanttTaskDto,
     @CurrentUser() user: any,
   ) {
+    if (user.role === 'track_lead') {
+      await this.ganttService.assertUserOwnsGanttTask(user.id, id);
+    }
     return this.ganttService.updateTask(id, dto, user.id);
   }
 
   @Post('tasks/bulk-update')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async bulkUpdate(@Body() dto: BulkUpdateDto, @CurrentUser() user: any) {
+    if (user.role === 'track_lead') {
+      for (const t of dto.tasks) {
+        await this.ganttService.assertUserOwnsGanttTask(user.id, t.id);
+      }
+    }
     return this.ganttService.bulkUpdate(dto.tasks, user.id);
   }
 
@@ -64,15 +77,21 @@ export class GanttController {
 
   @Delete('tasks/:id')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async deleteTask(@Param('id') id: string, @CurrentUser() user: any) {
+    if (user.role === 'track_lead') {
+      await this.ganttService.assertUserOwnsGanttTask(user.id, id);
+    }
     return this.ganttService.deleteTask(id, user.id);
   }
 
   @Post('tasks/:id/undo-delete')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async undoDeleteTask(@Param('id') id: string, @CurrentUser() user: any) {
+    if (user.role === 'track_lead') {
+      await this.ganttService.assertUserOwnsGanttTask(user.id, id);
+    }
     return this.ganttService.undoDeleteTask(id, user.id);
   }
 
@@ -80,8 +99,11 @@ export class GanttController {
 
   @Post('auto-schedule/:trackId')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async autoSchedule(@Param('trackId') trackId: string, @CurrentUser() user: any) {
+    if (user.role === 'track_lead') {
+      await this.ganttService.assertUserOwnsTrack(user.id, trackId);
+    }
     return this.ganttService.autoSchedule(trackId, user.id);
   }
 
@@ -94,21 +116,24 @@ export class GanttController {
 
   @Post('dependencies')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async createDependency(@Body() dto: CreateDependencyDto, @CurrentUser() user: any) {
+    if (user.role === 'track_lead') {
+      await this.ganttService.assertUserOwnsGanttTask(user.id, dto.successorId);
+    }
     return this.ganttService.createDependency(dto, user.id);
   }
 
   @Patch('dependencies/:id')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async updateDependency(@Param('id') id: string, @Body() dto: UpdateDependencyDto) {
     return this.ganttService.updateDependency(id, dto);
   }
 
   @Delete('dependencies/:id')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async deleteDependency(@Param('id') id: string) {
     return this.ganttService.deleteDependency(id);
   }

@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { SchedulingEngine, ScheduleTask, ScheduleDependency, CalendarConfig } from './scheduling-engine';
 import {
@@ -46,6 +46,30 @@ export class GanttService {
   private readonly logger = new Logger(GanttService.name);
 
   constructor(private prisma: PrismaService) {}
+
+  // ─── AUTHORIZATION ───
+
+  async assertUserOwnsTrack(userId: string, trackId?: string) {
+    if (!trackId) {
+      throw new ForbiddenException('قائد المسار يجب أن يحدد المسار');
+    }
+    const perm = await this.prisma.trackPermission.findUnique({
+      where: { userId_trackId: { userId, trackId } },
+    });
+    if (!perm) {
+      throw new ForbiddenException('ليس لديك صلاحية على هذا المسار');
+    }
+  }
+
+  async assertUserOwnsGanttTask(userId: string, taskId: string) {
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { trackId: true },
+    });
+    if (!task) throw new NotFoundException('المهمة غير موجودة');
+    if (!task.trackId) throw new ForbiddenException('ليس لديك صلاحية على هذه المهمة');
+    await this.assertUserOwnsTrack(userId, task.trackId);
+  }
 
   // ─── TASKS ───
 

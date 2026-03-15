@@ -342,10 +342,12 @@ export default function GanttChart({
     <div className="flex flex-col h-full bg-gray-950 text-white select-none">
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border-b border-white/10">
-        <button onClick={onCreateTask} className="btn-primary text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg">
-          <Plus className="h-3.5 w-3.5" /> مهمة جديدة
-        </button>
-        <div className="h-5 w-px bg-white/10" />
+        {onCreateTask && (
+          <button onClick={onCreateTask} className="btn-primary text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg">
+            <Plus className="h-3.5 w-3.5" /> مهمة جديدة
+          </button>
+        )}
+        {onCreateTask && <div className="h-5 w-px bg-white/10" />}
         {/* Zoom */}
         {(['day', 'week', 'month', 'quarter', 'year'] as ZoomLevel[]).map((z) => (
           <button
@@ -361,21 +363,27 @@ export default function GanttChart({
           <Calendar className="h-3.5 w-3.5" /> اليوم
         </button>
         <div className="flex-1" />
-        <button onClick={onAutoSchedule} className="text-xs text-gray-400 hover:text-emerald-400 flex items-center gap-1 px-2 py-1">
-          <Play className="h-3.5 w-3.5" /> جدولة تلقائية
-        </button>
-        <button onClick={onSetBaseline} className="text-xs text-gray-400 hover:text-blue-400 flex items-center gap-1 px-2 py-1">
-          <Settings className="h-3.5 w-3.5" /> خط الأساس
-        </button>
+        {onAutoSchedule && (
+          <button onClick={onAutoSchedule} className="text-xs text-gray-400 hover:text-emerald-400 flex items-center gap-1 px-2 py-1">
+            <Play className="h-3.5 w-3.5" /> جدولة تلقائية
+          </button>
+        )}
+        {onSetBaseline && (
+          <button onClick={onSetBaseline} className="text-xs text-gray-400 hover:text-blue-400 flex items-center gap-1 px-2 py-1">
+            <Settings className="h-3.5 w-3.5" /> خط الأساس
+          </button>
+        )}
         <button onClick={onExportXML} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 px-2 py-1">
           <Download className="h-3.5 w-3.5" /> XML
         </button>
         <button onClick={onExportCSV} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 px-2 py-1">
           <Download className="h-3.5 w-3.5" /> CSV
         </button>
-        <button onClick={onImportXML} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 px-2 py-1">
-          <Upload className="h-3.5 w-3.5" /> استيراد (XML/CSV/JSON)
-        </button>
+        {onImportXML && (
+          <button onClick={onImportXML} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 px-2 py-1">
+            <Upload className="h-3.5 w-3.5" /> استيراد (XML/CSV/JSON)
+          </button>
+        )}
       </div>
 
       {/* Main area: Grid + Chart */}
