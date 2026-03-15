@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Resend } from 'resend';
 import * as nodemailer from 'nodemailer';
 import * as dns from 'dns';
 import { PLATFORM_NAME } from './platform';
@@ -10,41 +11,94 @@ dns.setDefaultResultOrder('ipv4first');
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private transporter: nodemailer.Transporter;
+  private resend: Resend | null = null;
+  private transporter: nodemailer.Transporter | null = null;
+  private mode: 'resend' | 'smtp' | 'console';
 
   constructor(private config: ConfigService) {
-    const host = this.config.get<string>('SMTP_HOST');
-    const port = this.config.get<number>('SMTP_PORT', 587);
-    const user = this.config.get<string>('SMTP_USER');
-    const pass = this.config.get<string>('SMTP_PASS');
+    const resendKey = this.config.get<string>('RESEND_API_KEY');
+    const smtpHost = this.config.get<string>('SMTP_HOST');
+    const smtpUser = this.config.get<string>('SMTP_USER');
+    const smtpPass = this.config.get<string>('SMTP_PASS');
 
-    if (host && user && pass) {
+    if (resendKey) {
+      // Priority 1: Resend (HTTP-based, works on all cloud providers)
+      this.resend = new Resend(resendKey);
+      this.mode = 'resend';
+      this.logger.log('Mail transport: Resend API');
+    } else if (smtpHost && smtpUser && smtpPass) {
+      // Priority 2: SMTP (may not work on Railway due to port blocking)
+      const port = this.config.get<number>('SMTP_PORT', 587);
       this.transporter = nodemailer.createTransport({
-        host,
+        host: smtpHost,
         port,
         secure: port === 465,
-        auth: { user, pass },
+        auth: { user: smtpUser, pass: smtpPass },
         connectionTimeout: 10000,
         greetingTimeout: 10000,
         socketTimeout: 10000,
       });
-      this.logger.log(`Mail transport configured: ${host}:${port} (IPv4 forced)`);
+      this.mode = 'smtp';
+      this.logger.log(`Mail transport: SMTP ${smtpHost}:${port}`);
     } else {
-      // Development fallback: log emails to console
+      // Fallback: log emails to console
+      this.mode = 'console';
       this.logger.warn(
-        'SMTP not configured (SMTP_HOST/SMTP_USER/SMTP_PASS). Emails will be logged to console.',
+        'No email provider configured. Set RESEND_API_KEY or SMTP_HOST/SMTP_USER/SMTP_PASS. Emails will be logged to console.',
       );
-      this.transporter = nodemailer.createTransport({
-        jsonTransport: true,
-      });
     }
   }
 
   async sendPasswordResetEmail(to: string, resetLink: string): Promise<void> {
-    const fromAddress = this.config.get<string>('SMTP_FROM', `noreply@ruya.sa`);
+    const fromAddress = this.config.get<string>(
+      'EMAIL_FROM',
+      this.config.get<string>('SMTP_FROM', 'onboarding@resend.dev'),
+    );
     const subject = `إعادة تعيين كلمة المرور – منصة ${PLATFORM_NAME}`;
 
-    const html = `
+    const html = this.buildResetEmailHtml(resetLink);
+    const text = this.buildResetEmailText(resetLink);
+
+    try {
+      if (this.mode === 'resend' && this.resend) {
+        const { data, error } = await this.resend.emails.send({
+          from: `منصة ${PLATFORM_NAME} <${fromAddress}>`,
+          to: [to],
+          subject,
+          html,
+          text,
+        });
+
+        if (error) {
+          this.logger.error(`Resend error for ${to}: ${JSON.stringify(error)}`);
+          return;
+        }
+
+        this.logger.log(`Password reset email sent via Resend to ${to} (id: ${data?.id})`);
+      } else if (this.mode === 'smtp' && this.transporter) {
+        const info = await this.transporter.sendMail({
+          from: `"منصة ${PLATFORM_NAME}" <${fromAddress}>`,
+          to,
+          subject,
+          text,
+          html,
+        });
+
+        this.logger.log(`Password reset email sent via SMTP to ${to} (messageId: ${info.messageId})`);
+      } else {
+        // Console mode — log the reset link for development
+        this.logger.log(`[DEV] Password reset email for ${to}:`);
+        this.logger.log(`[DEV] Reset link: ${resetLink}`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to send password reset email to ${to}`);
+      this.logger.error(error instanceof Error ? error.message : String(error));
+      // Don't throw — we never reveal email delivery status to the user
+    }
+  }
+
+  private buildResetEmailHtml(resetLink: string): string {
+    return `
       <div dir="rtl" style="font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #1f2937;">
         <div style="background: linear-gradient(135deg, #065f46 0%, #047857 100%); border-radius: 16px; padding: 32px; margin-bottom: 24px;">
           <h1 style="color: #ffffff; font-size: 24px; margin: 0; font-weight: 700;">منصة ${PLATFORM_NAME}</h1>
@@ -91,8 +145,10 @@ export class MailService {
         </p>
       </div>
     `;
+  }
 
-    const text = `
+  private buildResetEmailText(resetLink: string): string {
+    return `
 منصة ${PLATFORM_NAME} - إعادة تعيين كلمة المرور
 
 مرحباً،
@@ -110,28 +166,5 @@ ${resetLink}
 مع تحيات
 منصة ${PLATFORM_NAME}
     `.trim();
-
-    try {
-      const info = await this.transporter.sendMail({
-        from: `"منصة ${PLATFORM_NAME}" <${fromAddress}>`,
-        to,
-        subject,
-        text,
-        html,
-      });
-
-      // In dev mode (jsonTransport), log the email
-      if (info.message) {
-        const parsed = JSON.parse(info.message);
-        this.logger.log(`[DEV] Password reset email for ${to}:`);
-        this.logger.log(`[DEV] Reset link: ${resetLink}`);
-        this.logger.debug(`[DEV] Subject: ${parsed.subject}`);
-      } else {
-        this.logger.log(`Password reset email sent to ${to} (messageId: ${info.messageId})`);
-      }
-    } catch (error) {
-      this.logger.error(`Failed to send password reset email to ${to}`, error);
-      // Don't throw — we never reveal email delivery status to the user
-    }
   }
 }
