@@ -124,15 +124,14 @@ export default function TasksPage() {
     if (isAdminOrPm) fetchStats();
   }, [isAdminOrPm, fetchStats]);
 
-  // Load tracks + users for modal
+  // Load tracks + users for modal (independently so one failure doesn't block the other)
   const loadLookups = useCallback(async () => {
-    try {
-      const [tracksRes, usersRes] = await Promise.all([tracksApi.list(), usersApi.list()]);
-      setTracks(tracksRes.data?.data || tracksRes.data || []);
-      setUsers(usersRes.data?.data || usersRes.data || []);
-    } catch (err) {
-      console.error('[TasksPage] Failed to load tracks/users:', err);
-    }
+    tracksApi.list()
+      .then((res) => setTracks(res.data?.data || res.data || []))
+      .catch((err) => console.error('[TasksPage] Failed to load tracks:', err));
+    usersApi.list()
+      .then((res) => setUsers(res.data?.data || res.data || []))
+      .catch((err) => console.error('[TasksPage] Failed to load users:', err));
   }, []);
 
   useEffect(() => {
