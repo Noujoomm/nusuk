@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { cn, formatDate, TASK_STATUS_LABELS, TASK_STATUS_COLORS, PRIORITY_LABELS, PRIORITY_COLORS, ASSIGNEE_TYPE_LABELS, ASSIGNEE_TYPE_COLORS } from '@/lib/utils';
-import { Calendar, Users, User, Building2, Globe, Hash, CheckSquare, RefreshCw, Paperclip, ChevronDown, Loader2 } from 'lucide-react';
+import { Calendar, Users, User, Building2, Globe, Hash, CheckSquare, RefreshCw, Paperclip, ChevronDown, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { Task } from '@/stores/tasks';
 import { tasksApi } from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -20,6 +20,8 @@ interface Props {
   task: Task;
   onClick: (task: Task) => void;
   onStatusChange?: () => void;
+  onEdit?: (task: Task) => void;
+  onDelete?: (task: Task) => void;
 }
 
 const ASSIGNEE_TYPE_ICONS: Record<string, typeof Users> = {
@@ -29,7 +31,7 @@ const ASSIGNEE_TYPE_ICONS: Record<string, typeof Users> = {
   GLOBAL: Globe,
 };
 
-export default function TaskCard({ task, onClick, onStatusChange }: Props) {
+export default function TaskCard({ task, onClick, onStatusChange, onEdit, onDelete }: Props) {
   const [statusOpen, setStatusOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null);
@@ -86,11 +88,35 @@ export default function TaskCard({ task, onClick, onStatusChange }: Props) {
         isOverdue && 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]',
       )}
     >
-      {/* Header: Title + Badges */}
+      {/* Header: Title + Actions */}
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-white truncate mb-3">
-          {task.titleAr || task.title}
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-white truncate flex-1">
+            {task.titleAr || task.title}
+          </h3>
+          {(onEdit || onDelete) && (
+            <div className="flex items-center gap-1 mr-2 shrink-0">
+              {onEdit && (
+                <span
+                  onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+                  className="p-1 rounded-lg text-gray-500 hover:text-brand-400 hover:bg-brand-500/10 transition-colors cursor-pointer"
+                  title="تعديل"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </span>
+              )}
+              {onDelete && (
+                <span
+                  onClick={(e) => { e.stopPropagation(); onDelete(task); }}
+                  className="p-1 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                  title="حذف"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </span>
+              )}
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Inline status dropdown */}
           <div className="relative">

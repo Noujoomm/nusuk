@@ -14,6 +14,7 @@ import {
   Building2,
   Globe,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Task } from '@/stores/tasks';
 import { useTasks } from '@/stores/tasks';
 import { useAuth } from '@/stores/auth';
@@ -166,6 +167,36 @@ export default function TasksPage() {
     loadTasks();
     if (isAdminOrPm) fetchStats();
   };
+
+  const handleEdit = (task: Task) => {
+    setEditingTask(task);
+    setModalOpen(true);
+  };
+
+  const handleDelete = async (task: Task) => {
+    if (!confirm(`هل أنت متأكد من حذف المهمة "${task.titleAr || task.title}"؟`)) return;
+    try {
+      await tasksApi.delete(task.id);
+      toast.success('تم حذف المهمة');
+      loadTasks();
+      if (isAdminOrPm) fetchStats();
+    } catch {
+      toast.error('فشل حذف المهمة');
+    }
+  };
+
+  // Determine if user can edit/delete a specific task
+  const canManageTask = useCallback(
+    (task: Task) => {
+      if (isAdminOrPm) return true;
+      if (user?.role === 'track_lead' && task.trackId) {
+        const userTrackIds = new Set(user.trackPermissions?.map((tp: any) => tp.trackId) || []);
+        return userTrackIds.has(task.trackId);
+      }
+      return false;
+    },
+    [isAdminOrPm, user],
+  );
 
   // Stats values
   const safeStats = stats || { total: 0, byStatus: {}, overdue: 0 };
@@ -355,10 +386,81 @@ export default function TasksPage() {
           <ListChecks className="h-12 w-12" />
           <p className="text-sm">لا توجد مهام</p>
         </div>
+      ) : activeTab === 'all' && !trackFilter ? (
+        // Group by track in "all" tab when no track filter
+        (() => {
+          const grouped = new Map<string, { name: string; color?: string; tasks: Task[] }>();
+          const noTrack: Task[] = [];
+          tasks.forEach((task) => {
+            if (task.track) {
+              const group = grouped.get(task.track.id) || { name: task.track.nameAr, color: task.track.color, tasks: [] };
+              group.tasks.push(task);
+              grouped.set(task.track.id, group);
+            } else {
+              noTrack.push(task);
+            }
+          });
+          return (
+            <div className="space-y-6">
+              {Array.from(grouped.entries()).map(([trackId, group]) => (
+                <div key={trackId}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: group.color || '#6366f1' }}
+                    />
+                    <h3 className="text-sm font-semibold text-white">{group.name}</h3>
+                    <span className="text-xs text-gray-500">({group.tasks.length})</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {group.tasks.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        onClick={handleCardClick}
+                        onStatusChange={loadTasks}
+                        onEdit={canManageTask(task) ? handleEdit : undefined}
+                        onDelete={canManageTask(task) ? handleDelete : undefined}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {noTrack.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="w-3 h-3 rounded-full bg-gray-500" />
+                    <h3 className="text-sm font-semibold text-white">بدون مسار</h3>
+                    <span className="text-xs text-gray-500">({noTrack.length})</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {noTrack.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        onClick={handleCardClick}
+                        onStatusChange={loadTasks}
+                        onEdit={canManageTask(task) ? handleEdit : undefined}
+                        onDelete={canManageTask(task) ? handleDelete : undefined}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onClick={handleCardClick} onStatusChange={loadTasks} />
+            <TaskCard
+              key={task.id}
+              task={task}
+              onClick={handleCardClick}
+              onStatusChange={loadTasks}
+              onEdit={canManageTask(task) ? handleEdit : undefined}
+              onDelete={canManageTask(task) ? handleDelete : undefined}
+            />
           ))}
         </div>
       )}

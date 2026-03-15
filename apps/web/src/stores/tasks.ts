@@ -13,6 +13,7 @@ export interface Task {
   priority: string;
   trackId?: string;
   scopeBlockId?: string;
+  startDate?: string;
   dueDate?: string;
   progress: number;
   weight?: number;

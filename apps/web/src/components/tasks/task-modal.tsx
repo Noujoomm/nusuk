@@ -44,14 +44,26 @@ interface FileDraft {
   isExisting?: boolean;
 }
 
+const STATUS_OPTIONS = [
+  { value: 'pending', label: 'معلقة' },
+  { value: 'in_progress', label: 'قيد التنفيذ' },
+  { value: 'under_review', label: 'تحت المراجعة' },
+  { value: 'completed', label: 'مكتملة' },
+  { value: 'delayed', label: 'متأخرة' },
+];
+
 const EMPTY_FORM = {
   titleAr: '',
   title: '',
   descriptionAr: '',
   priority: 'medium',
+  status: 'pending',
   trackId: '',
+  startDate: '',
   dueDate: '',
+  progress: '',
   weight: '',
+  notes: '',
   assigneeIds: [] as string[],
 };
 
@@ -78,9 +90,13 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
           title: task.title || '',
           descriptionAr: task.descriptionAr || '',
           priority: task.priority || 'medium',
+          status: task.status || 'pending',
           trackId: task.trackId || '',
+          startDate: task.startDate ? task.startDate.substring(0, 10) : '',
           dueDate: task.dueDate ? task.dueDate.substring(0, 10) : '',
+          progress: task.progress != null ? String(task.progress) : '',
           weight: task.weight ? String(task.weight) : '',
+          notes: task.notes || '',
           assigneeIds: task.assignments?.map((a) => a.userId || a.user?.id).filter(Boolean) as string[] || [],
         });
         // Load existing checklist
@@ -190,9 +206,13 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
         title: form.title || form.titleAr,
         descriptionAr: form.descriptionAr,
         priority: form.priority,
+        status: form.status,
+        startDate: form.startDate || undefined,
         dueDate: form.dueDate || undefined,
         trackId: form.trackId || undefined,
+        progress: form.progress ? parseFloat(form.progress) : undefined,
         weight: form.weight ? parseFloat(form.weight) : undefined,
+        notes: form.notes || undefined,
         assigneeType: 'GLOBAL',
         assigneeIds: form.assigneeIds.length > 0 ? form.assigneeIds : undefined,
       };
@@ -320,6 +340,34 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
             </select>
           </div>
 
+          {/* الحالة والتقدم */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-300">الحالة</label>
+              <select
+                value={form.status}
+                onChange={(e) => updateField('status', e.target.value)}
+                className="input-field"
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-300">التقدم %</label>
+              <input
+                type="number"
+                value={form.progress}
+                onChange={(e) => updateField('progress', e.target.value)}
+                placeholder="0"
+                min="0"
+                max="100"
+                className="input-field"
+              />
+            </div>
+          </div>
+
           {/* المسار */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-300">المسار</label>
@@ -339,15 +387,28 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
             )}
           </div>
 
-          {/* تاريخ الاستحقاق */}
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-300">تاريخ الاستحقاق</label>
-            <input
-              type="date"
-              value={form.dueDate}
-              onChange={(e) => updateField('dueDate', e.target.value)}
-              className="input-field"
-            />
+          {/* التواريخ */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-300">تاريخ البداية</label>
+              <input
+                type="date"
+                value={form.startDate}
+                onChange={(e) => updateField('startDate', e.target.value)}
+                className="input-field"
+                dir="ltr"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-300">تاريخ الاستحقاق</label>
+              <input
+                type="date"
+                value={form.dueDate}
+                onChange={(e) => updateField('dueDate', e.target.value)}
+                className="input-field"
+                dir="ltr"
+              />
+            </div>
           </div>
 
           {/* الوزن */}
@@ -428,6 +489,18 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
                 )}
               </div>
             </div>
+          </div>
+
+          {/* ملاحظات */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-300">ملاحظات</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => updateField('notes', e.target.value)}
+              placeholder="ملاحظات إضافية..."
+              rows={2}
+              className="input-field resize-none"
+            />
           </div>
 
           {/* قائمة المهام (Checklist) */}
