@@ -71,6 +71,7 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [userSearch, setUserSearch] = useState('');
+  const [trackSearch, setTrackSearch] = useState('');
 
   // Checklist
   const [checklistItems, setChecklistItems] = useState<ChecklistDraft[]>([]);
@@ -115,6 +116,7 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
         setFiles([]);
       }
       setUserSearch('');
+      setTrackSearch('');
       setNewChecklistTitle('');
     }
   }, [isOpen, task]);
@@ -132,6 +134,11 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
       }).catch(() => {});
     }
   }, [isOpen, task?.id]);
+
+  const filteredTracks = useMemo(() => {
+    if (!trackSearch) return tracks;
+    return tracks.filter((t) => t.nameAr?.includes(trackSearch));
+  }, [tracks, trackSearch]);
 
   const filteredUsers = useMemo(() => {
     if (!userSearch) return users;
@@ -196,6 +203,10 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
     e.preventDefault();
     if (!form.titleAr.trim()) {
       toast.error('العنوان بالعربية مطلوب');
+      return;
+    }
+    if (!form.trackId && tracks.length > 0) {
+      toast.error('يرجى اختيار المسار');
       return;
     }
 
@@ -370,16 +381,67 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
 
           {/* المسار */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-300">المسار</label>
+            <label className="mb-1.5 block text-sm font-medium text-gray-300">
+              المسار <span className="text-red-400 mr-1">*</span>
+            </label>
             {tracks.length === 0 ? (
-              <p className="text-sm text-gray-500 bg-white/5 rounded-xl px-4 py-3">لا يوجد مسارات مرتبطة بك</p>
+              <p className="text-sm text-gray-500 bg-white/5 rounded-xl px-4 py-3">لا توجد مسارات مضافة في النظام حالياً</p>
+            ) : tracks.length > 8 ? (
+              /* Searchable track selector for large lists */
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="relative mb-2">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                  <input
+                    type="text"
+                    value={trackSearch}
+                    onChange={(e) => setTrackSearch(e.target.value)}
+                    placeholder="بحث في المسارات..."
+                    className="input-field pr-9 text-sm"
+                  />
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {filteredTracks.length === 0 ? (
+                    <p className="text-xs text-gray-500 text-center py-2">لا توجد نتائج</p>
+                  ) : (
+                    filteredTracks.map((t) => {
+                      const isSelected = form.trackId === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => { updateField('trackId', t.id); setTrackSearch(''); }}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                            isSelected ? 'bg-brand-500/20 text-brand-300' : 'text-gray-300 hover:bg-white/5',
+                          )}
+                        >
+                          <span
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: t.color || '#6366f1' }}
+                          />
+                          <span className="flex-1 text-right">{t.nameAr}</span>
+                          {isSelected && <Check className="h-4 w-4 text-brand-400 shrink-0" />}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                {form.trackId && (
+                  <div className="mt-2 pt-2 border-t border-white/5 flex items-center gap-2">
+                    <span className="text-xs text-gray-400">المختار:</span>
+                    <span className="text-xs font-medium text-brand-300">
+                      {tracks.find((t) => t.id === form.trackId)?.nameAr}
+                    </span>
+                  </div>
+                )}
+              </div>
             ) : (
               <select
                 value={form.trackId}
                 onChange={(e) => updateField('trackId', e.target.value)}
                 className="input-field"
               >
-                {tracks.length > 1 && <option value="">حدد المسار</option>}
+                <option value="">حدد المسار</option>
                 {tracks.map((t) => (
                   <option key={t.id} value={t.id}>{t.nameAr}</option>
                 ))}

@@ -125,31 +125,38 @@ export default function TasksPage() {
   }, [isAdminOrPm, fetchStats]);
 
   // Load tracks + users for modal
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [tracksRes, usersRes] = await Promise.all([tracksApi.list(), usersApi.list()]);
-        setTracks(tracksRes.data?.data || tracksRes.data || []);
-        setUsers(usersRes.data?.data || usersRes.data || []);
-      } catch {
-        // Silent fail
-      }
-    };
-    load();
+  const loadLookups = useCallback(async () => {
+    try {
+      const [tracksRes, usersRes] = await Promise.all([tracksApi.list(), usersApi.list()]);
+      setTracks(tracksRes.data?.data || tracksRes.data || []);
+      setUsers(usersRes.data?.data || usersRes.data || []);
+    } catch (err) {
+      console.error('[TasksPage] Failed to load tracks/users:', err);
+    }
   }, []);
 
-  // Filter tracks for task modal: track_lead only sees their own tracks
+  useEffect(() => {
+    loadLookups();
+  }, [loadLookups]);
+
+  // Filter tracks for task modal: admin/pm see all, track_lead sees own tracks
   const modalTracks = useMemo(() => {
-    if (isAdminOrPm) return tracks;
-    if (user?.role === 'track_lead') {
-      const userTrackIds = new Set(user.trackPermissions?.map((tp) => tp.trackId) || []);
-      return tracks.filter((t) => userTrackIds.has(t.id));
+    let filtered: Track[];
+    if (isAdminOrPm) {
+      filtered = tracks;
+    } else if (user?.role === 'track_lead') {
+      const userTrackIds = new Set(user.trackPermissions?.map((tp: any) => tp.trackId) || []);
+      filtered = tracks.filter((t) => userTrackIds.has(t.id));
+    } else {
+      filtered = [];
     }
-    return [];
+    return [...filtered].sort((a, b) => a.nameAr.localeCompare(b.nameAr, 'ar'));
   }, [tracks, user, isAdminOrPm]);
 
   // Handlers
   const handleCreate = () => {
+    // Reload tracks if empty (in case initial load failed)
+    if (tracks.length === 0) loadLookups();
     setEditingTask(null);
     setModalOpen(true);
   };
