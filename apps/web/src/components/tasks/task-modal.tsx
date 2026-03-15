@@ -92,7 +92,9 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
           (task.files || []).map((f: any) => ({ id: f.id, fileName: f.fileName, fileSize: f.fileSize, isNew: false, isExisting: true }))
         );
       } else {
-        setForm({ ...EMPTY_FORM, trackId: defaultTrackId || '' });
+        // Auto-select track if only one is available (e.g. track_lead with single track)
+        const autoTrackId = defaultTrackId || (tracks.length === 1 ? tracks[0].id : '');
+        setForm({ ...EMPTY_FORM, trackId: autoTrackId });
         setChecklistItems([]);
         setFiles([]);
       }
@@ -321,16 +323,20 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
           {/* المسار */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-300">المسار</label>
-            <select
-              value={form.trackId}
-              onChange={(e) => updateField('trackId', e.target.value)}
-              className="input-field"
-            >
-              <option value="">حدد المسار</option>
-              {tracks.map((t) => (
-                <option key={t.id} value={t.id}>{t.nameAr}</option>
-              ))}
-            </select>
+            {tracks.length === 0 ? (
+              <p className="text-sm text-gray-500 bg-white/5 rounded-xl px-4 py-3">لا يوجد مسارات مرتبطة بك</p>
+            ) : (
+              <select
+                value={form.trackId}
+                onChange={(e) => updateField('trackId', e.target.value)}
+                className="input-field"
+              >
+                {tracks.length > 1 && <option value="">حدد المسار</option>}
+                {tracks.map((t) => (
+                  <option key={t.id} value={t.id}>{t.nameAr}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* تاريخ الاستحقاق */}

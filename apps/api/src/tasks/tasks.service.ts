@@ -141,6 +141,35 @@ export class TasksService {
   }
 
   /**
+   * Verify a track_lead has permission on a given track.
+   * Used to enforce backend authorization for task creation/update.
+   */
+  async assertUserOwnsTrack(userId: string, trackId?: string) {
+    if (!trackId) {
+      throw new ForbiddenException('قائد المسار يجب أن يحدد المسار عند إنشاء المهمة');
+    }
+    const perm = await this.prisma.trackPermission.findUnique({
+      where: { userId_trackId: { userId, trackId } },
+    });
+    if (!perm) {
+      throw new ForbiddenException('ليس لديك صلاحية على هذا المسار');
+    }
+  }
+
+  /**
+   * Verify a track_lead owns the task's track before editing.
+   */
+  async assertUserOwnsTask(userId: string, taskId: string) {
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { trackId: true },
+    });
+    if (!task) throw new NotFoundException('المهمة غير موجودة');
+    if (!task.trackId) throw new ForbiddenException('ليس لديك صلاحية على هذه المهمة');
+    await this.assertUserOwnsTrack(userId, task.trackId);
+  }
+
+  /**
    * Build visibility filter based on user role and track permissions.
    * - Admin/PM: see all tasks
    * - HR: GLOBAL + HR + own USER tasks + own track tasks

@@ -81,6 +81,7 @@ export default function TasksPage() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const isAdminOrPm = user?.role === 'admin' || user?.role === 'pm';
+  const canCreateTasks = isAdminOrPm || user?.role === 'track_lead';
 
   // Determine visible tabs based on role
   const visibleTabs = useMemo(() => {
@@ -135,6 +136,16 @@ export default function TasksPage() {
     };
     load();
   }, []);
+
+  // Filter tracks for task modal: track_lead only sees their own tracks
+  const modalTracks = useMemo(() => {
+    if (isAdminOrPm) return tracks;
+    if (user?.role === 'track_lead') {
+      const userTrackIds = new Set(user.trackPermissions?.map((tp) => tp.trackId) || []);
+      return tracks.filter((t) => userTrackIds.has(t.id));
+    }
+    return [];
+  }, [tracks, user, isAdminOrPm]);
 
   // Handlers
   const handleCreate = () => {
@@ -198,7 +209,7 @@ export default function TasksPage() {
           <h1 className="text-2xl font-bold">المهام</h1>
           <p className="text-gray-400 mt-1">إدارة ومتابعة المهام والتكليفات</p>
         </div>
-        {isAdminOrPm && (
+        {canCreateTasks && (
           <button
             onClick={handleCreate}
             className="rounded-xl bg-brand-500/20 px-4 py-2.5 text-sm font-medium text-brand-300 hover:bg-brand-500/30 transition-colors flex items-center gap-2"
@@ -357,7 +368,7 @@ export default function TasksPage() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         task={editingTask}
-        tracks={tracks}
+        tracks={modalTracks}
         users={users}
         onSuccess={handleModalSuccess}
       />

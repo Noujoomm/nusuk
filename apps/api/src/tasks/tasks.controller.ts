@@ -131,8 +131,12 @@ export class TasksController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async create(@Body() dto: CreateTaskDto, @CurrentUser() user: any, @Req() req: Request) {
+    // Track leads can only create tasks for their own tracks
+    if (user.role === 'track_lead') {
+      await this.tasks.assertUserOwnsTrack(user.id, dto.trackId);
+    }
     const task = await this.tasks.create(dto, user.id);
 
     await this.audit.log({
@@ -150,8 +154,11 @@ export class TasksController {
 
   @Patch(':id')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async update(@Param('id') id: string, @Body() dto: UpdateTaskDto, @CurrentUser() user: any, @Req() req: Request) {
+    if (user.role === 'track_lead') {
+      await this.tasks.assertUserOwnsTask(user.id, id);
+    }
     const task = await this.tasks.update(id, dto, user.id);
     return task;
   }
