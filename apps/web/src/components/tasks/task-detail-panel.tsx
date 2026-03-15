@@ -112,7 +112,12 @@ export default function TaskDetailPanel({ task: initialTask, onClose, onUpdate }
   const isDirectAssignee = task.assigneeType === 'USER' && task.assigneeUserId === user?.id;
   const isAdminOrPm = user?.role === 'admin' || user?.role === 'pm';
   const isTrackLead = user?.role === 'track_lead';
-  const canChangeStatus = isAssigned || isDirectAssignee || isAdminOrPm;
+  const isTrackLeadOfTask = isTrackLead && (() => {
+    const userTrackIds = new Set(user?.trackPermissions?.map((tp: any) => tp.trackId) || []);
+    const taskTrackId = task.trackId || task.assigneeTrackId;
+    return taskTrackId ? userTrackIds.has(taskTrackId) : false;
+  })();
+  const canChangeStatus = isAssigned || isDirectAssignee || isAdminOrPm || isTrackLeadOfTask;
   const canManageChecklist = isAdminOrPm || isTrackLead;
   const nextStatuses = STATUS_FLOW[task.status] || [];
 
