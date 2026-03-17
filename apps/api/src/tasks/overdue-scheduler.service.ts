@@ -26,7 +26,7 @@ export class OverdueSchedulerService {
         where: {
           isDeleted: false,
           dueDate: { lt: now },
-          status: { notIn: ['completed', 'cancelled'] },
+          status: { notIn: ['completed', 'cancelled', 'scheduled'] },
           lastOverdueNotifiedAt: null,
         },
         include: {
@@ -94,7 +94,7 @@ export class OverdueSchedulerService {
         where: {
           isDeleted: false,
           dueDate: { lt: now },
-          status: { notIn: ['completed', 'cancelled'] },
+          status: { notIn: ['completed', 'cancelled', 'scheduled'] },
           lastOverdueNotifiedAt: { not: null },
         },
         include: {

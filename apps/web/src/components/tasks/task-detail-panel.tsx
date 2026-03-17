@@ -25,12 +25,13 @@ interface Props {
 }
 
 const STATUS_FLOW: Record<string, string[]> = {
-  pending: ['in_progress'],
+  pending: ['in_progress', 'scheduled'],
   in_progress: ['under_review', 'completed', 'delayed'],
   under_review: ['completed', 'in_progress'],
   delayed: ['in_progress', 'completed'],
   completed: [],
   cancelled: [],
+  scheduled: ['in_progress'],
 };
 
 type TabKey = 'details' | 'checklist' | 'updates' | 'files' | 'notes' | 'comments' | 'audit';

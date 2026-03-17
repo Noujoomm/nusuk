@@ -50,6 +50,7 @@ const STATUS_OPTIONS = [
   { value: 'under_review', label: 'تحت المراجعة' },
   { value: 'completed', label: 'مكتملة' },
   { value: 'delayed', label: 'متأخرة' },
+  { value: 'scheduled', label: 'مجدولة' },
 ];
 
 const EMPTY_FORM = {
@@ -357,7 +358,14 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
               <label className="mb-1.5 block text-sm font-medium text-gray-300">الحالة</label>
               <select
                 value={form.status}
-                onChange={(e) => updateField('status', e.target.value)}
+                onChange={(e) => {
+                  const newStatus = e.target.value;
+                  setForm((prev) => ({
+                    ...prev,
+                    status: newStatus,
+                    ...(newStatus === 'scheduled' ? { progress: '0' } : {}),
+                  }));
+                }}
                 className="input-field"
               >
                 {STATUS_OPTIONS.map((s) => (
@@ -374,7 +382,8 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
                 placeholder="0"
                 min="0"
                 max="100"
-                className="input-field"
+                disabled={form.status === 'scheduled'}
+                className={`input-field${form.status === 'scheduled' ? ' opacity-50 cursor-not-allowed' : ''}`}
               />
             </div>
           </div>

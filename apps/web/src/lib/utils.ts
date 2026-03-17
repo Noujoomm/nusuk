@@ -68,6 +68,7 @@ export const TASK_STATUS_LABELS: Record<string, string> = {
   completed: 'مكتملة',
   delayed: 'متأخرة',
   cancelled: 'ملغاة',
+  scheduled: 'مجدولة',
 };
 
 export const TASK_STATUS_COLORS: Record<string, string> = {
@@ -77,6 +78,7 @@ export const TASK_STATUS_COLORS: Record<string, string> = {
   completed: 'bg-emerald-500/20 text-emerald-300',
   delayed: 'bg-red-500/20 text-red-300',
   cancelled: 'bg-zinc-500/20 text-zinc-400',
+  scheduled: 'bg-cyan-500/20 text-cyan-300',
 };
 
 export const ASSIGNEE_TYPE_LABELS: Record<string, string> = {

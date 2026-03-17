@@ -706,6 +706,7 @@ enum TaskStatus {
   completed
   delayed
   cancelled
+  scheduled
 }
 
 enum AssigneeType {

@@ -270,7 +270,7 @@ export class TasksService {
     }
     if (overdue) {
       where.dueDate = { lt: new Date() };
-      where.status = { notIn: ['completed', 'cancelled'] };
+      where.status = { notIn: ['completed', 'cancelled', 'scheduled'] };
     }
     if (dueDateFrom || dueDateTo) {
       where.dueDate = {
@@ -324,7 +324,7 @@ export class TasksService {
     }
     if (overdue) {
       where.dueDate = { lt: new Date() };
-      where.status = { notIn: ['completed', 'cancelled'] };
+      where.status = { notIn: ['completed', 'cancelled', 'scheduled'] };
     }
 
     const [data, total] = await Promise.all([
@@ -563,6 +563,7 @@ export class TasksService {
   // Auto-progress mapping by status
   private readonly STATUS_PROGRESS: Record<string, number> = {
     pending: 0,
+    scheduled: 0,
     in_progress: 50,
     under_review: 80,
     completed: 100,
