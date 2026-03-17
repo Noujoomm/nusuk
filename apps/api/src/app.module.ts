@@ -28,6 +28,7 @@ import { DailyUpdatesModule } from './daily-updates/daily-updates.module';
 import { ImportsModule } from './imports/imports.module';
 import { SystemExportModule } from './system-export/system-export.module';
 import { GanttModule } from './gantt/gantt.module';
+import { ExecutiveTasksModule } from './executive-tasks/executive-tasks.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -60,6 +61,7 @@ import { HealthController } from './health.controller';
     ImportsModule,
     SystemExportModule,
     GanttModule,
+    ExecutiveTasksModule,
   ],
   controllers: [HealthController],
   providers: [

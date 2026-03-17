@@ -112,9 +112,14 @@ async function bootstrap() {
   // Socket.IO adapter
   app.useWebSocketAdapter(new IoAdapter(app));
 
-  await app.listen(port, '0.0.0.0');
+  // Increase timeout for large file uploads (10 minutes)
+  const server = await app.listen(port, '0.0.0.0');
+  server.setTimeout(600000); // 10 minutes
+  server.keepAliveTimeout = 620000; // slightly longer than setTimeout
+  server.headersTimeout = 630000; // slightly longer than keepAliveTimeout
+
   Logger.log(
-    `API running on http://0.0.0.0:${port} [${isProduction ? 'production' : 'development'}]`,
+    `API running on http://0.0.0.0:${port} [${isProduction ? 'production' : 'development'}] (timeout: 600s)`,
     'Bootstrap',
   );
 }

@@ -12,6 +12,13 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+  // Increase proxy timeout for large file uploads
+  httpAgentOptions: {
+    keepAlive: true,
+  },
+  experimental: {
+    proxyTimeout: 600000, // 10 minutes
+  },
   async rewrites() {
     return [
       {

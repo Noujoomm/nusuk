@@ -28,6 +28,7 @@ import {
   Database,
   GanttChart,
   CalendarRange,
+  ClipboardList,
 } from 'lucide-react';
 import NotificationBell from '@/components/notifications/notification-bell';
 
@@ -48,6 +49,7 @@ const NAV_ITEMS = [
   { href: '/search', label: 'البحث الذكي', icon: Search, roles: ['admin', 'pm', 'track_lead', 'employee', 'hr'] },
   { href: '/ai-analyze', label: 'تحليل الملفات AI', icon: Sparkles, roles: ['admin', 'pm'] },
   { href: '/import', label: 'استيراد البيانات', icon: Upload, roles: ['admin', 'pm', 'hr'] },
+  { href: '/executive-tasks', label: 'المهام التنفيذية', icon: ClipboardList, roles: ['admin', 'pm'] },
   { href: '/updates', label: 'التحديثات', icon: Activity, roles: ['admin', 'pm', 'track_lead', 'employee', 'hr'] },
   { href: '/users', label: 'المستخدمين', icon: Users, roles: ['admin'] },
   { href: '/system-export', label: 'النظام والنسخ', icon: Database, roles: ['admin'] },

@@ -220,6 +220,18 @@ export const reportsApi = {
   create: (data: any) => api.post('/reports', data),
   update: (id: string, data: any) => api.patch(`/reports/${id}`, data),
   delete: (id: string) => api.delete(`/reports/${id}`),
+  // Attachments
+  addAttachments: (reportId: string, files: File[]) => {
+    const form = new FormData();
+    files.forEach((file) => form.append('files', file));
+    return api.post(`/reports/${reportId}/attachments`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    });
+  },
+  deleteAttachment: (attachmentId: string) => api.delete(`/reports/attachments/${attachmentId}`),
+  downloadAttachment: (attachmentId: string) =>
+    api.get(`/reports/attachments/${attachmentId}/download`, { responseType: 'blob' }),
 };
 
 // ─── Files ───
@@ -419,6 +431,18 @@ export const ganttApi = {
   exportCSV: (trackId?: string) => api.get('/gantt/export/csv', { params: { trackId }, responseType: 'blob', timeout: 120000 }),
   importXML: (xmlContent: string, trackId: string) => api.post('/gantt/import/msproject', { xmlContent, trackId }, { timeout: 300000, maxBodyLength: 500 * 1024 * 1024, maxContentLength: 500 * 1024 * 1024 }),
   smartImport: (content: string, trackId: string, format?: string) => api.post('/gantt/import', { content, trackId, format }, { timeout: 300000, maxBodyLength: 500 * 1024 * 1024, maxContentLength: 500 * 1024 * 1024 }),
+};
+
+// ─── Executive Tasks (المهام التنفيذية) ───
+export const executiveTasksApi = {
+  list: (params?: any) => api.get('/executive-tasks', { params }),
+  stats: () => api.get('/executive-tasks/stats'),
+  sheets: () => api.get('/executive-tasks/sheets'),
+  get: (id: string) => api.get(`/executive-tasks/${id}`),
+  create: (data: any) => api.post('/executive-tasks', data),
+  update: (id: string, data: any) => api.patch(`/executive-tasks/${id}`, data),
+  delete: (id: string) => api.delete(`/executive-tasks/${id}`),
+  importData: (data: any[], sheetName: string) => api.post('/executive-tasks/import', { data, sheetName }),
 };
 
 // ─── Admin System Export ───

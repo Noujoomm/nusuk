@@ -60,6 +60,9 @@ model User {
   // Gantt: Resource Assignments
   resourceAssignments ResourceAssignment[]
 
+  // Report attachments
+  reportAttachments  ReportAttachment[] @relation("ReportAttachmentUploader")
+
   // Scope Block relations
   scopeBlockAttachments ScopeBlockAttachment[] @relation("ScopeBlockAttachmentUploader")
   scopeBlockUpdates     ScopeBlockUpdate[]     @relation("ScopeBlockUpdateAuthor")
@@ -394,14 +397,16 @@ model Report {
   kpiUpdates     String?    @map("kpi_updates") @db.Text
   challenges     String?    @db.Text
   supportNeeded  String?    @map("support_needed") @db.Text
+  upcomingTasks  String?    @map("upcoming_tasks") @db.Text
   notes          String?    @db.Text
   aiSummary      String?    @map("ai_summary") @db.Text
   reportDate     DateTime   @map("report_date") @default(now())
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
 
-  track  Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  author User  @relation(fields: [authorId], references: [id])
+  track       Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  author      User  @relation(fields: [authorId], references: [id])
+  attachments ReportAttachment[]
 
   @@index([trackId])
   @@index([authorId])
@@ -410,11 +415,47 @@ model Report {
   @@map("reports")
 }
 
+model ReportAttachment {
+  id              String   @id @default(cuid())
+  reportId        String   @map("report_id")
+  originalName    String   @map("original_name")
+  storedName      String   @map("stored_name")
+  mimeType        String   @map("mime_type")
+  sizeBytes       Int      @map("size_bytes")
+  storageProvider String   @default("DB") @map("storage_provider")
+  storagePath     String   @map("storage_path")
+  fileData        Bytes?   @map("file_data")
+  uploadedById    String   @map("uploaded_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  report     Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  uploadedBy User   @relation("ReportAttachmentUploader", fields: [uploadedById], references: [id])
+  chunks     ReportFileChunk[]
+
+  @@index([reportId])
+  @@index([createdAt])
+  @@map("report_attachments")
+}
+
+model ReportFileChunk {
+  id           String @id @default(cuid())
+  attachmentId String @map("attachment_id")
+  chunkIndex   Int    @map("chunk_index")
+  data         Bytes
+
+  attachment ReportAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  @@unique([attachmentId, chunkIndex])
+  @@index([attachmentId])
+  @@map("report_file_chunks")
+}
+
 enum ReportType {
   daily
   weekly
   monthly
   annual
+  operational
 }
 
 // ─── FILE MANAGEMENT ───
@@ -1013,4 +1054,38 @@ model Embedding {
   @@index([entityType])
   @@index([trackId])
   @@map("embeddings")
+}
+
+// ─── EXECUTIVE TASKS (المهام التنفيذية) ───
+
+enum ExecutiveTaskStatus {
+  sent        // تم الارسال
+  in_progress // قيد التنفيذ
+  editing     // قيد التعديل
+  edited      // تم التعديل
+  approved    // معتمد
+  completed   // مكتملة
+}
+
+model ExecutiveTask {
+  id          String                @id @default(cuid())
+  sheetName   String                @map("sheet_name")
+  name        String                @db.Text
+  status      ExecutiveTaskStatus   @default(in_progress)
+  track       String?
+  entity      String?
+  responsible String?
+  followUp    String?               @map("follow_up")
+  receiveDate DateTime?             @map("receive_date")
+  lastActionDate DateTime?          @map("last_action_date")
+  dueDate     DateTime?             @map("due_date")
+  deliveryDate DateTime?            @map("delivery_date")
+  notes       String?               @db.Text
+  sortOrder   Int                   @default(0) @map("sort_order")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+
+  @@index([sheetName])
+  @@index([status])
+  @@map("executive_tasks")
 }

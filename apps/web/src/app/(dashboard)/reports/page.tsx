@@ -1,9 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { reportsApi, tracksApi } from '@/lib/api';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import api, { reportsApi, tracksApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
-import { FileText, Plus, Search, ChevronDown, Calendar, Brain } from 'lucide-react';
+import {
+  FileText, Plus, Search, ChevronDown, Calendar, Brain,
+  Upload, X, Paperclip, Download, Trash2, Loader2, File as FileIcon,
+  Pencil, AlertTriangle,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 
 // ─── Types ───
@@ -25,20 +29,30 @@ interface ReportTrack {
   nameAr: string;
 }
 
+interface Attachment {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 interface Report {
   id: string;
   title: string;
-  type: 'daily' | 'weekly' | 'monthly' | 'annual';
+  type: 'daily' | 'weekly' | 'monthly' | 'annual' | 'operational';
   reportDate: string;
   achievements: string | null;
   kpiUpdates: string | null;
   challenges: string | null;
   supportNeeded: string | null;
+  upcomingTasks: string | null;
   notes: string | null;
   aiSummary: string | null;
   createdAt: string;
   author: ReportAuthor;
   track: ReportTrack;
+  attachments?: Attachment[];
 }
 
 interface ReportStats {
@@ -47,16 +61,18 @@ interface ReportStats {
   weekly: number;
   monthly: number;
   annual: number;
+  operational: number;
 }
 
 interface CreateReportForm {
   trackId: string;
-  type: 'daily' | 'weekly' | 'monthly' | 'annual';
+  type: 'daily' | 'weekly' | 'monthly' | 'annual' | 'operational';
   title: string;
   achievements: string;
   kpiUpdates: string;
   challenges: string;
   supportNeeded: string;
+  upcomingTasks: string;
   notes: string;
   reportDate: string;
 }
@@ -68,6 +84,7 @@ const TYPE_LABELS: Record<string, string> = {
   weekly: 'أسبوعي',
   monthly: 'شهري',
   annual: 'سنوي',
+  operational: 'تشغيلي',
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -75,6 +92,7 @@ const TYPE_COLORS: Record<string, string> = {
   weekly: 'bg-violet-500/20 text-violet-300',
   monthly: 'bg-amber-500/20 text-amber-300',
   annual: 'bg-emerald-500/20 text-emerald-300',
+  operational: 'bg-rose-500/20 text-rose-300',
 };
 
 const INITIAL_FORM: CreateReportForm = {
@@ -85,16 +103,96 @@ const INITIAL_FORM: CreateReportForm = {
   kpiUpdates: '',
   challenges: '',
   supportNeeded: '',
+  upcomingTasks: '',
   notes: '',
   reportDate: new Date().toISOString().split('T')[0],
 };
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function getFileIcon(mimeType: string): string {
+  if (mimeType.startsWith('image/')) return '🖼️';
+  if (mimeType.includes('pdf')) return '📄';
+  if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊';
+  if (mimeType.includes('document') || mimeType.includes('word')) return '📝';
+  if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return '📎';
+  if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('archive')) return '📦';
+  return '📎';
+}
+
+function fixFileName(name: string): string {
+  // Fix mojibake: multer stores Arabic UTF-8 as Latin-1 bytes
+  try {
+    const bytes = new Uint8Array(name.length);
+    for (let i = 0; i < name.length; i++) bytes[i] = name.charCodeAt(i);
+    const decoded = new TextDecoder('utf-8').decode(bytes);
+    if (/[\u0600-\u06FF]/.test(decoded)) return decoded;
+  } catch {}
+  return name;
+}
+
+// ─── File Validation ───
+
+const ALLOWED_EXTENSIONS = [
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp',
+  '.txt', '.csv', '.rtf', '.zip', '.rar', '.7z',
+  '.mp4', '.mp3', '.wav', '.avi', '.mov',
+];
+
+const BLOCKED_EXTENSIONS = ['.exe', '.js', '.sh', '.bat', '.dll', '.apk', '.cmd', '.com', '.msi', '.ps1', '.vbs', '.wsf', '.scr'];
+
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB - no practical limit
+
+function validateFiles(files: File[]): { valid: File[]; errors: string[] } {
+  const valid: File[] = [];
+  const errors: string[] = [];
+
+  for (const file of files) {
+    const ext = '.' + (file.name.split('.').pop()?.toLowerCase() || '');
+
+    // Empty file
+    if (file.size === 0) {
+      errors.push(`الملف فارغ: ${file.name}`);
+      continue;
+    }
+
+    // File too large
+    if (file.size > MAX_FILE_SIZE) {
+      errors.push(`حجم الملف كبير جداً (الحد 500MB): ${file.name}`);
+      continue;
+    }
+
+    // Blocked extension
+    if (BLOCKED_EXTENSIONS.includes(ext)) {
+      errors.push(`نوع الملف غير مسموح: ${file.name}`);
+      continue;
+    }
+
+    // Unsupported extension
+    if (ext !== '.' && !ALLOWED_EXTENSIONS.includes(ext)) {
+      errors.push(`نوع الملف غير مدعوم (${ext}): ${file.name}`);
+      continue;
+    }
+
+    valid.push(file);
+  }
+
+  return { valid, errors };
+}
 
 // ─── Component ───
 
 export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [stats, setStats] = useState<ReportStats>({ total: 0, daily: 0, weekly: 0, monthly: 0, annual: 0 });
+  const [stats, setStats] = useState<ReportStats>({ total: 0, daily: 0, weekly: 0, monthly: 0, annual: 0, operational: 0 });
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -103,6 +201,9 @@ export default function ReportsPage() {
   // UI state
   const [showForm, setShowForm] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [editingReport, setEditingReport] = useState<Report | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Report | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Filters
   const [filterTrack, setFilterTrack] = useState('');
@@ -111,6 +212,13 @@ export default function ReportsPage() {
 
   // Form
   const [form, setForm] = useState<CreateReportForm>(INITIAL_FORM);
+
+  // File attachments
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const pageSize = 20;
 
@@ -131,9 +239,7 @@ export default function ReportsPage() {
     try {
       const { data } = await reportsApi.stats();
       setStats(data);
-    } catch {
-      // stats are optional, fail silently
-    }
+    } catch {}
   };
 
   const loadTracks = async () => {
@@ -155,7 +261,6 @@ export default function ReportsPage() {
     loadReports();
   }, [loadReports]);
 
-  // Filter by search locally
   const filtered = reports.filter((r) => {
     if (!search) return true;
     return (
@@ -171,6 +276,109 @@ export default function ReportsPage() {
 
   const updateForm = (field: keyof CreateReportForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleFilesSelected = (files: FileList | File[]) => {
+    const newFiles = Array.from(files);
+    const { valid, errors } = validateFiles(newFiles);
+
+    // Show validation errors
+    if (errors.length > 0) {
+      errors.forEach((err) => toast.error(err, { duration: 4000 }));
+    }
+
+    if (valid.length === 0) return;
+
+    // Deduplicate against already pending files
+    const existingNames = new Set(pendingFiles.map((f) => f.name));
+    const unique = valid.filter((f) => {
+      if (existingNames.has(f.name)) {
+        toast.error(`الملف مضاف مسبقاً: ${f.name}`);
+        return false;
+      }
+      return true;
+    });
+
+    if (unique.length > 0) {
+      setPendingFiles((prev) => [...prev, ...unique]);
+    }
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files.length > 0) {
+      handleFilesSelected(e.dataTransfer.files);
+    }
+  };
+
+  const uploadWithRetry = async (reportId: string, files: File[], maxRetries = 2): Promise<any> => {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        setUploadProgress(0);
+        const form = new FormData();
+        files.forEach((file) => form.append('files', file));
+        const { data } = await api.post(`/reports/${reportId}/attachments`, form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 300000,
+          onUploadProgress: (e: any) => {
+            if (e.total) {
+              setUploadProgress(Math.round((e.loaded * 100) / e.total));
+            }
+          },
+        });
+        setUploadProgress(100);
+        return data;
+      } catch (err: any) {
+        const isNetworkError = !err.response || err.code === 'ERR_NETWORK' || err.code === 'ECONNABORTED';
+        if (isNetworkError && attempt < maxRetries) {
+          toast.error(`فشل الاتصال، جارٍ إعادة المحاولة... (${attempt + 1}/${maxRetries})`);
+          await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+          continue;
+        }
+        // Extract server error message
+        const serverMsg = err.response?.data?.message;
+        const msg = Array.isArray(serverMsg) ? serverMsg[0] : (serverMsg || 'فشل رفع الملفات، حاول مرة أخرى');
+        throw new Error(msg);
+      }
+    }
+  };
+
+  const handleEdit = (report: Report) => {
+    setEditingReport(report);
+    setForm({
+      trackId: report.track?.id || '',
+      type: report.type,
+      title: report.title,
+      achievements: report.achievements || '',
+      kpiUpdates: report.kpiUpdates || '',
+      challenges: report.challenges || '',
+      supportNeeded: report.supportNeeded || '',
+      upcomingTasks: report.upcomingTasks || '',
+      notes: report.notes || '',
+      reportDate: report.reportDate ? report.reportDate.split('T')[0] : new Date().toISOString().split('T')[0],
+    });
+    setPendingFiles([]);
+    setShowForm(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await reportsApi.delete(deleteTarget.id);
+      toast.success('تم حذف التقرير بنجاح');
+      setDeleteTarget(null);
+      await Promise.all([loadReports(), loadStats()]);
+    } catch {
+      toast.error('فشل حذف التقرير');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -197,9 +405,52 @@ export default function ReportsPage() {
       if (form.kpiUpdates.trim()) body.kpiUpdates = form.kpiUpdates.trim();
       if (form.challenges.trim()) body.challenges = form.challenges.trim();
       if (form.supportNeeded.trim()) body.supportNeeded = form.supportNeeded.trim();
+      if (form.upcomingTasks.trim()) body.upcomingTasks = form.upcomingTasks.trim();
       if (form.notes.trim()) body.notes = form.notes.trim();
 
+      if (editingReport) {
+        await reportsApi.update(editingReport.id, body);
+        if (pendingFiles.length > 0) {
+          setUploading(true);
+          try {
+            const result = await uploadWithRetry(editingReport.id, pendingFiles);
+            if (result?.failed?.length > 0) {
+              toast.error(`فشل رفع: ${result.failed.join(', ')}`);
+            }
+          } catch (err: any) {
+            toast.error(err.message || 'فشل رفع المرفقات');
+          } finally {
+            setUploading(false);
+            setUploadProgress(0);
+          }
+        }
+        toast.success('تم تحديث التقرير بنجاح');
+        setEditingReport(null);
+        setForm(INITIAL_FORM);
+        setPendingFiles([]);
+        setShowForm(false);
+        await Promise.all([loadReports(), loadStats()]);
+        return;
+      }
+
       const { data: newReport } = await reportsApi.create(body);
+
+      if (pendingFiles.length > 0) {
+        setUploading(true);
+        try {
+          const result = await uploadWithRetry(newReport.id, pendingFiles);
+          const uploaded = result?.attachments?.length || pendingFiles.length;
+          toast.success(`تم رفع ${uploaded} مرفق بنجاح`);
+          if (result?.failed?.length > 0) {
+            toast.error(`فشل رفع: ${result.failed.join(', ')}`);
+          }
+        } catch (err: any) {
+          toast.error(err.message || 'تم إنشاء التقرير لكن فشل رفع المرفقات');
+        } finally {
+          setUploading(false);
+          setUploadProgress(0);
+        }
+      }
 
       toast.success('تم إنشاء التقرير بنجاح');
 
@@ -208,6 +459,7 @@ export default function ReportsPage() {
       }
 
       setForm(INITIAL_FORM);
+      setPendingFiles([]);
       setShowForm(false);
       setPage(1);
       await Promise.all([loadReports(), loadStats()]);
@@ -215,6 +467,52 @@ export default function ReportsPage() {
       toast.error('فشل إنشاء التقرير');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownloadAttachment = async (att: Attachment) => {
+    setDownloadingId(att.id);
+    const toastId = toast.loading('جارٍ تحميل الملف...');
+    try {
+      const { data } = await reportsApi.downloadAttachment(att.id);
+      const blob = new Blob([data], { type: att.mimeType || 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fixFileName(att.originalName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success('تم تحميل الملف', { id: toastId });
+    } catch (err: any) {
+      let msg = 'تعذر تحميل الملف، حاول مرة أخرى';
+      try {
+        // Error response might be JSON in a blob
+        const errData = err?.response?.data;
+        if (errData instanceof Blob) {
+          const text = await errData.text();
+          const parsed = JSON.parse(text);
+          msg = parsed.message || msg;
+        } else if (errData?.message) {
+          msg = typeof errData.message === 'string' ? errData.message : msg;
+        }
+      } catch {}
+      toast.error(msg, { id: toastId });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleDeleteAttachment = async (reportId: string, attId: string) => {
+    try {
+      await reportsApi.deleteAttachment(attId);
+      toast.success('تم حذف المرفق');
+      await loadReports();
+    } catch {
+      toast.error('فشل حذف المرفق');
     }
   };
 
@@ -237,7 +535,19 @@ export default function ReportsPage() {
           <p className="text-gray-400 mt-1">{total} تقرير</p>
         </div>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            if (showForm) {
+              setShowForm(false);
+              setEditingReport(null);
+              setForm(INITIAL_FORM);
+              setPendingFiles([]);
+            } else {
+              setEditingReport(null);
+              setForm(INITIAL_FORM);
+              setPendingFiles([]);
+              setShowForm(true);
+            }
+          }}
           className="btn-primary flex items-center gap-2"
         >
           <Plus className={`w-4 h-4 transition-transform ${showForm ? 'rotate-45' : ''}`} />
@@ -246,13 +556,14 @@ export default function ReportsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {[
           { label: 'إجمالي التقارير', value: stats.total, icon: FileText, color: 'text-blue-400', bg: 'bg-blue-500/20' },
           { label: 'تقارير يومية', value: stats.daily, icon: Calendar, color: 'text-cyan-400', bg: 'bg-cyan-500/20' },
           { label: 'تقارير أسبوعية', value: stats.weekly, icon: Calendar, color: 'text-violet-400', bg: 'bg-violet-500/20' },
           { label: 'تقارير شهرية', value: stats.monthly, icon: Calendar, color: 'text-amber-400', bg: 'bg-amber-500/20' },
           { label: 'تقارير سنوية', value: stats.annual, icon: Calendar, color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
+          { label: 'تقارير تشغيلية', value: stats.operational, icon: Calendar, color: 'text-rose-400', bg: 'bg-rose-500/20' },
         ].map((stat) => (
           <div key={stat.label} className="glass p-4">
             <div className="flex items-center gap-3">
@@ -273,7 +584,7 @@ export default function ReportsPage() {
         <form onSubmit={handleSubmit} className="glass p-5 space-y-4">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <FileText className="w-5 h-5 text-brand-400" />
-            إنشاء تقرير جديد
+            {editingReport ? 'تعديل التقرير' : 'إنشاء تقرير جديد'}
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -337,6 +648,85 @@ export default function ReportsPage() {
             </div>
           </div>
 
+          {/* Attachments Section */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-2 flex items-center gap-2">
+              <Paperclip className="w-4 h-4" />
+              المرفقات
+            </label>
+
+            {/* Drop Zone */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+                dragOver
+                  ? 'border-brand-400 bg-brand-500/10'
+                  : 'border-white/10 hover:border-white/20 hover:bg-white/5'
+              }`}
+            >
+              <Upload className={`w-8 h-8 mx-auto mb-2 ${dragOver ? 'text-brand-400' : 'text-gray-500'}`} />
+              <p className="text-sm text-gray-400">
+                اسحب الملفات هنا أو اضغط للاختيار
+              </p>
+              <p className="text-xs text-gray-600 mt-1">
+                يدعم جميع أنواع الملفات (PDF, Word, Excel, صور, ZIP...)
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) handleFilesSelected(e.target.files);
+                  e.target.value = '';
+                }}
+              />
+            </div>
+
+            {/* Add File Button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-2 flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-brand-300 hover:bg-brand-500/10 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              إضافة ملف
+            </button>
+
+            {/* Pending Files List */}
+            {pendingFiles.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {pendingFiles.map((file, idx) => (
+                  <div
+                    key={`${file.name}-${idx}`}
+                    className="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2 border border-white/5"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span className="text-lg flex-shrink-0">{getFileIcon(file.type)}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm text-white truncate">{file.name}</p>
+                        <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePendingFile(idx)}
+                      className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <p className="text-xs text-gray-500">
+                  {pendingFiles.length} ملف — {formatFileSize(pendingFiles.reduce((s, f) => s + f.size, 0))}
+                </p>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Achievements */}
             <div>
@@ -387,6 +777,18 @@ export default function ReportsPage() {
             </div>
           </div>
 
+          {/* Upcoming Tasks */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">المهام القادمة</label>
+            <textarea
+              value={form.upcomingTasks}
+              onChange={(e) => updateForm('upcomingTasks', e.target.value)}
+              placeholder="المهام المخطط تنفيذها في الفترة القادمة..."
+              className="input-field w-full min-h-[100px] resize-y"
+              rows={3}
+            />
+          </div>
+
           {/* Notes */}
           <div>
             <label className="block text-sm text-gray-400 mb-1">ملاحظات</label>
@@ -402,26 +804,45 @@ export default function ReportsPage() {
           <div className="flex items-center gap-3 pt-2">
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || uploading}
               className="btn-primary flex items-center gap-2"
             >
-              {submitting ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              {(submitting || uploading) ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <Plus className="w-4 h-4" />
               )}
-              {submitting ? 'جارٍ الإنشاء...' : 'إنشاء التقرير'}
+              {uploading ? `جارٍ رفع المرفقات${uploadProgress > 0 ? ` (${uploadProgress}%)` : '...'}` : submitting ? (editingReport ? 'جارٍ التحديث...' : 'جارٍ الإنشاء...') : (editingReport ? 'حفظ التعديلات' : 'إنشاء التقرير')}
             </button>
+            {uploading && uploadProgress > 0 && (
+              <div className="flex-1 max-w-[200px]">
+                <div className="w-full bg-white/10 rounded-full h-2">
+                  <div
+                    className="bg-brand-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">{uploadProgress}%</p>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => {
                 setForm(INITIAL_FORM);
+                setPendingFiles([]);
+                setEditingReport(null);
                 setShowForm(false);
               }}
               className="btn-secondary"
             >
               إلغاء
             </button>
+            {pendingFiles.length > 0 && (
+              <span className="text-xs text-gray-500 flex items-center gap-1 mr-auto">
+                <Paperclip className="w-3 h-3" />
+                {pendingFiles.length} مرفق
+              </span>
+            )}
           </div>
         </form>
       )}
@@ -505,15 +926,38 @@ export default function ReportsPage() {
                     <span className="text-xs text-gray-500">
                       {formatDateTime(report.reportDate)}
                     </span>
+                    {report.attachments && report.attachments.length > 0 && (
+                      <>
+                        <span className="text-gray-600">|</span>
+                        <span className="text-xs text-gray-500 flex items-center gap-1">
+                          <Paperclip className="w-3 h-3" />
+                          {report.attachments.length} مرفق
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 flex-shrink-0 mr-3">
+              <div className="flex items-center gap-2 flex-shrink-0 mr-3">
                 <span
                   className={`badge text-xs ${TYPE_COLORS[report.type] || 'bg-gray-500/20 text-gray-300'}`}
                 >
                   {TYPE_LABELS[report.type] || report.type}
+                </span>
+                <span
+                  onClick={(e) => { e.stopPropagation(); handleEdit(report); }}
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-brand-400 hover:bg-brand-500/10 transition-colors cursor-pointer"
+                  title="تعديل"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </span>
+                <span
+                  onClick={(e) => { e.stopPropagation(); setDeleteTarget(report); }}
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                  title="حذف"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
                 </span>
                 <ChevronDown
                   className={`w-4 h-4 text-gray-500 transition-transform ${
@@ -576,6 +1020,14 @@ export default function ReportsPage() {
                       bgColor="bg-red-500/10"
                     />
                   )}
+                  {report.upcomingTasks && (
+                    <DetailSection
+                      title="المهام القادمة"
+                      content={report.upcomingTasks}
+                      color="text-cyan-400"
+                      bgColor="bg-cyan-500/10"
+                    />
+                  )}
                 </div>
                 {report.notes && (
                   <DetailSection
@@ -584,6 +1036,49 @@ export default function ReportsPage() {
                     color="text-gray-400"
                     bgColor="bg-white/5"
                   />
+                )}
+
+                {/* Attachments */}
+                {report.attachments && report.attachments.length > 0 && (
+                  <div className="rounded-lg bg-white/5 p-3">
+                    <p className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-1.5">
+                      <Paperclip className="w-3.5 h-3.5" />
+                      المرفقات ({report.attachments.length})
+                    </p>
+                    <div className="space-y-1.5">
+                      {report.attachments.map((att) => (
+                        <div
+                          key={att.id}
+                          className="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="text-sm flex-shrink-0">{getFileIcon(att.mimeType)}</span>
+                            <div className="min-w-0">
+                              <p className="text-sm text-gray-300 truncate">{fixFileName(att.originalName)}</p>
+                              <p className="text-xs text-gray-600">{formatFileSize(att.sizeBytes)}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => handleDownloadAttachment(att)}
+                              disabled={downloadingId === att.id}
+                              className="p-1.5 rounded-lg text-gray-500 hover:text-brand-400 hover:bg-brand-500/10 transition-colors disabled:opacity-50"
+                              title="تحميل"
+                            >
+                              {downloadingId === att.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAttachment(report.id, att.id)}
+                              className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                              title="حذف"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             )}
@@ -618,6 +1113,47 @@ export default function ReportsPage() {
           >
             التالي
           </button>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !deleting && setDeleteTarget(null)} />
+          <div className="relative w-full max-w-md glass rounded-2xl border border-white/10 shadow-2xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-red-500/15 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">تأكيد الحذف</h3>
+                <p className="text-sm text-gray-400">هذا الإجراء لا يمكن التراجع عنه</p>
+              </div>
+            </div>
+            <div className="bg-white/5 rounded-xl p-3 mb-5 border border-white/5">
+              <p className="text-sm text-gray-300 line-clamp-2">{deleteTarget.title}</p>
+            </div>
+            <p className="text-sm text-gray-400 mb-5">
+              هل أنت متأكد من حذف هذا التقرير؟ سيتم حذف جميع المرفقات المرتبطة به.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="px-5 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-5 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors flex items-center gap-2"
+              >
+                {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                حذف التقرير
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

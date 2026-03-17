@@ -35,7 +35,17 @@ export class CreateTaskDto {
 
   @IsOptional()
   @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
   dueDate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  progress?: number;
 
   @IsOptional()
   @IsString()
@@ -48,15 +58,16 @@ export class CreateTaskDto {
   weight?: number;
 
   // Polymorphic assignment
+  @IsOptional()
   @IsEnum(['TRACK', 'USER', 'HR', 'GLOBAL'], { message: 'نوع التعيين غير صالح' })
-  assigneeType: string;
+  assigneeType?: string;
 
-  @ValidateIf((o) => o.assigneeType === 'TRACK')
-  @IsString({ message: 'معرف المسار مطلوب عند التعيين لمسار' })
+  @IsOptional()
+  @IsString()
   assigneeTrackId?: string;
 
-  @ValidateIf((o) => o.assigneeType === 'USER')
-  @IsString({ message: 'معرف المستخدم مطلوب عند التعيين لموظف' })
+  @IsOptional()
+  @IsString()
   assigneeUserId?: string;
 
   @IsOptional()

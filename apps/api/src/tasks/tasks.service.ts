@@ -411,7 +411,8 @@ export class TasksService {
   }
 
   async create(dto: CreateTaskDto, userId: string) {
-    const { assigneeIds, assigneeType, assigneeTrackId, assigneeUserId, ...taskData } = dto;
+    const { assigneeIds, assigneeTrackId, assigneeUserId, ...taskData } = dto;
+    const assigneeType = dto.assigneeType || 'GLOBAL';
 
     // Validate polymorphic assignment
     this.validateAssignment(assigneeType, assigneeTrackId, assigneeUserId);
