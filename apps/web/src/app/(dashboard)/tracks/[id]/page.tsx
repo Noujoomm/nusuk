@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { tracksApi, employeesApi, deliverablesApi, scopesApi, penaltiesApi, trackKpisApi, dailyUpdatesApi, filesApi, tasksApi, usersApi, commentsApi } from '@/lib/api';
+import { tracksApi, employeesApi, deliverablesApi, scopesApi, penaltiesApi, trackKpisApi, dailyUpdatesApi, filesApi, tasksApi, usersApi, commentsApi, reportsApi } from '@/lib/api';
 import { useAuth } from '@/stores/auth';
 import { getSocket, joinTrack, leaveTrack } from '@/lib/socket';
 import { CONTRACT_TYPE_LABELS, formatDate, formatNumber, TASK_STATUS_LABELS, TASK_STATUS_COLORS, cn } from '@/lib/utils';
@@ -41,7 +41,7 @@ export default function TrackDetailPage() {
   const { user, hasPermission } = useAuth();
   const [track, setTrack] = useState<Track | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'tasks' | 'details' | 'scope' | 'updates' | 'comments' | 'attachments'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'details' | 'scope' | 'updates' | 'comments' | 'attachments' | 'reports'>('tasks');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   // Daily updates state
@@ -84,6 +84,26 @@ export default function TrackDetailPage() {
   const [pptxApplying, setPptxApplying] = useState(false);
   const [pptxResult, setPptxResult] = useState<any>(null);
   const [pptxUpdates, setPptxUpdates] = useState<any[]>([]);
+
+  // Track reports state
+  const [trackReports, setTrackReports] = useState<any[]>([]);
+  const [trackReportsLoading, setTrackReportsLoading] = useState(false);
+  const [trackReportsTotal, setTrackReportsTotal] = useState(0);
+  const [expandedReport, setExpandedReport] = useState<string | null>(null);
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [reportForm, setReportForm] = useState({
+    type: 'daily' as 'daily' | 'weekly' | 'monthly' | 'annual' | 'operational',
+    title: '',
+    achievements: '',
+    kpiUpdates: '',
+    challenges: '',
+    supportNeeded: '',
+    upcomingTasks: '',
+    notes: '',
+    reportDate: new Date().toISOString().split('T')[0],
+  });
 
   const canEdit = hasPermission(id, 'edit');
   const canCreate = hasPermission(id, 'create');
@@ -179,6 +199,23 @@ export default function TrackDetailPage() {
   useEffect(() => {
     if (activeTab === 'attachments') loadTrackFiles();
   }, [activeTab, loadTrackFiles]);
+
+  // Load track reports
+  const loadTrackReports = useCallback(async () => {
+    setTrackReportsLoading(true);
+    try {
+      const { data } = await reportsApi.list({ trackId: id, pageSize: 50 });
+      setTrackReports(data.data || []);
+      setTrackReportsTotal(data.total || 0);
+    } catch {
+      setTrackReports([]);
+    }
+    setTrackReportsLoading(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (activeTab === 'reports') loadTrackReports();
+  }, [activeTab, loadTrackReports]);
 
   const ALLOWED_TRACK_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'pptx', 'png', 'jpg', 'jpeg', 'zip'];
   const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
@@ -371,6 +408,7 @@ export default function TrackDetailPage() {
       <div className="flex gap-2">
         {[
           { key: 'tasks' as const, label: 'المهام' },
+          { key: 'reports' as const, label: 'التقارير' },
           { key: 'updates' as const, label: 'التحديثات اليومية' },
           { key: 'attachments' as const, label: 'المرفقات' },
           { key: 'comments' as const, label: 'التعليقات' },
@@ -905,6 +943,171 @@ export default function TrackDetailPage() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Reports Tab */}
+      {activeTab === 'reports' && (
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-400">
+              {trackReportsTotal > 0 ? `${trackReportsTotal} تقرير` : 'لا توجد تقارير'}
+            </p>
+            <button
+              onClick={() => {
+                setReportForm({ type: 'daily', title: '', achievements: '', kpiUpdates: '', challenges: '', supportNeeded: '', upcomingTasks: '', notes: '', reportDate: new Date().toISOString().split('T')[0] });
+                setShowReportForm(true);
+              }}
+              className="rounded-xl bg-brand-500/20 px-4 py-2.5 text-sm font-medium text-brand-300 hover:bg-brand-500/30 transition-colors flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              إضافة تقرير
+            </button>
+          </div>
+
+          {/* Reports List */}
+          {trackReportsLoading ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : trackReports.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-400">
+              <FileText className="h-12 w-12" />
+              <p className="text-sm">لا توجد تقارير لهذا المسار</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {trackReports.map((report) => {
+                const REPORT_TYPE_LABELS: Record<string, string> = { daily: 'يومي', weekly: 'أسبوعي', monthly: 'شهري', annual: 'سنوي', operational: 'تشغيلي' };
+                const REPORT_TYPE_COLORS: Record<string, string> = { daily: 'bg-blue-500/20 text-blue-300', weekly: 'bg-violet-500/20 text-violet-300', monthly: 'bg-amber-500/20 text-amber-300', annual: 'bg-emerald-500/20 text-emerald-300', operational: 'bg-rose-500/20 text-rose-300' };
+                return (
+                  <div key={report.id} className="glass p-5">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs px-2 py-0.5 rounded-lg font-medium ${REPORT_TYPE_COLORS[report.type] || 'bg-gray-500/20 text-gray-300'}`}>
+                            {REPORT_TYPE_LABELS[report.type] || report.type}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(report.reportDate).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                        <h4 className="text-white font-semibold truncate">{report.title}</h4>
+                        <p className="text-xs text-gray-500 mt-0.5">{report.author?.nameAr || report.author?.name}</p>
+                        {report.aiSummary && report.aiSummary !== 'لا يوجد ملخص متاح' && (
+                          <p className="text-xs text-brand-300/70 mt-1 leading-relaxed">{report.aiSummary}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mr-3 flex-shrink-0">
+                        <button
+                          onClick={() => setExpandedReport(expandedReport === report.id ? null : report.id)}
+                          className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                        >
+                          <ChevronDown className={`w-4 h-4 transition-transform ${expandedReport === report.id ? 'rotate-180' : ''}`} />
+                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm('هل أنت متأكد من حذف هذا التقرير؟')) return;
+                              setDeletingReportId(report.id);
+                              try {
+                                await reportsApi.delete(report.id);
+                                toast.success('تم حذف التقرير');
+                                loadTrackReports();
+                              } catch {
+                                toast.error('فشل حذف التقرير');
+                              }
+                              setDeletingReportId(null);
+                            }}
+                            disabled={deletingReportId === report.id}
+                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 disabled:opacity-50 transition-colors"
+                          >
+                            {deletingReportId === report.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Expanded details */}
+                    {expandedReport === report.id && (
+                      <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+                        {report.achievements && (
+                          <div>
+                            <p className="text-xs font-medium text-gray-400 mb-1">الإنجازات</p>
+                            <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{report.achievements}</p>
+                          </div>
+                        )}
+                        {report.challenges && (
+                          <div>
+                            <p className="text-xs font-medium text-gray-400 mb-1">التحديات</p>
+                            <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{report.challenges}</p>
+                          </div>
+                        )}
+                        {report.kpiUpdates && (
+                          <div>
+                            <p className="text-xs font-medium text-gray-400 mb-1">تحديثات مؤشرات الأداء</p>
+                            <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{report.kpiUpdates}</p>
+                          </div>
+                        )}
+                        {report.supportNeeded && (
+                          <div>
+                            <p className="text-xs font-medium text-gray-400 mb-1">الدعم المطلوب</p>
+                            <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{report.supportNeeded}</p>
+                          </div>
+                        )}
+                        {report.upcomingTasks && (
+                          <div>
+                            <p className="text-xs font-medium text-gray-400 mb-1">المهام القادمة</p>
+                            <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{report.upcomingTasks}</p>
+                          </div>
+                        )}
+                        {report.notes && (
+                          <div>
+                            <p className="text-xs font-medium text-gray-400 mb-1">ملاحظات</p>
+                            <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{report.notes}</p>
+                          </div>
+                        )}
+                        {report.attachments && report.attachments.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-gray-400 mb-2">المرفقات ({report.attachments.length})</p>
+                            <div className="flex flex-wrap gap-2">
+                              {report.attachments.map((att: any) => (
+                                <button
+                                  key={att.id}
+                                  onClick={async () => {
+                                    try {
+                                      const { data } = await reportsApi.downloadAttachment(att.id);
+                                      const url = window.URL.createObjectURL(data);
+                                      const a = document.createElement('a');
+                                      a.href = url;
+                                      a.download = att.originalName;
+                                      a.click();
+                                      window.URL.revokeObjectURL(url);
+                                    } catch {
+                                      toast.error('فشل تحميل المرفق');
+                                    }
+                                  }}
+                                  className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 transition-colors"
+                                >
+                                  <Paperclip className="w-3 h-3 text-gray-500" />
+                                  {att.originalName}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1524,6 +1727,125 @@ export default function TrackDetailPage() {
                 إلغاء
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Report Modal */}
+      {showReportForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowReportForm(false)}>
+          <div className="glass p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold">إضافة تقرير جديد</h3>
+              <button onClick={() => setShowReportForm(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!reportForm.title.trim()) { toast.error('يرجى إدخال عنوان التقرير'); return; }
+                setSubmittingReport(true);
+                try {
+                  const body: Record<string, any> = {
+                    trackId: id,
+                    type: reportForm.type,
+                    title: reportForm.title.trim(),
+                    reportDate: reportForm.reportDate,
+                  };
+                  if (reportForm.achievements.trim()) body.achievements = reportForm.achievements.trim();
+                  if (reportForm.kpiUpdates.trim()) body.kpiUpdates = reportForm.kpiUpdates.trim();
+                  if (reportForm.challenges.trim()) body.challenges = reportForm.challenges.trim();
+                  if (reportForm.supportNeeded.trim()) body.supportNeeded = reportForm.supportNeeded.trim();
+                  if (reportForm.upcomingTasks.trim()) body.upcomingTasks = reportForm.upcomingTasks.trim();
+                  if (reportForm.notes.trim()) body.notes = reportForm.notes.trim();
+                  await reportsApi.create(body);
+                  toast.success('تم إنشاء التقرير بنجاح');
+                  setShowReportForm(false);
+                  loadTrackReports();
+                } catch (err: any) {
+                  toast.error(err.response?.data?.message || 'فشل إنشاء التقرير');
+                }
+                setSubmittingReport(false);
+              }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1.5">نوع التقرير</label>
+                  <select
+                    value={reportForm.type}
+                    onChange={(e) => setReportForm({ ...reportForm, type: e.target.value as typeof reportForm.type })}
+                    className="input-field"
+                  >
+                    <option value="daily">يومي</option>
+                    <option value="weekly">أسبوعي</option>
+                    <option value="monthly">شهري</option>
+                    <option value="annual">سنوي</option>
+                    <option value="operational">تشغيلي</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1.5">تاريخ التقرير</label>
+                  <input
+                    type="date"
+                    value={reportForm.reportDate}
+                    onChange={(e) => setReportForm({ ...reportForm, reportDate: e.target.value })}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-1.5">عنوان التقرير *</label>
+                <input
+                  type="text"
+                  value={reportForm.title}
+                  onChange={(e) => setReportForm({ ...reportForm, title: e.target.value })}
+                  className="input-field"
+                  placeholder="مثال: تقرير أعمال الأسبوع الثاني..."
+                  required
+                />
+              </div>
+
+              {[
+                { key: 'achievements', label: 'الإنجازات', placeholder: 'اذكر الإنجازات المحققة...' },
+                { key: 'challenges', label: 'التحديات', placeholder: 'اذكر التحديات التي واجهتها...' },
+                { key: 'kpiUpdates', label: 'تحديثات مؤشرات الأداء', placeholder: 'اذكر تحديثات مؤشرات الأداء...' },
+                { key: 'supportNeeded', label: 'الدعم المطلوب', placeholder: 'ما الدعم الذي تحتاجه؟' },
+                { key: 'upcomingTasks', label: 'المهام القادمة', placeholder: 'اذكر المهام المخططة للفترة القادمة...' },
+                { key: 'notes', label: 'ملاحظات', placeholder: 'أي ملاحظات إضافية...' },
+              ].map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <label className="block text-sm text-gray-400 mb-1.5">{label}</label>
+                  <textarea
+                    value={(reportForm as any)[key]}
+                    onChange={(e) => setReportForm({ ...reportForm, [key]: e.target.value })}
+                    className="input-field min-h-[80px] resize-y"
+                    placeholder={placeholder}
+                  />
+                </div>
+              ))}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={submittingReport}
+                  className="flex-1 btn-primary disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {submittingReport && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {submittingReport ? 'جاري الحفظ...' : 'حفظ التقرير'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowReportForm(false)}
+                  className="px-6 py-2 rounded-xl bg-white/5 text-gray-400 hover:bg-white/10 text-sm font-medium transition-colors"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
