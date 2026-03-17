@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { buildSkipTake } from '../common/utils/pagination.util';
 
 @Injectable()
 export class CommentsService {
@@ -17,8 +18,9 @@ export class CommentsService {
     role: true,
   };
 
-  async findByEntity(entityType: string, entityId: string, params: { page?: number; pageSize?: number }) {
-    const { page = 1, pageSize = 25 } = params;
+  async findByEntity(entityType: string, entityId: string, params: { page: number; pageSize: number }) {
+    const { page, pageSize } = params;
+    const { skip, take } = buildSkipTake(page, pageSize);
     const where = { entityType, entityId, parentId: null };
 
     const [data, total] = await Promise.all([
@@ -34,8 +36,8 @@ export class CommentsService {
           },
         },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        skip,
+        take,
       }),
       this.prisma.comment.count({ where }),
     ]);

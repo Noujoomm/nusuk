@@ -2,6 +2,7 @@ import { Injectable, ConflictException, NotFoundException } from '@nestjs/common
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../common/prisma.service';
 import { CreateUserDto, UpdateUserDto } from './users.dto';
+import { buildSkipTake } from '../common/utils/pagination.util';
 
 const USER_SELECT = {
   id: true, email: true, name: true, nameAr: true,
@@ -20,7 +21,8 @@ const USER_SELECT = {
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(page = 1, pageSize = 25, search?: string) {
+  async findAll(page: number, pageSize: number, search?: string) {
+    const { skip, take } = buildSkipTake(page, pageSize);
     const where: any = {};
     if (search) {
       where.OR = [
@@ -35,8 +37,8 @@ export class UsersService {
         where,
         select: USER_SELECT,
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        skip,
+        take,
       }),
       this.prisma.user.count({ where }),
     ]);

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { buildSkipTake } from '../common/utils/pagination.util';
 
 interface AuditLogInput {
   actorId?: string;
@@ -28,14 +29,15 @@ export class AuditService {
   }
 
   async findAll(params: {
-    page?: number;
-    pageSize?: number;
+    page: number;
+    pageSize: number;
     trackId?: string;
     entityType?: string;
     actionType?: string;
     actorId?: string;
   }) {
-    const { page = 1, pageSize = 25, trackId, entityType, actionType, actorId } = params;
+    const { page, pageSize, trackId, entityType, actionType, actorId } = params;
+    const { skip, take } = buildSkipTake(page, pageSize);
     const where: any = {};
     if (trackId) where.trackId = trackId;
     if (entityType) where.entityType = entityType;
@@ -50,8 +52,8 @@ export class AuditService {
           track: { select: { id: true, nameAr: true } },
         },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        skip,
+        take,
       }),
       this.prisma.auditLog.count({ where }),
     ]);

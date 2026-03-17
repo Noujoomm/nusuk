@@ -14,6 +14,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuditService } from '../audit/audit.service';
 import { CreateDailyUpdateDto, UpdateDailyUpdateDto } from './daily-updates.dto';
+import { parsePage, parseLimit } from '../common/utils/pagination.util';
 
 const MAX_FILE_SIZE = parseInt(process.env.MAX_UPLOAD_MB || '25', 10) * 1024 * 1024;
 
@@ -35,8 +36,8 @@ export class DailyUpdatesController {
 
   @Get()
   findAll(
-    @Query('page') page?: number,
-    @Query('pageSize') pageSize?: number,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
     @Query('type') type?: string,
     @Query('trackId') trackId?: string,
     @Query('search') search?: string,
@@ -44,7 +45,16 @@ export class DailyUpdatesController {
     @Query('priority') priority?: string,
     @CurrentUser() user?: any,
   ) {
-    return this.service.findAll({ page, pageSize, type, trackId, search, pinned, priority, userId: user?.id });
+    return this.service.findAll({
+      page: parsePage(page),
+      pageSize: parseLimit(pageSize, 20),
+      type,
+      trackId,
+      search,
+      pinned,
+      priority,
+      userId: user?.id,
+    });
   }
 
   @Get('unread-count')

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CreateDailyUpdateDto, UpdateDailyUpdateDto } from './daily-updates.dto';
+import { buildSkipTake } from '../common/utils/pagination.util';
 import { extname } from 'path';
 
 const ALLOWED_EXTENSIONS = new Set([
@@ -62,8 +63,8 @@ export class DailyUpdatesService {
   // ─── CRUD ───
 
   async findAll(params: {
-    page?: number;
-    pageSize?: number;
+    page: number;
+    pageSize: number;
     type?: string;
     trackId?: string;
     search?: string;
@@ -71,7 +72,8 @@ export class DailyUpdatesService {
     priority?: string;
     userId?: string;
   }) {
-    const { page = 1, pageSize = 20, type, trackId, search, pinned, priority, userId } = params;
+    const { page, pageSize, type, trackId, search, pinned, priority, userId } = params;
+    const { skip, take } = buildSkipTake(page, pageSize);
     const where: any = { isDeleted: false };
     if (type) where.type = type;
     if (trackId) where.trackId = trackId;
@@ -98,8 +100,8 @@ export class DailyUpdatesService {
           ...(userId ? { reads: { where: { userId }, select: { id: true } } } : {}),
         },
         orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        skip,
+        take,
       }),
       this.prisma.dailyUpdate.count({ where }),
     ]);

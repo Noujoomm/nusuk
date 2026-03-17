@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma.service';
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
 import { ImportDataDto } from './imports.dto';
+import { buildSkipTake } from '../common/utils/pagination.util';
 
 // Field definitions for each entity type
 const ENTITY_FIELDS: Record<string, Array<{ field: string; label: string; labelAr: string; required?: boolean }>> = {
@@ -557,8 +558,9 @@ export class ImportsService {
   // ─── History ───
 
   async getHistory(params?: { page?: number; pageSize?: number }) {
-    const page = params?.page || 1;
-    const pageSize = params?.pageSize || 20;
+    const page = params?.page ?? 1;
+    const pageSize = params?.pageSize ?? 20;
+    const { skip, take } = buildSkipTake(page, pageSize);
 
     const [data, total] = await Promise.all([
       this.prisma.importHistory.findMany({
@@ -566,8 +568,8 @@ export class ImportsService {
           author: { select: { id: true, name: true, nameAr: true } },
         },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        skip,
+        take,
       }),
       this.prisma.importHistory.count(),
     ]);

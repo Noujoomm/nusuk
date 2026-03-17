@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CreateUserDto, UpdateUserDto, SetPermissionsDto, ResetPasswordDto } from './users.dto';
+import { parsePage, parseLimit } from '../common/utils/pagination.util';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -13,11 +14,11 @@ export class UsersController {
 
   @Get()
   findAll(
-    @Query('page') page?: number,
-    @Query('pageSize') pageSize?: number,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
     @Query('search') search?: string,
   ) {
-    return this.users.findAll(page, pageSize, search);
+    return this.users.findAll(parsePage(page), parseLimit(pageSize), search);
   }
 
   @Get(':id')

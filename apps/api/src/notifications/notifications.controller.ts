@@ -3,6 +3,7 @@ import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UpdatePreferencesDto } from './notifications.dto';
+import { parsePage, parseLimit } from '../common/utils/pagination.util';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
@@ -12,13 +13,13 @@ export class NotificationsController {
   @Get()
   findAll(
     @CurrentUser() user: any,
-    @Query('page') page?: number,
-    @Query('pageSize') pageSize?: number,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
     @Query('unreadOnly') unreadOnly?: string,
   ) {
     return this.notifications.findByUser(user.id, {
-      page: page ? Number(page) : undefined,
-      pageSize: pageSize ? Number(pageSize) : undefined,
+      page: parsePage(page),
+      pageSize: parseLimit(pageSize),
       unreadOnly: unreadOnly === 'true',
     });
   }

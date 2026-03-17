@@ -3,6 +3,7 @@ import { CommentsService } from './comments.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreateCommentDto, UpdateCommentDto } from './comments.dto';
+import { parsePage, parseLimit } from '../common/utils/pagination.util';
 
 @Controller('comments')
 @UseGuards(JwtAuthGuard)
@@ -13,10 +14,13 @@ export class CommentsController {
   findByEntity(
     @Param('entityType') entityType: string,
     @Param('entityId') entityId: string,
-    @Query('page') page?: number,
-    @Query('pageSize') pageSize?: number,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    return this.comments.findByEntity(entityType, entityId, { page, pageSize });
+    return this.comments.findByEntity(entityType, entityId, {
+      page: parsePage(page),
+      pageSize: parseLimit(pageSize),
+    });
   }
 
   @Get(':entityType/:entityId/count')

@@ -12,6 +12,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuditService } from '../audit/audit.service';
 import { ImportDataDto } from './imports.dto';
+import { parsePage, parseLimit } from '../common/utils/pagination.util';
 
 // Ensure uploads directory exists at startup
 const UPLOADS_DIR = join(process.cwd(), 'uploads', 'imports');
@@ -99,9 +100,9 @@ export class ImportsController {
 
   @Get('history')
   getHistory(
-    @Query('page') page?: number,
-    @Query('pageSize') pageSize?: number,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    return this.service.getHistory({ page, pageSize });
+    return this.service.getHistory({ page: parsePage(page), pageSize: parseLimit(pageSize, 20) });
   }
 }

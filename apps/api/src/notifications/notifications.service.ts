@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { buildSkipTake } from '../common/utils/pagination.util';
 
 @Injectable()
 export class NotificationsService {
@@ -77,9 +78,10 @@ export class NotificationsService {
 
   async findByUser(
     userId: string,
-    params: { page?: number; pageSize?: number; unreadOnly?: boolean },
+    params: { page: number; pageSize: number; unreadOnly?: boolean },
   ) {
-    const { page = 1, pageSize = 25, unreadOnly = false } = params;
+    const { page, pageSize, unreadOnly = false } = params;
+    const { skip, take } = buildSkipTake(page, pageSize);
     const where: any = { userId };
 
     if (unreadOnly) {
@@ -93,8 +95,8 @@ export class NotificationsService {
           sender: { select: { id: true, name: true, nameAr: true } },
         },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        skip,
+        take,
       }),
       this.prisma.notification.count({ where }),
     ]);
