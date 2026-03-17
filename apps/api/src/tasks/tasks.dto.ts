@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsArray, IsDateString, Min, Max, MinLength, ValidateIf } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsNumber, IsBoolean, IsArray, IsDateString, Min, Max, MinLength, ValidateIf } from 'class-validator';
 
 export class CreateTaskDto {
   @IsString()
@@ -71,6 +71,10 @@ export class CreateTaskDto {
   assigneeUserId?: string;
 
   @IsOptional()
+  @IsBoolean()
+  isGlobal?: boolean;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   assigneeIds?: string[];
@@ -141,6 +145,10 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsString()
   assigneeUserId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isGlobal?: boolean;
 
   @IsOptional()
   @IsArray()

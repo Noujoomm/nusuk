@@ -112,7 +112,13 @@ export class GanttService {
       }
     }
 
-    if (query.trackId) where.trackId = query.trackId;
+    if (query.trackId) {
+      where.trackId = query.trackId;
+    } else {
+      // Global Gantt: only show tasks explicitly marked as global (not track-scoped)
+      where.isGlobal = true;
+      where.trackId = null;
+    }
     if (query.status) where.status = query.status;
     if (query.priority) where.priority = query.priority;
     if (query.assigneeId) {
@@ -202,6 +208,7 @@ export class GanttService {
         description: data.description,
         descriptionAr: data.descriptionAr,
         trackId: data.trackId,
+        isGlobal: data.trackId ? false : true,
         startDate: resolved.startDate,
         dueDate: resolved.dueDate,
         duration: resolved.duration,

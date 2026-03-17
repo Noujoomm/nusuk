@@ -731,6 +731,7 @@ model Task {
   completionDate DateTime?   @map("completion_date")
   notes         String?      @db.Text
   createdById   String       @map("created_by_id")
+  isGlobal      Boolean      @default(false) @map("is_global")
   isDeleted     Boolean      @default(false) @map("is_deleted")
   deletedAt     DateTime?    @map("deleted_at")
   lastOverdueNotifiedAt DateTime? @map("last_overdue_notified_at")
@@ -792,6 +793,7 @@ model Task {
   @@index([assigneeType])
   @@index([assigneeTrackId])
   @@index([assigneeUserId])
+  @@index([isGlobal])
   @@index([isDeleted])
   @@index([parentTaskId])
   @@index([startDate])

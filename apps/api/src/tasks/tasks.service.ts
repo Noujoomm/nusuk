@@ -430,6 +430,8 @@ export class TasksService {
     const task = await this.prisma.task.create({
       data: {
         ...taskData,
+        // If task belongs to a track, it is never global (Gantt-only)
+        isGlobal: dto.trackId ? false : (dto.isGlobal ?? false),
         status: (dto.status as any) || 'pending',
         priority: (dto.priority as any) || 'medium',
         createdById: userId,
@@ -500,6 +502,11 @@ export class TasksService {
     }
 
     const updateData: any = { ...taskData };
+
+    // Enforce: tasks with a trackId cannot be global
+    if (updateData.trackId) {
+      updateData.isGlobal = false;
+    }
 
     // Apply reassignment
     if (assigneeType) {
