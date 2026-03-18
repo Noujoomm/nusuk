@@ -1,6 +1,7 @@
 import { IsString, IsOptional, IsEnum, IsDateString, IsInt, Min } from 'class-validator';
 
 export enum ExecutiveTaskStatusDto {
+  new = 'new',
   sent = 'sent',
   in_progress = 'in_progress',
   editing = 'editing',

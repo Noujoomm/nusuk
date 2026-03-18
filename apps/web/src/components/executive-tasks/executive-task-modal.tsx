@@ -31,6 +31,7 @@ interface Props {
 }
 
 const STATUS_OPTIONS = [
+  { value: 'new', label: 'جديد' },
   { value: 'in_progress', label: 'قيد التنفيذ' },
   { value: 'sent', label: 'تم الإرسال' },
   { value: 'editing', label: 'قيد التعديل' },
@@ -42,7 +43,7 @@ const STATUS_OPTIONS = [
 const EMPTY_FORM = {
   name: '',
   sheetName: '',
-  status: 'in_progress',
+  status: 'new',
   track: '',
   entity: '',
   responsible: '',

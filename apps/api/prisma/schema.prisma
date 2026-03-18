@@ -1063,6 +1063,7 @@ model Embedding {
 // ─── EXECUTIVE TASKS (المهام التنفيذية) ───
 
 enum ExecutiveTaskStatus {
+  new         // جديد
   sent        // تم الارسال
   in_progress // قيد التنفيذ
   editing     // قيد التعديل

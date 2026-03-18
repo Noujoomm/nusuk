@@ -53,6 +53,7 @@ interface Stats {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: typeof Send }> = {
+  new: { label: 'جديد', color: 'text-violet-400', bg: 'bg-violet-500/15', icon: ClipboardList },
   sent: { label: 'تم الإرسال', color: 'text-blue-400', bg: 'bg-blue-500/15', icon: Send },
   in_progress: { label: 'قيد التنفيذ', color: 'text-amber-400', bg: 'bg-amber-500/15', icon: Clock },
   editing: { label: 'قيد التعديل', color: 'text-orange-400', bg: 'bg-orange-500/15', icon: FileEdit },

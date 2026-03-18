@@ -77,12 +77,14 @@ const ROW_HEIGHT = 36;
 const HEADER_HEIGHT = 60;
 const GRID_MIN_WIDTH = 500;
 const STATUS_COLORS: Record<string, string> = {
+  new: '#7C3AED',
   pending: '#6B7280',
   in_progress: '#3B82F6',
   under_review: '#F59E0B',
   completed: '#10B981',
   delayed: '#EF4444',
   cancelled: '#9CA3AF',
+  scheduled: '#06B6D4',
 };
 const PRIORITY_COLORS: Record<string, string> = {
   low: '#6B7280',
