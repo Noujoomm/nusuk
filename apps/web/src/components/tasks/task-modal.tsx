@@ -45,6 +45,7 @@ interface FileDraft {
 }
 
 const STATUS_OPTIONS = [
+  { value: 'new', label: 'جديد' },
   { value: 'pending', label: 'معلقة' },
   { value: 'in_progress', label: 'قيد التنفيذ' },
   { value: 'under_review', label: 'تحت المراجعة' },
@@ -58,7 +59,7 @@ const EMPTY_FORM = {
   title: '',
   descriptionAr: '',
   priority: 'medium',
-  status: 'pending',
+  status: 'new',
   trackId: '',
   startDate: '',
   dueDate: '',
@@ -363,7 +364,7 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
                   setForm((prev) => ({
                     ...prev,
                     status: newStatus,
-                    ...(newStatus === 'scheduled' ? { progress: '0' } : {}),
+                    ...(['new', 'scheduled'].includes(newStatus) ? { progress: '0' } : {}),
                   }));
                 }}
                 className="input-field"
@@ -382,8 +383,8 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
                 placeholder="0"
                 min="0"
                 max="100"
-                disabled={form.status === 'scheduled'}
-                className={`input-field${form.status === 'scheduled' ? ' opacity-50 cursor-not-allowed' : ''}`}
+                disabled={['new', 'scheduled'].includes(form.status)}
+                className={`input-field${['new', 'scheduled'].includes(form.status) ? ' opacity-50 cursor-not-allowed' : ''}`}
               />
             </div>
           </div>

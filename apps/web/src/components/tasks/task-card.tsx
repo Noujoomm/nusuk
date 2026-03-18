@@ -8,6 +8,7 @@ import { tasksApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 const STATUS_FLOW: Record<string, string[]> = {
+  new: ['pending', 'in_progress', 'scheduled'],
   pending: ['in_progress', 'scheduled'],
   in_progress: ['under_review', 'completed', 'delayed'],
   under_review: ['completed', 'in_progress'],

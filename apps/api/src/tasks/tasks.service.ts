@@ -562,6 +562,7 @@ export class TasksService {
 
   // Auto-progress mapping by status
   private readonly STATUS_PROGRESS: Record<string, number> = {
+    new: 0,
     pending: 0,
     scheduled: 0,
     in_progress: 50,

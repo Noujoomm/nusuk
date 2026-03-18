@@ -700,6 +700,7 @@ enum NotificationType {
 // ─── TASK MANAGEMENT ───
 
 enum TaskStatus {
+  new
   pending
   in_progress
   under_review

@@ -142,7 +142,7 @@ export class UpdateGanttTaskDto {
   parentTaskId?: string;
 
   @IsOptional()
-  @IsEnum(['pending', 'in_progress', 'under_review', 'completed', 'delayed', 'cancelled'])
+  @IsEnum(['new', 'pending', 'in_progress', 'under_review', 'completed', 'delayed', 'cancelled', 'scheduled'])
   status?: string;
 
   @IsOptional()

@@ -30,21 +30,25 @@ interface TimelineTask {
 type ZoomLevel = 'day' | 'week' | 'month' | 'quarter';
 
 const STATUS_LABELS: Record<string, string> = {
+  new: 'جديد',
   pending: 'معلقة',
   in_progress: 'قيد التنفيذ',
   under_review: 'تحت المراجعة',
   completed: 'مكتملة',
   delayed: 'متأخرة',
   cancelled: 'ملغاة',
+  scheduled: 'مجدولة',
 };
 
 const STATUS_COLORS: Record<string, string> = {
+  new: '#7C3AED',
   pending: '#6B7280',
   in_progress: '#3B82F6',
   under_review: '#F59E0B',
   completed: '#10B981',
   delayed: '#EF4444',
   cancelled: '#9CA3AF',
+  scheduled: '#06B6D4',
 };
 
 const LANE_HEIGHT = 140;
