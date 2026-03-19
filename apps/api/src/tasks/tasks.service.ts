@@ -427,9 +427,16 @@ export class TasksService {
       if (!user) throw new BadRequestException('المستخدم المحدد غير موجود');
     }
 
+    // Sanitize empty-string date fields → undefined so Prisma doesn't choke
+    const startDate = taskData.startDate || undefined;
+    const dueDate   = taskData.dueDate   || undefined;
+    const { startDate: _s, dueDate: _d, ...restTaskData } = taskData;
+
     const task = await this.prisma.task.create({
       data: {
-        ...taskData,
+        ...restTaskData,
+        startDate: startDate as any,
+        dueDate: dueDate as any,
         // If task belongs to a track, it is never global (Gantt-only)
         isGlobal: dto.trackId ? false : (dto.isGlobal ?? false),
         status: (dto.status as any) || 'pending',
@@ -502,6 +509,10 @@ export class TasksService {
     }
 
     const updateData: any = { ...taskData };
+
+    // Sanitize empty-string date fields → undefined
+    if (updateData.startDate === '') updateData.startDate = undefined;
+    if (updateData.dueDate   === '') updateData.dueDate   = undefined;
 
     // Enforce: tasks with a trackId cannot be global
     if (updateData.trackId) {
