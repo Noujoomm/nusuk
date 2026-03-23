@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const API_INTERNAL = process.env.API_INTERNAL_URL || 'http://127.0.0.1:4000';
+const API_INTERNAL = process.env.API_INTERNAL_URL || 'http://localhost:4000';
 
 const nextConfig = {
   output: 'standalone',

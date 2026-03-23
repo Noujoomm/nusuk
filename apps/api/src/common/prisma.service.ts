@@ -15,8 +15,35 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    const url = process.env.DATABASE_URL || '';
-    const isRender = url.includes('.render.com') || url.includes('.onrender.com');
+    const rawUrl = process.env.DATABASE_URL || '';
+
+    // Validate DATABASE_URL at startup
+    if (!rawUrl) {
+      const msg = 'DATABASE_URL is not set — cannot start without a database connection';
+      console.error(`[PrismaService] FATAL: ${msg}`);
+      throw new Error(msg);
+    }
+
+    // Detect external managed PostgreSQL (Render, Railway, Neon, Supabase, etc.)
+    const isExternalDb =
+      rawUrl.includes('.render.com') ||
+      rawUrl.includes('.onrender.com') ||
+      rawUrl.includes('.railway.app') ||
+      rawUrl.includes('.neon.tech') ||
+      rawUrl.includes('.supabase.co');
+
+    // Auto-append SSL and connection_limit for external databases
+    let url = rawUrl;
+    if (isExternalDb) {
+      const separator = url.includes('?') ? '&' : '?';
+      const params: string[] = [];
+      if (!url.includes('sslmode=')) params.push('sslmode=require');
+      if (!url.includes('connection_limit=')) params.push('connection_limit=5');
+      if (!url.includes('pool_timeout=')) params.push('pool_timeout=15');
+      if (params.length > 0) {
+        url = `${url}${separator}${params.join('&')}`;
+      }
+    }
 
     super({
       datasources: { db: { url } },
@@ -34,9 +61,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       this.logger.warn(`Prisma warning: ${e.message}`);
     });
 
-    if (isRender) {
-      this.logger.log('Render PostgreSQL detected — using production connection settings');
-    }
+    // Startup diagnostics (no secrets)
+    const parsed = (() => {
+      try { return new URL(url); } catch { return null; }
+    })();
+    this.logger.log(`DB host: ${parsed?.hostname || 'unknown'}`);
+    this.logger.log(`DB port: ${parsed?.port || '5432'}`);
+    this.logger.log(`DB name: ${parsed?.pathname?.slice(1) || 'unknown'}`);
+    this.logger.log(`SSL: ${url.includes('sslmode=require') ? 'required' : 'not set'}`);
+    this.logger.log(`External DB: ${isExternalDb ? 'yes' : 'no (local)'}`);
   }
 
   async onModuleInit() {
@@ -49,10 +82,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   /**
-   * Attempt to connect with bounded retry (3 attempts, exponential backoff).
+   * Attempt to connect with bounded retry (5 attempts, exponential backoff).
    * If all attempts fail, throw — NestJS will refuse to start.
    */
-  private async connectWithRetry(maxRetries = 3): Promise<void> {
+  private async connectWithRetry(maxRetries = 5): Promise<void> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await this.$connect();
@@ -63,12 +96,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         this.logger.error(
           `DB connection attempt ${attempt}/${maxRetries} failed: ${msg}`,
         );
+
         if (attempt === maxRetries) {
           this.logger.error('All DB connection attempts exhausted — aborting startup');
+          this.logger.error(
+            'Checklist: (1) Is DATABASE_URL correct? (2) Does it include ?sslmode=require for managed DBs? ' +
+            '(3) Is the database server running? (4) Are firewall/network rules allowing access?',
+          );
           throw error;
         }
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
-        this.logger.warn(`Retrying in ${delay}ms...`);
+
+        // Exponential backoff: 2s, 4s, 8s, 10s (capped)
+        const delay = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
+        this.logger.warn(`Retrying in ${delay / 1000}s...`);
         await new Promise((r) => setTimeout(r, delay));
       }
     }
@@ -76,7 +116,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   /**
    * Returns true if the error is a known transient Prisma/DB connectivity issue.
-   * Use this in services to decide whether to retry or surface the error.
    */
   static isTransientError(error: unknown): boolean {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -85,7 +124,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     if (error instanceof Prisma.PrismaClientInitializationError) {
       return true;
     }
-    // Catch raw "Server has closed the connection" / ECONNREFUSED
     const msg = (error as any)?.message || '';
     return (
       msg.includes('Server has closed the connection') ||
@@ -98,7 +136,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   /**
    * Execute a DB operation with a single retry on transient failures.
-   * Suitable for scheduler jobs and background tasks.
    */
   async withRetry<T>(
     operation: () => Promise<T>,

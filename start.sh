@@ -40,10 +40,10 @@ echo "[3/4] Starting API on port $API_PORT..."
 API_PORT=$API_PORT node dist/src/main.js > /tmp/api.log 2>&1 &
 API_PID=$!
 
-# Wait for API to be ready (up to 20 seconds)
+# Wait for API to be ready (up to 45 seconds — external DB may be slow)
 echo "Waiting for API (PID $API_PID)..."
 API_READY=false
-for i in $(seq 1 20); do
+for i in $(seq 1 45); do
   if curl -sf "http://127.0.0.1:${API_PORT}/health" > /dev/null 2>&1; then
     echo "API is healthy! (took ${i}s)"
     API_READY=true
@@ -68,10 +68,17 @@ else
   echo "  !! API: NOT RUNNING — crash logs:"
   echo "=========================================="
   cat /tmp/api.log
+  echo ""
+  echo "!! Starting frontend anyway (API may recover)..."
 fi
 
 # Navigate to web directory
 cd ../web || { echo "!! apps/web not found"; exit 1; }
+
+# Set API_INTERNAL_URL so Next.js rewrites target the co-located API
+# In single-container (Railway/Render), both processes share 127.0.0.1
+export API_INTERNAL_URL="http://127.0.0.1:${API_PORT}"
+echo "API_INTERNAL_URL set to: $API_INTERNAL_URL"
 
 echo "[4/4] Starting Next.js on port ${PORT:-3000}..."
 
