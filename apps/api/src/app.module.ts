@@ -29,6 +29,7 @@ import { ImportsModule } from './imports/imports.module';
 import { SystemExportModule } from './system-export/system-export.module';
 import { GanttModule } from './gantt/gantt.module';
 import { ExecutiveTasksModule } from './executive-tasks/executive-tasks.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -62,6 +63,7 @@ import { HealthController } from './health.controller';
     SystemExportModule,
     GanttModule,
     ExecutiveTasksModule,
+    AnalyticsModule,
   ],
   controllers: [HealthController],
   providers: [

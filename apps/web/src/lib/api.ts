@@ -445,6 +445,11 @@ export const executiveTasksApi = {
   importData: (data: any[], sheetName: string) => api.post('/executive-tasks/import', { data, sheetName }),
 };
 
+// ─── Analytics ───
+export const analyticsApi = {
+  dashboard: () => api.get('/analytics/dashboard'),
+};
+
 // ─── Admin System Export ───
 export const adminExportApi = {
   systemStats: () => api.get('/admin/system-stats'),
