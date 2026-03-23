@@ -109,6 +109,9 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api', { exclude: ['health'] });
 
+  // Enable graceful shutdown hooks (Prisma disconnect, etc.)
+  app.enableShutdownHooks();
+
   // Socket.IO adapter
   app.useWebSocketAdapter(new IoAdapter(app));
 

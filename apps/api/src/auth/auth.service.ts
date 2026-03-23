@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -28,10 +28,21 @@ export class AuthService {
 
   async validateUser(email: string, password: string) {
     const normalizedEmail = email.toLowerCase().trim();
-    const user = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail },
-      include: { trackPermissions: { include: { track: true } } },
-    });
+
+    let user: any;
+    try {
+      user = await this.prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        include: { trackPermissions: { include: { track: true } } },
+      });
+    } catch (error) {
+      this.logger.error(`[validateUser] DB error looking up user: ${(error as any)?.message}`);
+      if (PrismaService.isTransientError(error)) {
+        throw new InternalServerErrorException('خطأ مؤقت في الخادم، يرجى المحاولة لاحقاً');
+      }
+      throw new InternalServerErrorException('خطأ داخلي في الخادم');
+    }
+
     if (!user) throw new UnauthorizedException('بيانات الدخول غير صحيحة');
 
     // Check if account is locked
@@ -48,10 +59,15 @@ export class AuthService {
       }
 
       // Lock expired, unlock
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { isLocked: false, failedLoginAttempts: 0, lockedAt: null },
-      });
+      try {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { isLocked: false, failedLoginAttempts: 0, lockedAt: null },
+        });
+      } catch (error) {
+        this.logger.error(`[validateUser] DB error unlocking user: ${(error as any)?.message}`);
+        // Non-fatal: continue with validation even if unlock write fails
+      }
     }
 
     if (!user.isActive) throw new UnauthorizedException('الحساب غير مفعل');
@@ -62,13 +78,18 @@ export class AuthService {
       const newAttempts = (user.failedLoginAttempts || 0) + 1;
       const shouldLock = newAttempts >= MAX_FAILED_ATTEMPTS;
 
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          failedLoginAttempts: newAttempts,
-          ...(shouldLock ? { isLocked: true, lockedAt: new Date() } : {}),
-        },
-      });
+      try {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            failedLoginAttempts: newAttempts,
+            ...(shouldLock ? { isLocked: true, lockedAt: new Date() } : {}),
+          },
+        });
+      } catch (error) {
+        this.logger.error(`[validateUser] DB error updating failed attempts: ${(error as any)?.message}`);
+        // Non-fatal: still reject the login
+      }
 
       if (shouldLock) {
         throw new UnauthorizedException(
@@ -80,16 +101,21 @@ export class AuthService {
     }
 
     // Successful login: reset failed attempts, update login stats
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        failedLoginAttempts: 0,
-        isLocked: false,
-        lockedAt: null,
-        lastLoginAt: new Date(),
-        loginCount: { increment: 1 },
-      },
-    });
+    try {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: 0,
+          isLocked: false,
+          lockedAt: null,
+          lastLoginAt: new Date(),
+          loginCount: { increment: 1 },
+        },
+      });
+    } catch (error) {
+      this.logger.error(`[validateUser] DB error updating login stats: ${(error as any)?.message}`);
+      // Non-fatal: user is already validated, continue
+    }
 
     return user;
   }
@@ -109,205 +135,267 @@ export class AuthService {
     }
 
     const normalizedEmail = dto.email.toLowerCase().trim();
-    const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
-    if (existing) throw new ConflictException('البريد الإلكتروني مستخدم بالفعل');
 
-    const track = await this.prisma.track.findUnique({ where: { id: dto.trackId } });
-    if (!track || !track.isActive) {
-      throw new ConflictException('المسار غير موجود أو غير فعال');
+    try {
+      const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+      if (existing) throw new ConflictException('البريد الإلكتروني مستخدم بالفعل');
+
+      const track = await this.prisma.track.findUnique({ where: { id: dto.trackId } });
+      if (!track || !track.isActive) {
+        throw new ConflictException('المسار غير موجود أو غير فعال');
+      }
+
+      const passwordHash = await bcrypt.hash(dto.password, 12);
+
+      const defaultPermissions = dto.role === 'track_lead'
+        ? ['view', 'edit', 'create']
+        : ['view'];
+
+      const user = await this.prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email: normalizedEmail,
+            name: dto.name,
+            nameAr: dto.nameAr,
+            passwordHash,
+            role: dto.role as any,
+            isActive: true,
+          },
+        });
+
+        await tx.trackPermission.create({
+          data: {
+            userId: newUser.id,
+            trackId: dto.trackId,
+            permissions: defaultPermissions,
+          },
+        });
+
+        return tx.user.findUnique({
+          where: { id: newUser.id },
+          include: { trackPermissions: { include: { track: true } } },
+        });
+      });
+
+      const tokens = await this.generateTokens(user!.id, user!.email, user!.role);
+
+      await this.prisma.refreshToken.create({
+        data: {
+          token: tokens.refreshToken,
+          userId: user!.id,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      this.logger.log(`New user registered: ${user!.email} [${dto.role}] on track ${track.name}`);
+      return { ...tokens, user: this.sanitizeUser(user) };
+    } catch (error) {
+      // Re-throw business exceptions as-is
+      if (error instanceof ConflictException || error instanceof BadRequestException) {
+        throw error;
+      }
+      this.logger.error(`[register] DB error: ${(error as any)?.message}`);
+      if (PrismaService.isTransientError(error)) {
+        throw new InternalServerErrorException('خطأ مؤقت في الخادم، يرجى المحاولة لاحقاً');
+      }
+      throw new InternalServerErrorException('خطأ داخلي في الخادم');
     }
-
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-
-    const defaultPermissions = dto.role === 'track_lead'
-      ? ['view', 'edit', 'create']
-      : ['view'];
-
-    const user = await this.prisma.$transaction(async (tx) => {
-      const newUser = await tx.user.create({
-        data: {
-          email: normalizedEmail,
-          name: dto.name,
-          nameAr: dto.nameAr,
-          passwordHash,
-          role: dto.role as any,
-          isActive: true,
-        },
-      });
-
-      await tx.trackPermission.create({
-        data: {
-          userId: newUser.id,
-          trackId: dto.trackId,
-          permissions: defaultPermissions,
-        },
-      });
-
-      return tx.user.findUnique({
-        where: { id: newUser.id },
-        include: { trackPermissions: { include: { track: true } } },
-      });
-    });
-
-    const tokens = await this.generateTokens(user!.id, user!.email, user!.role);
-
-    await this.prisma.refreshToken.create({
-      data: {
-        token: tokens.refreshToken,
-        userId: user!.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
-
-    this.logger.log(`New user registered: ${user!.email} [${dto.role}] on track ${track.name}`);
-    return { ...tokens, user: this.sanitizeUser(user) };
   }
 
   async login(email: string, password: string) {
+    // validateUser already handles its own DB errors
     const user = await this.validateUser(email, password);
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
 
-    // Store refresh token
-    await this.prisma.refreshToken.create({
-      data: {
-        token: tokens.refreshToken,
-        userId: user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-      },
-    });
+    try {
+      const tokens = await this.generateTokens(user.id, user.email, user.role);
 
-    this.logger.log(`User logged in: ${user.email}`);
-    return { ...tokens, user: this.sanitizeUser(user) };
+      // Store refresh token
+      await this.prisma.refreshToken.create({
+        data: {
+          token: tokens.refreshToken,
+          userId: user.id,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      this.logger.log(`User logged in: ${user.email}`);
+      return { ...tokens, user: this.sanitizeUser(user) };
+    } catch (error) {
+      if (error instanceof UnauthorizedException || error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      this.logger.error(`[login] DB error storing refresh token: ${(error as any)?.message}`);
+      if (PrismaService.isTransientError(error)) {
+        throw new InternalServerErrorException('خطأ مؤقت في الخادم، يرجى المحاولة لاحقاً');
+      }
+      throw new InternalServerErrorException('خطأ داخلي في الخادم');
+    }
   }
 
   async refresh(refreshToken: string) {
-    const stored = await this.prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
-      include: { user: { include: { trackPermissions: { include: { track: true } } } } },
-    });
+    try {
+      const stored = await this.prisma.refreshToken.findUnique({
+        where: { token: refreshToken },
+        include: { user: { include: { trackPermissions: { include: { track: true } } } } },
+      });
 
-    if (!stored || stored.revoked || stored.expiresAt < new Date()) {
-      throw new UnauthorizedException('جلسة منتهية، يرجى تسجيل الدخول مرة أخرى');
+      if (!stored || stored.revoked || stored.expiresAt < new Date()) {
+        throw new UnauthorizedException('جلسة منتهية، يرجى تسجيل الدخول مرة أخرى');
+      }
+
+      // Revoke old token
+      await this.prisma.refreshToken.update({
+        where: { id: stored.id },
+        data: { revoked: true },
+      });
+
+      const tokens = await this.generateTokens(stored.user.id, stored.user.email, stored.user.role);
+
+      // Store new refresh token
+      await this.prisma.refreshToken.create({
+        data: {
+          token: tokens.refreshToken,
+          userId: stored.user.id,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      return { ...tokens, user: this.sanitizeUser(stored.user) };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+      this.logger.error(`[refresh] DB error: ${(error as any)?.message}`);
+      if (PrismaService.isTransientError(error)) {
+        throw new InternalServerErrorException('خطأ مؤقت في الخادم، يرجى المحاولة لاحقاً');
+      }
+      throw new InternalServerErrorException('خطأ داخلي في الخادم');
     }
-
-    // Revoke old token
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: { revoked: true },
-    });
-
-    const tokens = await this.generateTokens(stored.user.id, stored.user.email, stored.user.role);
-
-    // Store new refresh token
-    await this.prisma.refreshToken.create({
-      data: {
-        token: tokens.refreshToken,
-        userId: stored.user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
-
-    return { ...tokens, user: this.sanitizeUser(stored.user) };
   }
 
   async logout(userId: string) {
-    await this.prisma.refreshToken.updateMany({
-      where: { userId, revoked: false },
-      data: { revoked: true },
-    });
+    try {
+      await this.prisma.refreshToken.updateMany({
+        where: { userId, revoked: false },
+        data: { revoked: true },
+      });
+    } catch (error) {
+      this.logger.error(`[logout] DB error revoking tokens: ${(error as any)?.message}`);
+      // Non-fatal: the access token will expire naturally
+    }
   }
 
   async getProfile(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { trackPermissions: { include: { track: true } } },
-    });
-    if (!user) throw new UnauthorizedException();
-    return this.sanitizeUser(user);
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: { trackPermissions: { include: { track: true } } },
+      });
+      if (!user) throw new UnauthorizedException();
+      return this.sanitizeUser(user);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+      this.logger.error(`[getProfile] DB error: ${(error as any)?.message}`);
+      if (PrismaService.isTransientError(error)) {
+        throw new InternalServerErrorException('خطأ مؤقت في الخادم، يرجى المحاولة لاحقاً');
+      }
+      throw new InternalServerErrorException('خطأ داخلي في الخادم');
+    }
   }
 
   // ─── Forgot / Reset Password ───
 
   async forgotPassword(email: string): Promise<void> {
     const normalizedEmail = email.toLowerCase().trim();
-    const user = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail },
-    });
 
-    // Always return silently to prevent email enumeration
-    if (!user || !user.isActive) {
-      this.logger.log(`Password reset requested for unknown/inactive email: ${normalizedEmail}`);
-      return;
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { email: normalizedEmail },
+      });
+
+      // Always return silently to prevent email enumeration
+      if (!user || !user.isActive) {
+        this.logger.log(`Password reset requested for unknown/inactive email: ${normalizedEmail}`);
+        return;
+      }
+
+      // Generate cryptographically secure token
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const hashedToken = crypto
+        .createHash('sha256')
+        .update(rawToken)
+        .digest('hex');
+
+      // Store hashed token with 1-hour expiry
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          resetToken: hashedToken,
+          resetTokenExpiry: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      });
+
+      // Build reset link
+      const frontendUrl = this.config.get<string>('FRONTEND_URL')
+        || this.config.get<string>('CORS_ORIGINS')?.split(',')[0]
+        || 'http://localhost:3000';
+      const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
+
+      // Send email in background (fire-and-forget — never blocks response)
+      this.mail.sendPasswordResetEmail(normalizedEmail, resetLink).catch(() => {});
+
+      this.logger.log(`Password reset token generated for: ${normalizedEmail}`);
+    } catch (error) {
+      this.logger.error(`[forgotPassword] DB error: ${(error as any)?.message}`);
+      // Silently fail — do not reveal DB issues to prevent enumeration
     }
-
-    // Generate cryptographically secure token
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto
-      .createHash('sha256')
-      .update(rawToken)
-      .digest('hex');
-
-    // Store hashed token with 1-hour expiry
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        resetToken: hashedToken,
-        resetTokenExpiry: new Date(Date.now() + 60 * 60 * 1000),
-      },
-    });
-
-    // Build reset link
-    const frontendUrl = this.config.get<string>('FRONTEND_URL')
-      || this.config.get<string>('CORS_ORIGINS')?.split(',')[0]
-      || 'http://localhost:3000';
-    const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
-
-    // Send email in background (fire-and-forget — never blocks response)
-    this.mail.sendPasswordResetEmail(normalizedEmail, resetLink).catch(() => {});
-
-    this.logger.log(`Password reset token generated for: ${normalizedEmail}`);
   }
 
   async resetPassword(rawToken: string, newPassword: string): Promise<void> {
-    // Hash the incoming token to compare with stored hash
     const hashedToken = crypto
       .createHash('sha256')
       .update(rawToken)
       .digest('hex');
 
-    const user = await this.prisma.user.findFirst({
-      where: {
-        resetToken: hashedToken,
-        resetTokenExpiry: { gt: new Date() },
-      },
-    });
+    try {
+      const user = await this.prisma.user.findFirst({
+        where: {
+          resetToken: hashedToken,
+          resetTokenExpiry: { gt: new Date() },
+        },
+      });
 
-    if (!user) {
-      throw new BadRequestException('رابط إعادة التعيين غير صالح أو انتهت صلاحيته');
+      if (!user) {
+        throw new BadRequestException('رابط إعادة التعيين غير صالح أو انتهت صلاحيته');
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 12);
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash,
+          resetToken: null,
+          resetTokenExpiry: null,
+          isLocked: false,
+          failedLoginAttempts: 0,
+          lockedAt: null,
+        },
+      });
+
+      // Revoke all existing refresh tokens for security
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: user.id, revoked: false },
+        data: { revoked: true },
+      });
+
+      this.logger.log(`Password reset completed for: ${user.email}`);
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      this.logger.error(`[resetPassword] DB error: ${(error as any)?.message}`);
+      if (PrismaService.isTransientError(error)) {
+        throw new InternalServerErrorException('خطأ مؤقت في الخادم، يرجى المحاولة لاحقاً');
+      }
+      throw new InternalServerErrorException('خطأ داخلي في الخادم');
     }
-
-    const passwordHash = await bcrypt.hash(newPassword, 12);
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash,
-        resetToken: null,
-        resetTokenExpiry: null,
-        // Unlock account if it was locked
-        isLocked: false,
-        failedLoginAttempts: 0,
-        lockedAt: null,
-      },
-    });
-
-    // Revoke all existing refresh tokens for security
-    await this.prisma.refreshToken.updateMany({
-      where: { userId: user.id, revoked: false },
-      data: { revoked: true },
-    });
-
-    this.logger.log(`Password reset completed for: ${user.email}`);
   }
 
   async validateResetToken(rawToken: string): Promise<boolean> {
@@ -316,14 +404,18 @@ export class AuthService {
       .update(rawToken)
       .digest('hex');
 
-    const user = await this.prisma.user.findFirst({
-      where: {
-        resetToken: hashedToken,
-        resetTokenExpiry: { gt: new Date() },
-      },
-    });
-
-    return !!user;
+    try {
+      const user = await this.prisma.user.findFirst({
+        where: {
+          resetToken: hashedToken,
+          resetTokenExpiry: { gt: new Date() },
+        },
+      });
+      return !!user;
+    } catch (error) {
+      this.logger.error(`[validateResetToken] DB error: ${(error as any)?.message}`);
+      return false;
+    }
   }
 
   private async generateTokens(userId: string, email: string, role: string) {
