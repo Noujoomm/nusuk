@@ -27,6 +27,18 @@ if [ -n "$MISSING" ]; then
   echo ""
 fi
 
+# Auto-append sslmode=require for external managed databases
+if echo "$DATABASE_URL" | grep -qE '\.(render\.com|onrender\.com|railway\.app|neon\.tech|supabase\.co)'; then
+  if ! echo "$DATABASE_URL" | grep -q 'sslmode='; then
+    if echo "$DATABASE_URL" | grep -q '?'; then
+      export DATABASE_URL="${DATABASE_URL}&sslmode=require"
+    else
+      export DATABASE_URL="${DATABASE_URL}?sslmode=require"
+    fi
+    echo "Auto-appended sslmode=require for external database"
+  fi
+fi
+
 # Navigate to API directory
 cd apps/api || { echo "!! apps/api not found"; exit 1; }
 
