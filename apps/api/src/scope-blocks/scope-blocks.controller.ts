@@ -206,6 +206,15 @@ export class ScopeBlocksController {
     @CurrentUser() user: any,
   ) {
     if (!file) return { error: 'لم يتم رفع ملف' };
+    // Fix multer latin1 encoding for Arabic filenames
+    try {
+      const decoded = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      if (decoded !== file.originalname && /[\u0600-\u06FF\u0750-\u077F]/.test(decoded)) {
+        file.originalname = decoded;
+      }
+    } catch {}
+    file.originalname = file.originalname.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
+
     const fileUrl = `/uploads/scope-attachments/${file.filename}`;
     return this.scopeBlocks.addAttachment({
       scopeBlockId,

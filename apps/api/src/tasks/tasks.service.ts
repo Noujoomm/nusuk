@@ -127,7 +127,18 @@ export class TasksService {
     }
   }
 
+  private fixMulterFilename(file: Express.Multer.File) {
+    try {
+      const decoded = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      if (decoded !== file.originalname && /[\u0600-\u06FF\u0750-\u077F\u0980-\u09FF]/.test(decoded)) {
+        file.originalname = decoded;
+      }
+    } catch {}
+    file.originalname = file.originalname.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
+  }
+
   private validateFile(file: Express.Multer.File) {
+    this.fixMulterFilename(file);
     const ext = extname(file.originalname).toLowerCase();
     if (BLOCKED_EXTENSIONS.has(ext)) {
       throw new BadRequestException(`نوع الملف غير مسموح: ${ext}`);
@@ -274,8 +285,8 @@ export class TasksService {
     }
     if (dueDateFrom || dueDateTo) {
       where.dueDate = {
-        ...(dueDateFrom ? { gte: new Date(dueDateFrom) } : {}),
-        ...(dueDateTo ? { lte: new Date(dueDateTo) } : {}),
+        ...(dueDateFrom ? { gte: new Date(dueDateFrom + (dueDateFrom.includes('T') ? '' : 'T00:00:00Z')) } : {}),
+        ...(dueDateTo ? { lte: new Date(dueDateTo + (dueDateTo.includes('T') ? '' : 'T23:59:59Z')) } : {}),
       };
     }
 
@@ -427,10 +438,12 @@ export class TasksService {
       if (!user) throw new BadRequestException('المستخدم المحدد غير موجود');
     }
 
-    // Sanitize empty-string date fields → undefined so Prisma doesn't choke
-    const startDate = taskData.startDate || undefined;
-    const dueDate   = taskData.dueDate   || undefined;
+    // Sanitize and normalize date fields:
+    // - startDate → start of day UTC
+    // - dueDate → end of day UTC (23:59:59) so overdue checks work correctly
     const { startDate: _s, dueDate: _d, ...restTaskData } = taskData;
+    const startDate = _s ? new Date(_s + (String(_s).includes('T') ? '' : 'T00:00:00Z')) : undefined;
+    const dueDate = _d ? new Date(_d + (String(_d).includes('T') ? '' : 'T23:59:59Z')) : undefined;
 
     const task = await this.prisma.task.create({
       data: {
@@ -510,9 +523,17 @@ export class TasksService {
 
     const updateData: any = { ...taskData };
 
-    // Sanitize empty-string date fields → undefined
-    if (updateData.startDate === '') updateData.startDate = undefined;
-    if (updateData.dueDate   === '') updateData.dueDate   = undefined;
+    // Sanitize and normalize date fields
+    if (updateData.startDate === '') {
+      updateData.startDate = undefined;
+    } else if (updateData.startDate && !String(updateData.startDate).includes('T')) {
+      updateData.startDate = new Date(updateData.startDate + 'T00:00:00Z');
+    }
+    if (updateData.dueDate === '') {
+      updateData.dueDate = undefined;
+    } else if (updateData.dueDate && !String(updateData.dueDate).includes('T')) {
+      updateData.dueDate = new Date(updateData.dueDate + 'T23:59:59Z');
+    }
 
     // Enforce: tasks with a trackId cannot be global
     if (updateData.trackId) {

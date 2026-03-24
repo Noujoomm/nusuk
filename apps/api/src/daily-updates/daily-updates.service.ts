@@ -48,6 +48,15 @@ export class DailyUpdatesService {
   // ─── FILE VALIDATION ───
 
   validateFile(file: Express.Multer.File) {
+    // Fix multer latin1 encoding for Arabic filenames
+    try {
+      const decoded = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      if (decoded !== file.originalname && /[\u0600-\u06FF\u0750-\u077F]/.test(decoded)) {
+        file.originalname = decoded;
+      }
+    } catch {}
+    file.originalname = file.originalname.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
+
     const ext = extname(file.originalname).toLowerCase();
     if (BLOCKED_EXTENSIONS.has(ext)) {
       throw new BadRequestException(`نوع الملف غير مسموح: ${ext}`);
