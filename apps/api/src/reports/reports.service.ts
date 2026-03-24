@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException, InternalSer
 import { PrismaService } from '../common/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { extname } from 'path';
+import { fixMulterFilename } from '../common/fix-filename';
 import * as fs from 'fs';
 import * as zlib from 'zlib';
 import { promisify } from 'util';
@@ -172,18 +173,9 @@ export class ReportsService {
   // ─── ATTACHMENTS ───
 
   private validateFile(file: Express.Multer.File) {
-    // 0. Fix multer UTF-8 filename encoding (multer decodes as latin1)
-    try {
-      const decoded = Buffer.from(file.originalname, 'latin1').toString('utf8');
-      if (decoded !== file.originalname && /[\u0600-\u06FF\u0750-\u077F]/.test(decoded)) {
-        file.originalname = decoded;
-      }
-    } catch {}
+    fixMulterFilename(file);
 
-    // 1. Sanitize filename
-    file.originalname = file.originalname.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
-
-    // 2. Check empty file
+    // Check empty file
     if (!file.size || file.size === 0) {
       this.logger.warn(`Empty file rejected: ${file.originalname}`);
       throw new BadRequestException(`الملف فارغ: ${file.originalname}`);

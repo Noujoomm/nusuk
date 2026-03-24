@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { fixMulterFilename } from '../common/fix-filename';
 import {
   CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, AssignTaskDto,
   CreateChecklistItemDto, UpdateChecklistItemDto,
@@ -341,6 +342,7 @@ export class TasksController {
     @Body('notes') notes: string,
     @CurrentUser() user: any,
   ) {
+    fixMulterFilename(file);
     return this.tasks.uploadTaskFile(id, {
       fileName: file.originalname,
       fileSize: file.size,
