@@ -359,6 +359,70 @@ export class AnalyticsService {
       };
     });
 
+    // ──────────────────────────────────────
+    // 6. ACTIVITY FEED + EXTRA COUNTS
+    // ──────────────────────────────────────
+    const [
+      totalDailyUpdates,
+      totalFiles,
+      recentActivity,
+      recentReportsFeed,
+      recentFilesFeed,
+    ] = await Promise.all([
+      this.prisma.dailyUpdate.count(),
+      this.prisma.uploadedFile.count(),
+      this.prisma.taskUpdate.findMany({
+        select: {
+          id: true, content: true, createdAt: true,
+          author: { select: { id: true, name: true, nameAr: true } },
+          task: { select: { id: true, titleAr: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 15,
+      }),
+      this.prisma.report.findMany({
+        select: {
+          id: true, title: true, type: true, createdAt: true,
+          author: { select: { id: true, name: true, nameAr: true } },
+          track: { select: { id: true, nameAr: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.uploadedFile.findMany({
+        select: {
+          id: true, fileName: true, createdAt: true,
+          uploadedBy: { select: { id: true, name: true, nameAr: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+    ]);
+
+    const activityFeed = [
+      ...recentActivity.map((a) => ({
+        id: a.id, type: 'task_update' as const,
+        user_name: a.author?.nameAr || a.author?.name || '—',
+        description: a.content?.slice(0, 100) || '',
+        context: a.task?.titleAr || '',
+        created_at: a.createdAt,
+      })),
+      ...recentReportsFeed.map((r) => ({
+        id: r.id, type: 'report' as const,
+        user_name: r.author?.nameAr || r.author?.name || '—',
+        description: r.title,
+        context: r.track?.nameAr || '',
+        created_at: r.createdAt,
+      })),
+      ...recentFilesFeed.map((f) => ({
+        id: f.id, type: 'file' as const,
+        user_name: f.uploadedBy?.nameAr || f.uploadedBy?.name || '—',
+        description: f.fileName,
+        context: '',
+        created_at: f.createdAt,
+      })),
+    ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20);
+
     return {
       reports: {
         total_reports: totalReports,
@@ -403,6 +467,11 @@ export class AnalyticsService {
       },
       insights,
       track_performance: trackPerformance,
+      summary: {
+        total_daily_updates: totalDailyUpdates,
+        total_files: totalFiles,
+      },
+      activity_feed: activityFeed,
     };
   }
 
