@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req, UseInterceptors, UploadedFile as UpFile } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req, Res, UseInterceptors, UploadedFile as UpFile, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { mkdirSync } from 'fs';
+import { mkdirSync, existsSync, createReadStream } from 'fs';
 import { extname, join } from 'path';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 
 const TASK_UPLOADS_DIR = join(process.cwd(), 'uploads', 'tasks');
 try { mkdirSync(TASK_UPLOADS_DIR, { recursive: true }); } catch {}
@@ -349,6 +349,44 @@ export class TasksController {
       mimeType: file.mimetype,
       filePath: file.path,
     }, user.id, file, notes);
+  }
+
+  @Get(':id/files/:fileId/download')
+  async downloadTaskFile(
+    @Param('id') taskId: string,
+    @Param('fileId') fileId: string,
+    @CurrentUser() user: any,
+    @Res() res: Response,
+  ) {
+    // 1. Find the file
+    const file = await this.tasks.findTaskFile(taskId, fileId);
+    if (!file) throw new NotFoundException('الملف غير موجود');
+
+    // 2. RBAC: admin, pm, track_lead can always download.
+    //    Others must be assigned to the task or be the uploader.
+    const allowedRoles = ['admin', 'pm', 'track_lead'];
+    if (!allowedRoles.includes(user.role)) {
+      const isAssigned = await this.tasks.isUserAssignedToTask(user.id, taskId);
+      const isUploader = file.uploadedById === user.id;
+      if (!isAssigned && !isUploader) {
+        throw new ForbiddenException('ليس لديك صلاحية تحميل هذا الملف');
+      }
+    }
+
+    // 3. Stream the file
+    if (!existsSync(file.filePath)) {
+      throw new NotFoundException('الملف غير موجود على الخادم');
+    }
+
+    const encodedName = encodeURIComponent(file.fileName);
+    res.set({
+      'Content-Type': file.mimeType || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodedName}`,
+      'Content-Length': String(file.fileSize),
+    });
+
+    const stream = createReadStream(file.filePath);
+    stream.pipe(res);
   }
 
   @Delete(':id/files/:fileId')

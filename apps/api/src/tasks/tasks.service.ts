@@ -1059,6 +1059,27 @@ export class TasksService {
     return taskFile;
   }
 
+  async findTaskFile(taskId: string, fileId: string) {
+    return this.prisma.taskFile.findFirst({
+      where: { id: fileId, taskId },
+    });
+  }
+
+  async isUserAssignedToTask(userId: string, taskId: string): Promise<boolean> {
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: {
+        createdById: true,
+        assigneeUserId: true,
+        assignments: { select: { userId: true } },
+      },
+    });
+    if (!task) return false;
+    if (task.createdById === userId) return true;
+    if (task.assigneeUserId === userId) return true;
+    return task.assignments.some((a) => a.userId === userId);
+  }
+
   async deleteTaskFile(taskId: string, fileId: string, userId: string) {
     const file = await this.prisma.taskFile.findFirst({ where: { id: fileId, taskId } });
     if (!file) throw new NotFoundException('الملف غير موجود');

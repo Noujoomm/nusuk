@@ -253,6 +253,27 @@ export default function TaskDetailPanel({ task: initialTask, onClose, onUpdate }
   };
 
   const canDeleteFile = (file: any) => isAdminOrPm || isTrackLead || file.uploadedById === user?.id;
+  const canDownloadFile = isAdminOrPm || isTrackLead || isAssigned || isDirectAssignee;
+
+  const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
+  const handleDownloadFile = async (file: any) => {
+    setDownloadingFileId(file.id);
+    try {
+      const { data } = await tasksApi.downloadTaskFile(task.id, file.id);
+      const url = window.URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error('فشل تحميل الملف');
+    } finally {
+      setDownloadingFileId(null);
+    }
+  };
 
   let assigneeDisplay = '';
   if (task.assigneeType === 'TRACK' && task.assigneeTrack) assigneeDisplay = task.assigneeTrack.nameAr;
@@ -528,6 +549,13 @@ export default function TaskDetailPanel({ task: initialTask, onClose, onUpdate }
                         )}
                       </div>
                       <div className="flex items-center gap-1">
+                        {canDownloadFile && (
+                          <button onClick={() => handleDownloadFile(file)} disabled={downloadingFileId === file.id}
+                            title="تحميل الملف"
+                            className="p-1.5 rounded-lg hover:bg-brand-500/20 text-gray-400 hover:text-brand-300 transition-colors disabled:opacity-50">
+                            {downloadingFileId === file.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                          </button>
+                        )}
                         {canDeleteFile(file) && (
                           <button onClick={() => handleDeleteFile(file.id)} disabled={deletingFileId === file.id}
                             className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300 transition-colors disabled:opacity-50">

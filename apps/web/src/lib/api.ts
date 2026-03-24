@@ -360,6 +360,8 @@ export const tasksApi = {
     return api.post(`/tasks/${id}/files`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
   deleteTaskFile: (id: string, fileId: string) => api.delete(`/tasks/${id}/files/${fileId}`),
+  downloadTaskFile: (id: string, fileId: string) =>
+    api.get(`/tasks/${id}/files/${fileId}/download`, { responseType: 'blob' }),
   trackProgress: (trackId: string) => api.get(`/tasks/track/${trackId}/progress`),
 };
 
