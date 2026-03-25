@@ -93,7 +93,7 @@ export class DailyUpdatesController {
 
   @Post(':id/attachments')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   @UseInterceptors(FilesInterceptor('files', 10, {
     storage: tempStorage,
     limits: { fileSize: MAX_FILE_SIZE },
@@ -111,7 +111,7 @@ export class DailyUpdatesController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   @UseInterceptors(FilesInterceptor('files', 10, {
     storage: tempStorage,
     limits: { fileSize: MAX_FILE_SIZE },
@@ -137,7 +137,7 @@ export class DailyUpdatesController {
 
   @Patch(':id')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async update(@Param('id') id: string, @Body() dto: UpdateDailyUpdateDto, @CurrentUser() user: any, @Req() req: Request) {
     const before = await this.service.findById(id);
     const result = await this.service.update(id, dto, user.id, user.role);
@@ -156,14 +156,14 @@ export class DailyUpdatesController {
 
   @Delete('attachments/:attachmentId')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async deleteAttachment(@Param('attachmentId') attachmentId: string) {
     return this.service.deleteAttachment(attachmentId);
   }
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async delete(@Param('id') id: string, @CurrentUser() user: any, @Req() req: Request) {
     const before = await this.service.findById(id);
     const result = await this.service.delete(id, user.id, user.role);
@@ -181,7 +181,7 @@ export class DailyUpdatesController {
 
   @Patch(':id/pin')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'pm', 'track_lead')
   async togglePin(@Param('id') id: string, @CurrentUser() user: any) {
     return this.service.togglePin(id);
   }

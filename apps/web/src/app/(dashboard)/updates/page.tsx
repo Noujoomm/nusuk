@@ -102,7 +102,7 @@ export default function UpdatesPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'updates' | 'activity'>('updates');
 
-  const isAdmin = user?.role === 'admin' || user?.role === 'pm';
+  const isAdmin = user?.role === 'admin' || user?.role === 'pm' || user?.role === 'track_lead';
 
   return (
     <div className="space-y-6">

@@ -628,13 +628,15 @@ export default function TrackDetailPage() {
           {/* Add update button */}
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-white">التحديثات اليومية</h3>
-            <button
-              onClick={() => setShowUpdateForm(!showUpdateForm)}
-              className="btn-primary flex items-center gap-2 px-4 py-2 text-sm"
-            >
-              <Plus className="w-4 h-4" />
-              إضافة تحديث
-            </button>
+            {(isAdmin || user?.role === 'track_lead') && (
+              <button
+                onClick={() => setShowUpdateForm(!showUpdateForm)}
+                className="btn-primary flex items-center gap-2 px-4 py-2 text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                إضافة تحديث
+              </button>
+            )}
           </div>
 
           {/* New Update Form */}
