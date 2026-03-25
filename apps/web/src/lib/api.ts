@@ -450,7 +450,6 @@ export const executiveTasksApi = {
 // ─── Analytics ───
 export const analyticsApi = {
   dashboard: () => api.get('/analytics/dashboard'),
-  performanceReport: () => api.get('/analytics/performance-report'),
 };
 
 // ─── Admin System Export ───
