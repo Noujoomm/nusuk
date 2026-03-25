@@ -1,8 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 
 @Injectable()
 export class AnalyticsService {
+  private readonly logger = new Logger(AnalyticsService.name);
+
   constructor(private prisma: PrismaService) {}
 
   async getDashboardAnalytics() {
@@ -23,23 +25,26 @@ export class AnalyticsService {
       completedAiReports,
       pendingAiReports,
       failedAiReports,
-    ] = await Promise.all([
-      this.prisma.report.count(),
-      this.prisma.report.groupBy({ by: ['type'], _count: true }),
-      this.prisma.report.groupBy({
-        by: ['trackId'],
-        _count: true,
-      }),
-      this.prisma.report.findMany({
-        where: { createdAt: { gte: thirtyDaysAgo } },
-        select: { id: true, createdAt: true },
-        orderBy: { createdAt: 'asc' },
-      }),
-      this.prisma.aIReport.count(),
-      this.prisma.aIReport.count({ where: { status: 'completed' } }),
-      this.prisma.aIReport.count({ where: { status: { in: ['pending', 'generating'] } } }),
-      this.prisma.aIReport.count({ where: { status: 'failed' } }),
-    ]);
+    ] = await this.prisma.withRetry(
+      () => Promise.all([
+        this.prisma.report.count(),
+        this.prisma.report.groupBy({ by: ['type'], _count: true }),
+        this.prisma.report.groupBy({
+          by: ['trackId'],
+          _count: true,
+        }),
+        this.prisma.report.findMany({
+          where: { createdAt: { gte: thirtyDaysAgo } },
+          select: { id: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.prisma.aIReport.count(),
+        this.prisma.aIReport.count({ where: { status: 'completed' } }),
+        this.prisma.aIReport.count({ where: { status: { in: ['pending', 'generating'] } } }),
+        this.prisma.aIReport.count({ where: { status: 'failed' } }),
+      ]),
+      'analytics.reports',
+    );
 
     // Get track names for report breakdown
     const reportTrackIds = reportsByTrack.map((r) => r.trackId).filter(Boolean) as string[];
@@ -78,19 +83,22 @@ export class AnalyticsService {
       achievementsByEntityType,
       totalDeliverables,
       deliverablesByTrack,
-    ] = await Promise.all([
-      this.prisma.achievement.count(),
-      this.prisma.achievement.groupBy({
-        by: ['entityType'],
-        _count: true,
-      }),
-      this.prisma.deliverable.count({ where: { isDeleted: false } }),
-      this.prisma.deliverable.groupBy({
-        by: ['trackId'],
-        where: { isDeleted: false },
-        _count: true,
-      }),
-    ]);
+    ] = await this.prisma.withRetry(
+      () => Promise.all([
+        this.prisma.achievement.count(),
+        this.prisma.achievement.groupBy({
+          by: ['entityType'],
+          _count: true,
+        }),
+        this.prisma.deliverable.count({ where: { isDeleted: false } }),
+        this.prisma.deliverable.groupBy({
+          by: ['trackId'],
+          where: { isDeleted: false },
+          _count: true,
+        }),
+      ]),
+      'analytics.achievements',
+    );
     // Deliverables don't have a status field — treat all non-deleted as active
     const completedDeliverables = 0;
     const pendingDeliverables = totalDeliverables;
@@ -149,40 +157,43 @@ export class AnalyticsService {
       activeUsersCount,
       totalUsers,
       allTracks,
-    ] = await Promise.all([
-      this.prisma.task.count({ where: taskWhere }),
-      this.prisma.task.count({ where: { ...taskWhere, status: 'completed' } }),
-      this.prisma.task.count({
-        where: {
-          ...taskWhere,
-          dueDate: { lt: now },
-          status: { notIn: ['completed', 'cancelled'] },
-        },
-      }),
-      this.prisma.task.groupBy({ by: ['status'], where: taskWhere, _count: true }),
-      this.prisma.task.groupBy({ by: ['priority'], where: taskWhere, _count: true }),
-      this.prisma.task.groupBy({
-        by: ['trackId'],
-        where: { ...taskWhere, status: 'completed', trackId: { not: null } },
-        _count: true,
-      }),
-      this.prisma.dailyUpdate.findMany({
-        where: { createdAt: { gte: thirtyDaysAgo } },
-        select: { id: true, createdAt: true },
-        orderBy: { createdAt: 'asc' },
-      }),
-      this.prisma.auditLog.groupBy({
-        by: ['actorId'],
-        where: { createdAt: { gte: sevenDaysAgo }, actorId: { not: null } },
-      }).then((r) => r.length),
-      this.prisma.user.count({ where: { isLocked: false } }),
-      this.prisma.track.findMany({
-        select: {
-          id: true, nameAr: true, color: true,
-          _count: { select: { tasks: { where: taskWhere }, employees: true } },
-        },
-      }),
-    ]);
+    ] = await this.prisma.withRetry(
+      () => Promise.all([
+        this.prisma.task.count({ where: taskWhere }),
+        this.prisma.task.count({ where: { ...taskWhere, status: 'completed' } }),
+        this.prisma.task.count({
+          where: {
+            ...taskWhere,
+            dueDate: { lt: now },
+            status: { notIn: ['completed', 'cancelled'] },
+          },
+        }),
+        this.prisma.task.groupBy({ by: ['status'], where: taskWhere, _count: true }),
+        this.prisma.task.groupBy({ by: ['priority'], where: taskWhere, _count: true }),
+        this.prisma.task.groupBy({
+          by: ['trackId'],
+          where: { ...taskWhere, status: 'completed', trackId: { not: null } },
+          _count: true,
+        }),
+        this.prisma.dailyUpdate.findMany({
+          where: { createdAt: { gte: thirtyDaysAgo } },
+          select: { id: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.prisma.auditLog.groupBy({
+          by: ['actorId'],
+          where: { createdAt: { gte: sevenDaysAgo }, actorId: { not: null } },
+        }).then((r) => r.length),
+        this.prisma.user.count({ where: { isLocked: false } }),
+        this.prisma.track.findMany({
+          select: {
+            id: true, nameAr: true, color: true,
+            _count: { select: { tasks: { where: taskWhere }, employees: true } },
+          },
+        }),
+      ]),
+      'analytics.performance',
+    );
 
     const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
@@ -368,36 +379,39 @@ export class AnalyticsService {
       recentActivity,
       recentReportsFeed,
       recentFilesFeed,
-    ] = await Promise.all([
-      this.prisma.dailyUpdate.count(),
-      this.prisma.uploadedFile.count(),
-      this.prisma.taskUpdate.findMany({
-        select: {
-          id: true, content: true, createdAt: true,
-          author: { select: { id: true, name: true, nameAr: true } },
-          task: { select: { id: true, titleAr: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 15,
-      }),
-      this.prisma.report.findMany({
-        select: {
-          id: true, title: true, type: true, createdAt: true,
-          author: { select: { id: true, name: true, nameAr: true } },
-          track: { select: { id: true, nameAr: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-      }),
-      this.prisma.uploadedFile.findMany({
-        select: {
-          id: true, fileName: true, createdAt: true,
-          uploadedBy: { select: { id: true, name: true, nameAr: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-      }),
-    ]);
+    ] = await this.prisma.withRetry(
+      () => Promise.all([
+        this.prisma.dailyUpdate.count(),
+        this.prisma.uploadedFile.count(),
+        this.prisma.taskUpdate.findMany({
+          select: {
+            id: true, content: true, createdAt: true,
+            author: { select: { id: true, name: true, nameAr: true } },
+            task: { select: { id: true, titleAr: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 15,
+        }),
+        this.prisma.report.findMany({
+          select: {
+            id: true, title: true, type: true, createdAt: true,
+            author: { select: { id: true, name: true, nameAr: true } },
+            track: { select: { id: true, nameAr: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        }),
+        this.prisma.uploadedFile.findMany({
+          select: {
+            id: true, fileName: true, createdAt: true,
+            uploadedBy: { select: { id: true, name: true, nameAr: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        }),
+      ]),
+      'analytics.activityFeed',
+    );
 
     const activityFeed = [
       ...recentActivity.map((a) => ({
