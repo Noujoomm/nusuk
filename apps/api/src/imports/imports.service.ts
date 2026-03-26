@@ -272,58 +272,56 @@ export class ImportsService {
     let skipped = 0;
     const errors: any[] = [];
 
-    // Process in batches of 100
-    const BATCH_SIZE = 100;
-    for (let batch = 0; batch < rows.length; batch += BATCH_SIZE) {
-      const batchRows = rows.slice(batch, batch + BATCH_SIZE);
+    // Parse all rows into typed records, then batch-insert with createMany
+    const validRecords: Record<string, any>[] = [];
+    const requiredFields: Record<string, string[]> = {
+      employee: ['fullNameAr', 'fullName'],
+      deliverable: ['nameAr', 'name', 'trackId'],
+      penalty: ['violationAr', 'violation', 'trackId'],
+      scope: ['titleAr', 'title', 'trackId'],
+      track_kpi: ['nameAr', 'name', 'trackId'],
+    };
+    const required = requiredFields[entityType] || [];
 
-      for (let i = 0; i < batchRows.length; i++) {
-        const rowIdx = batch + i;
-        try {
-          const record: Record<string, any> = {};
-          for (const map of mapping) {
-            if (map.dbField && map.excelColumn && batchRows[i][map.excelColumn] !== undefined) {
-              let value: any = batchRows[i][map.excelColumn];
-              if (map.dbField === 'impactScore') {
-                value = parseFloat(value) || 0;
-              }
-              record[map.dbField] = value;
-            }
+    for (let i = 0; i < rows.length; i++) {
+      try {
+        const record: Record<string, any> = {};
+        for (const map of mapping) {
+          if (map.dbField && map.excelColumn && rows[i][map.excelColumn] !== undefined) {
+            let value: any = rows[i][map.excelColumn];
+            if (map.dbField === 'impactScore') value = parseFloat(value) || 0;
+            record[map.dbField] = value;
           }
+        }
+        if (Object.keys(record).length === 0) { skipped++; continue; }
+        if (trackId) record.trackId = trackId;
+        if (required.some((f) => !record[f])) { skipped++; continue; }
+        validRecords.push(record);
+      } catch (err: any) {
+        errors.push({ row: i + 2, error: err.message });
+        skipped++;
+      }
+    }
 
-          if (Object.keys(record).length === 0) {
+    // Batch insert using createMany (single query per batch instead of N queries)
+    const BATCH_SIZE = 200;
+    for (let b = 0; b < validRecords.length; b += BATCH_SIZE) {
+      const batch = validRecords.slice(b, b + BATCH_SIZE);
+      try {
+        const model = this.prisma[entityType === 'track_kpi' ? 'trackKPI' : entityType] as any;
+        const result = await model.createMany({ data: batch, skipDuplicates: true });
+        inserted += result.count;
+      } catch (err: any) {
+        // Fallback: insert individually to identify bad rows
+        for (let i = 0; i < batch.length; i++) {
+          try {
+            const model = this.prisma[entityType === 'track_kpi' ? 'trackKPI' : entityType] as any;
+            await model.create({ data: batch[i] });
+            inserted++;
+          } catch (rowErr: any) {
+            errors.push({ row: b + i + 2, error: rowErr.message });
             skipped++;
-            continue;
           }
-
-          if (trackId) record.trackId = trackId;
-
-          switch (entityType) {
-            case 'employee':
-              if (!record.fullNameAr || !record.fullName) { skipped++; continue; }
-              await this.prisma.employee.create({ data: record as any });
-              break;
-            case 'deliverable':
-              if (!record.nameAr || !record.name || !record.trackId) { skipped++; continue; }
-              await this.prisma.deliverable.create({ data: record as any });
-              break;
-            case 'penalty':
-              if (!record.violationAr || !record.violation || !record.trackId) { skipped++; continue; }
-              await this.prisma.penalty.create({ data: record as any });
-              break;
-            case 'scope':
-              if (!record.titleAr || !record.title || !record.trackId) { skipped++; continue; }
-              await this.prisma.scope.create({ data: record as any });
-              break;
-            case 'track_kpi':
-              if (!record.nameAr || !record.name || !record.trackId) { skipped++; continue; }
-              await this.prisma.trackKPI.create({ data: record as any });
-              break;
-          }
-          inserted++;
-        } catch (err: any) {
-          errors.push({ row: rowIdx + 2, error: err.message });
-          skipped++;
         }
       }
     }

@@ -128,10 +128,10 @@ export default function TasksPage() {
   const loadLookups = useCallback(async () => {
     tracksApi.list()
       .then((res) => setTracks(res.data?.data || res.data || []))
-      .catch((err) => console.error('[TasksPage] Failed to load tracks:', err));
+      .catch(() => { /* tracks will be empty — modal shows message */ });
     usersApi.list()
       .then((res) => setUsers(res.data?.data || res.data || []))
-      .catch((err) => console.error('[TasksPage] Failed to load users:', err));
+      .catch(() => { /* users will be empty — modal shows message */ });
   }, []);
 
   useEffect(() => {

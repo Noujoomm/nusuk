@@ -1,7 +1,7 @@
 import {
   Controller, Get, Post, Patch, Delete, Param, Body, Query,
   UseGuards, UseInterceptors, UploadedFiles, Req, Res,
-  BadRequestException,
+  BadRequestException, Logger,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -80,7 +80,7 @@ export class ReportsController {
       res.setHeader('Content-Length', buffer.length);
       res.status(200).end(buffer);
     } catch (e: any) {
-      console.error('[Download Error]', attachmentId, e.message);
+      Logger.error(`[Download Error] ${attachmentId}: ${e.message}`, undefined, 'ReportsController');
       if (!res.headersSent) {
         const msg = e.message || '';
         const is404 = msg.includes('not found') || msg.includes('غير موجود') || e.status === 404;

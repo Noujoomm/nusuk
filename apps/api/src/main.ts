@@ -33,11 +33,10 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 
 // Global unhandled error handlers
 process.on('uncaughtException', (err) => {
-  console.error('UNCAUGHT EXCEPTION:', err.message);
-  console.error(err.stack);
+  Logger.error(`UNCAUGHT EXCEPTION: ${err.message}`, err.stack, 'Process');
 });
 process.on('unhandledRejection', (reason) => {
-  console.error('UNHANDLED REJECTION:', reason);
+  Logger.error(`UNHANDLED REJECTION: ${reason}`, undefined, 'Process');
 });
 
 async function bootstrap() {
@@ -127,7 +126,6 @@ async function bootstrap() {
   );
 }
 bootstrap().catch((err) => {
-  console.error('BOOTSTRAP FAILED:', err.message);
-  console.error(err.stack);
+  Logger.error(`BOOTSTRAP FAILED: ${err.message}`, err.stack, 'Bootstrap');
   process.exit(1);
 });
