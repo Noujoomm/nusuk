@@ -226,9 +226,16 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
         progress: form.progress ? parseFloat(form.progress) : undefined,
         weight: form.weight ? parseFloat(form.weight) : undefined,
         notes: form.notes || undefined,
-        assigneeType: 'GLOBAL',
-        assigneeIds: form.assigneeIds.length > 0 ? form.assigneeIds : undefined,
       };
+
+      // Only send assignment fields if user changed them
+      if (form.assigneeIds.length > 0) {
+        payload.assigneeType = 'GLOBAL';
+        payload.assigneeIds = form.assigneeIds;
+      } else if (!isEdit) {
+        // New task — default to GLOBAL
+        payload.assigneeType = 'GLOBAL';
+      }
 
       let taskId: string;
 

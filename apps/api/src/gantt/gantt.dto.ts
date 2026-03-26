@@ -182,6 +182,11 @@ export class UpdateGanttTaskDto {
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  assigneeIds?: string[];
 }
 
 export class BulkUpdateGanttTaskDto {
