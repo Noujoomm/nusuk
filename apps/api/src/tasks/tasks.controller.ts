@@ -161,6 +161,17 @@ export class TasksController {
       await this.tasks.assertUserOwnsTask(user.id, id);
     }
     const task = await this.tasks.update(id, dto, user.id);
+
+    await this.audit.log({
+      actorId: user.id,
+      actionType: 'update',
+      entityType: 'task',
+      entityId: id,
+      trackId: task.trackId || undefined,
+      afterData: task as any,
+      ip: req.ip,
+    });
+
     return task;
   }
 

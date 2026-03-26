@@ -524,6 +524,13 @@ export class TasksService {
       updateData.dueDate = new Date(updateData.dueDate + 'T23:59:59Z');
     }
 
+    // Validate date relationship
+    const effectiveStart = updateData.startDate instanceof Date ? updateData.startDate : existing.startDate;
+    const effectiveDue = updateData.dueDate instanceof Date ? updateData.dueDate : existing.dueDate;
+    if (effectiveStart && effectiveDue && effectiveStart > effectiveDue) {
+      throw new BadRequestException('تاريخ البداية لا يمكن أن يكون بعد تاريخ الاستحقاق');
+    }
+
     // Enforce: tasks with a trackId cannot be global
     if (updateData.trackId) {
       updateData.isGlobal = false;
@@ -536,27 +543,33 @@ export class TasksService {
       updateData.assigneeUserId = assigneeType === 'USER' ? assigneeUserId : null;
     }
 
-    const task = await this.prisma.task.update({
-      where: { id },
-      data: updateData,
-      include: this.detailIncludes,
+    // Use transaction for task update + assignment changes to prevent inconsistent state
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const task = await tx.task.update({
+        where: { id },
+        data: updateData,
+        include: this.detailIncludes,
+      });
+
+      if (assigneeIds !== undefined) {
+        await tx.taskAssignment.deleteMany({ where: { taskId: id } });
+        if (assigneeIds.length > 0) {
+          await tx.taskAssignment.createMany({
+            data: assigneeIds.map((uid) => ({
+              taskId: id,
+              userId: uid,
+              assignedBy: userId,
+            })),
+          });
+        }
+        // Re-fetch with assignments included
+        return tx.task.findUniqueOrThrow({ where: { id }, include: this.detailIncludes });
+      }
+
+      return task;
     });
 
-    // Handle assignment updates
-    if (assigneeIds !== undefined) {
-      await this.prisma.taskAssignment.deleteMany({ where: { taskId: id } });
-      if (assigneeIds.length > 0) {
-        await this.prisma.taskAssignment.createMany({
-          data: assigneeIds.map((uid) => ({
-            taskId: id,
-            userId: uid,
-            assignedBy: userId,
-          })),
-        });
-      }
-    }
-
-    const updated = assigneeIds !== undefined ? await this.findById(id) : task;
+    if (!updated) throw new NotFoundException('فشل تحديث المهمة');
 
     // Determine audit action
     const action = assigneeType && assigneeType !== existing.assigneeType ? 'REASSIGNED' : 'UPDATED';

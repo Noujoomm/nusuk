@@ -82,6 +82,12 @@ export default function TaskDetailPanel({ task: initialTask, onClose, onUpdate }
   const [fileNotes, setFileNotes] = useState('');
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
 
+  // Sync when parent provides updated initialTask
+  useEffect(() => {
+    setTask(initialTask);
+    setProgress(initialTask.progress ?? 0);
+  }, [initialTask]);
+
   // Load full task details on mount
   useEffect(() => {
     const loadDetail = async () => {
@@ -135,7 +141,8 @@ export default function TaskDetailPanel({ task: initialTask, onClose, onUpdate }
   const handleStatusChange = async (newStatus: string) => {
     setUpdatingStatus(true);
     try {
-      await tasksApi.updateStatus(task.id, newStatus);
+      const { data } = await tasksApi.updateStatus(task.id, newStatus);
+      setTask((prev: any) => ({ ...prev, status: newStatus, ...(data || {}) }));
       toast.success('تم تحديث حالة المهمة');
       onUpdate();
     } catch { toast.error('فشل تحديث الحالة'); }
@@ -145,7 +152,8 @@ export default function TaskDetailPanel({ task: initialTask, onClose, onUpdate }
   const handleProgressSave = async () => {
     setSavingProgress(true);
     try {
-      await tasksApi.update(task.id, { progress });
+      const { data } = await tasksApi.update(task.id, { progress });
+      setTask((prev: any) => ({ ...prev, progress, ...(data || {}) }));
       toast.success('تم تحديث التقدم');
       onUpdate();
     } catch { toast.error('فشل تحديث التقدم'); }
