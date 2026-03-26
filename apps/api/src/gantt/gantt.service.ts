@@ -341,13 +341,12 @@ export class GanttService {
   }
 
   async bulkUpdate(tasks: Array<{ id: string; [key: string]: any }>, userId: string) {
-    const results: any[] = [];
-    for (const taskData of tasks) {
-      const { id, ...data } = taskData;
-      const result = await this.updateTask(id, data, userId);
-      results.push(result);
-    }
-    return results;
+    // Use $transaction to batch all updates in a single connection
+    return this.prisma.$transaction(
+      tasks.map(({ id, ...data }) =>
+        this.prisma.task.update({ where: { id }, data: data as any }),
+      ),
+    );
   }
 
   async deleteTask(id: string, userId: string) {
@@ -580,14 +579,21 @@ export class GanttService {
       throw new BadRequestException('لا يمكن ربط مهمة بنفسها');
     }
 
-    // Check circular dependency
-    const allDeps = await this.prisma.taskDependency.findMany();
-    const taskMap = new Map<string, ScheduleTask>();
-    // Build minimal task map for cycle detection
+    // Check circular dependency — scope to track instead of full table scan
+    const predecessorTask = await this.prisma.task.findUnique({
+      where: { id: data.predecessorId },
+      select: { trackId: true },
+    });
+    const trackFilter = predecessorTask?.trackId ? { trackId: predecessorTask.trackId } : {};
     const allTasks = await this.prisma.task.findMany({
-      where: { isDeleted: false },
+      where: { isDeleted: false, ...trackFilter },
       select: { id: true },
     });
+    const taskIds = allTasks.map((t) => t.id);
+    const allDeps = await this.prisma.taskDependency.findMany({
+      where: { predecessorId: { in: taskIds } },
+    });
+    const taskMap = new Map<string, ScheduleTask>();
     for (const t of allTasks) {
       const preds = allDeps.filter((d) => d.successorId === t.id);
       const succs = allDeps.filter((d) => d.predecessorId === t.id);

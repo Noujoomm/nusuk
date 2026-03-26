@@ -13,6 +13,7 @@ export interface JwtPayload {
   sub: string; // userId
   email: string;
   role: string;
+  tp?: Array<{ trackId: string; permissions: string[] }>; // compact track permissions
 }
 
 @Injectable()
@@ -419,7 +420,15 @@ export class AuthService {
   }
 
   private async generateTokens(userId: string, email: string, role: string) {
-    const payload: JwtPayload = { sub: userId, email, role };
+    // Include compact track permissions in JWT to avoid DB lookups on every request
+    const perms = await this.prisma.trackPermission.findMany({
+      where: { userId },
+      select: { trackId: true, permissions: true },
+    });
+    const payload: JwtPayload = {
+      sub: userId, email, role,
+      tp: perms.map((p) => ({ trackId: p.trackId, permissions: p.permissions })),
+    };
 
     const accessToken = this.jwt.sign(payload);
 

@@ -18,7 +18,7 @@ export class OverdueSchedulerService {
    * Every 15 minutes: detect newly overdue tasks and notify assignees.
    * Uses lastOverdueNotifiedAt for idempotency — only notifies once per task.
    */
-  @Cron('0 */15 * * * *')
+  @Cron('0 0 * * * *') // Every hour (was every 15 minutes — reduces pool pressure)
   async detectOverdueTasks() {
     this.logger.debug('Scheduler: detectOverdueTasks starting');
 
@@ -47,9 +47,9 @@ export class OverdueSchedulerService {
 
       this.logger.log(`Found ${overdueTasks.length} newly overdue tasks`);
 
+      // Send notifications (per-task, but non-blocking on pool)
       for (const task of overdueTasks) {
         try {
-          // Collect all users to notify: assignee + assignments + creator
           const userIds = new Set<string>();
           if (task.assigneeUserId) userIds.add(task.assigneeUserId);
           if (task.createdById) userIds.add(task.createdById);
@@ -67,7 +67,6 @@ export class OverdueSchedulerService {
               trackId: task.trackId || undefined,
             });
 
-            // Emit real-time notification
             userIds.forEach((uid) => {
               this.events.emitToUser(uid, 'notification.new', {
                 type: 'task_overdue',
@@ -76,19 +75,17 @@ export class OverdueSchedulerService {
               });
             });
           }
-
-          // Mark as notified (idempotency)
-          await this.prisma.task.update({
-            where: { id: task.id },
-            data: { lastOverdueNotifiedAt: now },
-          });
         } catch (taskError) {
-          // Log per-task errors but continue processing remaining tasks
-          this.logger.error(
-            `[detectOverdueTasks] Error processing task ${task.id}: ${(taskError as any)?.message}`,
-          );
+          this.logger.error(`[detectOverdueTasks] Notification error for task ${task.id}: ${(taskError as any)?.message}`);
         }
       }
+
+      // Batch-mark all as notified in a single query (instead of N individual updates)
+      const taskIds = overdueTasks.map((t) => t.id);
+      await this.prisma.task.updateMany({
+        where: { id: { in: taskIds } },
+        data: { lastOverdueNotifiedAt: now },
+      });
 
       this.logger.log(`Notified for ${overdueTasks.length} overdue tasks`);
     } catch (error) {
@@ -155,18 +152,17 @@ export class OverdueSchedulerService {
               trackId: task.trackId || undefined,
             });
           }
-
-          // Update lastOverdueNotifiedAt to now
-          await this.prisma.task.update({
-            where: { id: task.id },
-            data: { lastOverdueNotifiedAt: now },
-          });
         } catch (taskError) {
-          this.logger.error(
-            `[sendDailyOverdueReminders] Error processing task ${task.id}: ${(taskError as any)?.message}`,
-          );
+          this.logger.error(`[sendDailyOverdueReminders] Error for task ${task.id}: ${(taskError as any)?.message}`);
         }
       }
+
+      // Batch-mark all as notified
+      const taskIds = overdueTasks.map((t) => t.id);
+      await this.prisma.task.updateMany({
+        where: { id: { in: taskIds } },
+        data: { lastOverdueNotifiedAt: now },
+      });
     } catch (error) {
       if (PrismaService.isTransientError(error)) {
         this.logger.warn('[sendDailyOverdueReminders] Skipped — database temporarily unavailable');

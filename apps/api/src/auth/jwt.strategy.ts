@@ -2,36 +2,35 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { PrismaService } from '../common/prisma.service';
 import { JwtPayload } from './auth.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(
-    config: ConfigService,
-    private prisma: PrismaService,
-  ) {
+  constructor(config: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       secretOrKey: config.get<string>('JWT_SECRET'),
     });
   }
 
+  /**
+   * No DB call — use JWT claims directly.
+   * User data was embedded at login/refresh time.
+   * If user is deactivated, token will expire or be revoked via refresh flow.
+   */
   async validate(payload: JwtPayload) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-      include: { trackPermissions: true },
-    });
-
-    if (!user || !user.isActive) {
+    if (!payload.sub || !payload.role) {
       throw new UnauthorizedException('جلسة غير صالحة');
     }
 
     return {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      trackPermissions: user.trackPermissions,
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      trackPermissions: (payload.tp || []).map((p) => ({
+        trackId: p.trackId,
+        permissions: p.permissions,
+      })),
     };
   }
 }
