@@ -36,7 +36,6 @@ const NAV_ITEMS = [
   { href: '/', label: 'لوحة التحكم', icon: LayoutDashboard, roles: ['admin', 'pm', 'track_lead', 'employee', 'hr'] },
   { href: '/dashboard', label: 'لوحة القيادة', icon: BarChart3, roles: ['admin', 'pm'] },
   { href: '/tracks', label: 'المسارات', icon: GitBranch, roles: ['admin', 'pm', 'track_lead', 'employee'] },
-  { href: '/kpis', label: 'مؤشرات الأداء', icon: Target, roles: ['admin', 'pm', 'track_lead'] },
   { href: '/tasks', label: 'المهام', icon: CheckSquare, roles: ['admin', 'pm', 'track_lead', 'employee'] },
   { href: '/gantt', label: 'مخطط جانت', icon: GanttChart, roles: ['admin', 'pm', 'track_lead'] },
   { href: '/timeline', label: 'الجدول الزمني', icon: CalendarRange, roles: ['admin', 'pm', 'track_lead'] },
