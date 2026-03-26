@@ -191,17 +191,10 @@ export default function TasksPage() {
     }
   };
 
-  // Determine if user can edit/delete a specific task
+  // All authenticated users can edit/delete tasks
   const canManageTask = useCallback(
-    (task: Task) => {
-      if (isAdminOrPm) return true;
-      if (user?.role === 'track_lead' && task.trackId) {
-        const userTrackIds = new Set(user.trackPermissions?.map((tp: any) => tp.trackId) || []);
-        return userTrackIds.has(task.trackId);
-      }
-      return false;
-    },
-    [isAdminOrPm, user],
+    () => !!user,
+    [user],
   );
 
   // Stats values
@@ -425,8 +418,8 @@ export default function TasksPage() {
                         task={task}
                         onClick={handleCardClick}
                         onStatusChange={loadTasks}
-                        onEdit={canManageTask(task) ? handleEdit : undefined}
-                        onDelete={canManageTask(task) ? handleDelete : undefined}
+                        onEdit={canManageTask() ? handleEdit : undefined}
+                        onDelete={canManageTask() ? handleDelete : undefined}
                       />
                     ))}
                   </div>
@@ -446,8 +439,8 @@ export default function TasksPage() {
                         task={task}
                         onClick={handleCardClick}
                         onStatusChange={loadTasks}
-                        onEdit={canManageTask(task) ? handleEdit : undefined}
-                        onDelete={canManageTask(task) ? handleDelete : undefined}
+                        onEdit={canManageTask() ? handleEdit : undefined}
+                        onDelete={canManageTask() ? handleDelete : undefined}
                       />
                     ))}
                   </div>
@@ -464,8 +457,8 @@ export default function TasksPage() {
               task={task}
               onClick={handleCardClick}
               onStatusChange={loadTasks}
-              onEdit={canManageTask(task) ? handleEdit : undefined}
-              onDelete={canManageTask(task) ? handleDelete : undefined}
+              onEdit={canManageTask() ? handleEdit : undefined}
+              onDelete={canManageTask() ? handleDelete : undefined}
             />
           ))}
         </div>

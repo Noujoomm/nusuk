@@ -1097,13 +1097,6 @@ export class TasksService {
     const file = await this.prisma.taskFile.findFirst({ where: { id: fileId, taskId } });
     if (!file) throw new NotFoundException('الملف غير موجود');
 
-    // RBAC: admin/pm/track_lead or the original uploader
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    const allowedRoles = ['admin', 'pm', 'track_lead'];
-    if (!allowedRoles.includes(user?.role || '') && file.uploadedById !== userId) {
-      throw new ForbiddenException('ليس لديك صلاحية لحذف هذا الملف');
-    }
-
     await this.prisma.taskFile.delete({ where: { id: fileId } });
     await this.writeTaskAudit(taskId, 'FILE_DELETED', { fileId, fileName: file.fileName }, null, userId);
     return { message: 'تم حذف الملف' };

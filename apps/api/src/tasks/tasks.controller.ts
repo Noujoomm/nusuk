@@ -154,12 +154,7 @@ export class TasksController {
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
-  @Roles('admin', 'pm', 'track_lead')
   async update(@Param('id') id: string, @Body() dto: UpdateTaskDto, @CurrentUser() user: any, @Req() req: Request) {
-    if (user.role === 'track_lead') {
-      await this.tasks.assertUserOwnsTask(user.id, id);
-    }
     const task = await this.tasks.update(id, dto, user.id);
 
     await this.audit.log({
@@ -204,8 +199,6 @@ export class TasksController {
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
   async delete(@Param('id') id: string, @CurrentUser() user: any, @Req() req: Request) {
     const result = await this.tasks.delete(id, user.id);
     return result;

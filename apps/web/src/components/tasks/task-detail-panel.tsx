@@ -126,7 +126,7 @@ export default function TaskDetailPanel({ task: initialTask, onClose, onUpdate }
     return taskTrackId ? userTrackIds.has(taskTrackId) : false;
   })();
   const canChangeStatus = isAssigned || isDirectAssignee || isAdminOrPm || isTrackLeadOfTask;
-  const canManageChecklist = isAdminOrPm || isTrackLead;
+  const canManageChecklist = !!user;
   const nextStatuses = STATUS_FLOW[task.status] || [];
 
   // Load admin notes when tab activates (admin/pm only)
@@ -260,7 +260,7 @@ export default function TaskDetailPanel({ task: initialTask, onClose, onUpdate }
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const canDeleteFile = (file: any) => isAdminOrPm || isTrackLead || file.uploadedById === user?.id;
+  const canDeleteFile = () => !!user;
   const canDownloadFile = isAdminOrPm || isTrackLead || isAssigned || isDirectAssignee;
 
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
@@ -564,7 +564,7 @@ export default function TaskDetailPanel({ task: initialTask, onClose, onUpdate }
                             {downloadingFileId === file.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                           </button>
                         )}
-                        {canDeleteFile(file) && (
+                        {canDeleteFile() && (
                           <button onClick={() => handleDeleteFile(file.id)} disabled={deletingFileId === file.id}
                             className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300 transition-colors disabled:opacity-50">
                             {deletingFileId === file.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
