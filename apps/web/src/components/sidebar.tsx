@@ -35,7 +35,6 @@ import NotificationBell from '@/components/notifications/notification-bell';
 const NAV_ITEMS = [
   { href: '/', label: 'لوحة التحكم', icon: LayoutDashboard, roles: ['admin', 'pm', 'track_lead', 'employee', 'hr'] },
   { href: '/dashboard', label: 'لوحة القيادة', icon: BarChart3, roles: ['admin', 'pm'] },
-  { href: '/ceo', label: 'لوحة المدير التنفيذي', icon: Shield, roles: ['admin'] },
   { href: '/tracks', label: 'المسارات', icon: GitBranch, roles: ['admin', 'pm', 'track_lead', 'employee'] },
   { href: '/kpis', label: 'مؤشرات الأداء', icon: Target, roles: ['admin', 'pm', 'track_lead'] },
   { href: '/tasks', label: 'المهام', icon: CheckSquare, roles: ['admin', 'pm', 'track_lead', 'employee'] },
