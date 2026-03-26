@@ -162,6 +162,11 @@ export default function TaskCard({ task, onClick, onStatusChange, onEdit, onDele
             <AssigneeIcon className="h-3 w-3" />
             {assigneeTypeLabel}
           </span>
+          {task.isDirective && (
+            <span className="rounded-full px-3 py-1 text-xs font-medium bg-purple-500/20 text-purple-300 flex items-center gap-1">
+              تكليف د. حسام
+            </span>
+          )}
         </div>
       </div>
 

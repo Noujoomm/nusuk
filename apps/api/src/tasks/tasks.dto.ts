@@ -75,6 +75,10 @@ export class CreateTaskDto {
   isGlobal?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  isDirective?: boolean;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   assigneeIds?: string[];
@@ -153,6 +157,10 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsBoolean()
   isGlobal?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isDirective?: boolean;
 
   @IsOptional()
   @IsArray()

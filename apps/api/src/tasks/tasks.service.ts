@@ -222,7 +222,7 @@ export class TasksService {
     overdue?: boolean;
     dueDateFrom?: string;
     dueDateTo?: string;
-    tab?: string; // 'my' | 'track' | 'hr' | 'all'
+    tab?: string; // 'my' | 'track' | 'hr' | 'director' | 'all'
   }) {
     const { page = 1, pageSize = 25, status, priority, trackId, assigneeType, assigneeId, search, overdue, dueDateFrom, dueDateTo, tab } = params;
 
@@ -246,6 +246,8 @@ export class TasksService {
       }
     } else if (tab === 'hr') {
       where.assigneeType = 'HR';
+    } else if (tab === 'director') {
+      where.isDirective = true;
     }
 
     // Additional filters

@@ -322,6 +322,7 @@ export default function TaskDetailPanel({ task: initialTask, onClose, onUpdate }
                   <AssigneeIcon className="h-3 w-3" />{assigneeTypeLabel}
                 </span>
                 {isOverdue && <span className="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-300">متأخرة</span>}
+                {task.isDirective && <span className="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-purple-500/20 text-purple-300">تكليف من د. حسام</span>}
               </div>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">

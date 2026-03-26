@@ -27,6 +27,7 @@ interface Props {
   users: User[];
   onSuccess: () => void;
   defaultTrackId?: string;
+  isDirective?: boolean;
 }
 
 interface ChecklistDraft {
@@ -69,7 +70,7 @@ const EMPTY_FORM = {
   assigneeIds: [] as string[],
 };
 
-export default function TaskModal({ isOpen, onClose, task, tracks, users, onSuccess, defaultTrackId }: Props) {
+export default function TaskModal({ isOpen, onClose, task, tracks, users, onSuccess, defaultTrackId, isDirective }: Props) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [userSearch, setUserSearch] = useState('');
@@ -226,6 +227,7 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
         progress: form.progress ? parseFloat(form.progress) : undefined,
         weight: form.weight ? parseFloat(form.weight) : undefined,
         notes: form.notes || undefined,
+        ...(isDirective && !isEdit ? { isDirective: true } : {}),
       };
 
       // Only send assignment fields if user changed them
@@ -298,7 +300,7 @@ export default function TaskModal({ isOpen, onClose, task, tracks, users, onSucc
       <div className="glass relative w-full max-w-lg max-h-[85vh] overflow-hidden rounded-2xl border border-white/10">
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
           <h3 className="text-lg font-semibold text-white">
-            {isEdit ? 'تعديل المهمة' : 'إضافة مهمة'}
+            {isEdit ? 'تعديل المهمة' : isDirective ? 'تكليف من مدير النظام' : 'إضافة مهمة'}
           </h3>
           <button onClick={onClose} className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white">
             <X className="h-5 w-5" />

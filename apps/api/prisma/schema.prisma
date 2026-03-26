@@ -734,6 +734,7 @@ model Task {
   notes         String?      @db.Text
   createdById   String       @map("created_by_id")
   isGlobal      Boolean      @default(false) @map("is_global")
+  isDirective   Boolean      @default(false) @map("is_directive")
   isDeleted     Boolean      @default(false) @map("is_deleted")
   deletedAt     DateTime?    @map("deleted_at")
   lastOverdueNotifiedAt DateTime? @map("last_overdue_notified_at")

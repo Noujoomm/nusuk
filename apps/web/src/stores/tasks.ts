@@ -23,6 +23,7 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   isDeleted?: boolean;
+  isDirective?: boolean;
 
   // Polymorphic assignment
   assigneeType: 'TRACK' | 'USER' | 'HR' | 'GLOBAL';

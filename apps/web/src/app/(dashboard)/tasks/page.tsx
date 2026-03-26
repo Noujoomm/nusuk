@@ -13,6 +13,7 @@ import {
   User,
   Building2,
   Globe,
+  Shield,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Task } from '@/stores/tasks';
@@ -43,12 +44,13 @@ interface UserItem {
   nameAr: string;
 }
 
-type TabKey = 'all' | 'my' | 'track' | 'hr';
+type TabKey = 'all' | 'my' | 'track' | 'hr' | 'director';
 
 const TAB_CONFIG: { key: TabKey; label: string; icon: typeof ListChecks; roles?: string[] }[] = [
   { key: 'my', label: 'مهامي', icon: User },
   { key: 'track', label: 'مساري', icon: Users },
   { key: 'hr', label: 'الموارد البشرية', icon: Building2, roles: ['hr', 'admin', 'pm'] },
+  { key: 'director', label: 'مهام مدير النظام', icon: Shield, roles: ['admin'] },
   { key: 'all', label: 'الكل', icon: Globe, roles: ['admin', 'pm'] },
 ];
 
@@ -472,6 +474,7 @@ export default function TasksPage() {
         tracks={modalTracks}
         users={users}
         onSuccess={handleModalSuccess}
+        isDirective={activeTab === 'director'}
       />
 
       {/* Task Detail Panel */}
