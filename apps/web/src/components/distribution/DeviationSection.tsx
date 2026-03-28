@@ -8,12 +8,10 @@ import { distDeviationApi } from '@/lib/api';
 import { cn, formatNumber } from '@/lib/utils';
 import { chartTooltipStyle, chartTooltipLabelStyle, chartTooltipItemStyle, axisTickStyle, axisStroke, gridStroke, gridStrokeDash, legendStyle } from '@/lib/chart-theme';
 
-const DEV_SEV = (v: number) => {
-  const a = Math.abs(v);
-  if (a <= 10) return { label: 'منخفض', color: 'text-emerald-400', bg: 'bg-emerald-500/20' };
-  if (a <= 25) return { label: 'متوسط', color: 'text-amber-400', bg: 'bg-amber-500/20' };
-  return { label: 'مرتفع', color: 'text-red-400', bg: 'bg-red-500/20' };
-};
+const sevColor = (v: number) => Math.abs(v) <= 5 ? 'text-emerald-400' : Math.abs(v) <= 15 ? 'text-amber-400' : 'text-red-400';
+const sevBg = (v: number) => Math.abs(v) <= 5 ? 'bg-emerald-500/20' : Math.abs(v) <= 15 ? 'bg-amber-500/20' : 'bg-red-500/20';
+const sevLabel = (v: number) => Math.abs(v) <= 5 ? 'منخفض' : Math.abs(v) <= 15 ? 'متوسط' : 'مرتفع';
+const sevBar = (v: number) => Math.abs(v) <= 5 ? '#34D399' : Math.abs(v) <= 15 ? '#FBBF24' : '#F87171';
 
 export default function DeviationSection() {
   const [data, setData] = useState<any>(null);
@@ -22,8 +20,9 @@ export default function DeviationSection() {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     gregorianDate: '', hijriDate: '', companies: '',
-    platformValue: '', factoryValue: '', distributionValue: '', inValue: '', outValue: '',
-    platformDevPct: '', fullReceiptDevPct: '', completionCertDevPct: '', booking3HourDevPct: '',
+    platformValue: '', factoryValue: '', distributionValue: '',
+    fullDeliveryCount: '', scheduledAppointments: '', actualAppointments: '',
+    sortingTime: '',
   });
 
   const load = useCallback(async () => {
@@ -42,16 +41,14 @@ export default function DeviationSection() {
         platformValue: parseInt(form.platformValue) || 0,
         factoryValue: parseInt(form.factoryValue) || 0,
         distributionValue: parseInt(form.distributionValue) || 0,
-        inValue: parseInt(form.inValue) || 0,
-        outValue: parseInt(form.outValue) || 0,
-        platformDevPct: parseFloat(form.platformDevPct) || 0,
-        fullReceiptDevPct: parseFloat(form.fullReceiptDevPct) || 0,
-        completionCertDevPct: parseFloat(form.completionCertDevPct) || 0,
-        booking3HourDevPct: parseFloat(form.booking3HourDevPct) || 0,
+        fullDeliveryCount: parseInt(form.fullDeliveryCount) || 0,
+        scheduledAppointments: parseInt(form.scheduledAppointments) || 0,
+        actualAppointments: parseInt(form.actualAppointments) || 0,
+        sortingTime: parseInt(form.sortingTime) || 0,
       });
-      toast.success('تم حفظ بيانات الانحراف');
+      toast.success('تم حفظ البيانات — الانحرافات محسوبة تلقائياً');
       setShowForm(false);
-      setForm({ gregorianDate: '', hijriDate: '', companies: '', platformValue: '', factoryValue: '', distributionValue: '', inValue: '', outValue: '', platformDevPct: '', fullReceiptDevPct: '', completionCertDevPct: '', booking3HourDevPct: '' });
+      setForm({ gregorianDate: '', hijriDate: '', companies: '', platformValue: '', factoryValue: '', distributionValue: '', fullDeliveryCount: '', scheduledAppointments: '', actualAppointments: '', sortingTime: '' });
       load();
     } catch { toast.error('فشل الحفظ'); } finally { setSubmitting(false); }
   };
@@ -63,35 +60,36 @@ export default function DeviationSection() {
 
   const trendData = entries.slice(0, 15).reverse().map((e: any) => ({
     name: e.hijriDate?.slice(-5) || '',
-    'المنصة': Math.abs(e.platformDevPct),
-    'الاستلام': Math.abs(e.fullReceiptDevPct),
-    'الإتمام': Math.abs(e.completionCertDevPct),
-    '3 ساعات': Math.abs(e.booking3HourDevPct),
+    'المنصة': e.platformDev, 'المصنع': e.factoryDev, 'التوزيع': e.distributionDev,
+    'التسليم': e.deliveryDev, 'المواعيد': e.appointmentDev, 'الفرز': e.sortingDev,
   }));
 
-  const compData = entries.slice(0, 10).reverse().map((e: any) => ({
-    name: e.hijriDate?.slice(-5) || '',
-    'المنصة': e.platformValue, 'المصنع': e.factoryValue, 'التوزيع': e.distributionValue,
-  }));
+  const devFields = [
+    { key: 'platformDev', label: 'انحراف المنصة', latest: s?.latestPlatform, avg: s?.avgPlatform },
+    { key: 'factoryDev', label: 'انحراف المصنع', latest: s?.latestFactory, avg: s?.avgFactory },
+    { key: 'distributionDev', label: 'انحراف التوزيع', latest: s?.latestDistribution, avg: s?.avgDistribution },
+    { key: 'deliveryDev', label: 'انحراف التسليم', latest: s?.latestDelivery, avg: s?.avgDelivery },
+    { key: 'appointmentDev', label: 'انحراف المواعيد', latest: s?.latestAppointment, avg: s?.avgAppointment },
+    { key: 'sortingDev', label: 'انحراف الفرز', latest: s?.latestSorting, avg: s?.avgSorting },
+  ];
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-red-500/20"><ArrowLeftRight className="w-5 h-5 text-red-400" /></div>
-          <h2 className="text-base font-bold text-white">نسبة الانحراف — Deviation Percentage</h2>
+          <div>
+            <h2 className="text-base font-bold text-white">نسبة الانحراف</h2>
+            <p className="text-[10px] text-gray-500">الانحرافات تُحسب تلقائياً من البيانات الخام</p>
+          </div>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm">
-          <Plus className="w-4 h-4" /> إضافة بيانات الانحراف
-        </button>
+        <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إدخال بيانات خام</button>
       </div>
 
-      {/* Form */}
       {showForm && (
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white">إدخال بيانات الانحراف</h3>
+            <h3 className="text-sm font-semibold text-white">إدخال البيانات الخام فقط</h3>
             <button onClick={() => setShowForm(false)} className="p-1 rounded-lg hover:bg-white/10"><X className="w-4 h-4 text-gray-400" /></button>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -99,15 +97,13 @@ export default function DeviationSection() {
               { k: 'gregorianDate', l: 'التاريخ الميلادي', t: 'date' },
               { k: 'hijriDate', l: 'التاريخ الهجري', t: 'text', ph: '1447/09/28' },
               { k: 'companies', l: 'عدد الشركات', t: 'number' },
-              { k: 'platformValue', l: 'قيمة المنصة', t: 'number' },
-              { k: 'factoryValue', l: 'قيمة المصنع', t: 'number' },
-              { k: 'distributionValue', l: 'قيمة التوزيع', t: 'number' },
-              { k: 'inValue', l: 'الوارد IN', t: 'number' },
-              { k: 'outValue', l: 'الصادر OUT', t: 'number' },
-              { k: 'platformDevPct', l: 'انحراف المنصة %', t: 'number' },
-              { k: 'fullReceiptDevPct', l: 'انحراف الاستلام الكامل %', t: 'number' },
-              { k: 'completionCertDevPct', l: 'انحراف شهادة الإتمام %', t: 'number' },
-              { k: 'booking3HourDevPct', l: 'انحراف حجز 3 ساعات %', t: 'number' },
+              { k: 'platformValue', l: 'عدد المنصة', t: 'number' },
+              { k: 'factoryValue', l: 'عدد المصنع', t: 'number' },
+              { k: 'distributionValue', l: 'عدد التوزيع', t: 'number' },
+              { k: 'fullDeliveryCount', l: 'عدد التسليم الكامل', t: 'number' },
+              { k: 'scheduledAppointments', l: 'المواعيد المجدولة', t: 'number' },
+              { k: 'actualAppointments', l: 'المواعيد الفعلية', t: 'number' },
+              { k: 'sortingTime', l: 'وقت الفرز (دقائق)', t: 'number' },
             ].map((f) => (
               <div key={f.k}>
                 <label className="block text-xs text-gray-400 mb-1">{f.l}</label>
@@ -131,54 +127,41 @@ export default function DeviationSection() {
         </div>
       ) : (
         <>
-          {/* Critical alert */}
           {s?.hasCritical && (
             <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 flex items-center gap-3">
               <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
-              <p className="text-sm text-red-300">تم رصد انحراف مرتفع (أكثر من 25%) — يحتاج مراجعة فورية</p>
+              <p className="text-sm text-red-300">تم رصد انحراف مرتفع (أكثر من 15%) — يحتاج مراجعة فورية</p>
             </div>
           )}
 
-          {/* Summary */}
           {s && (
             <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 border-r-[3px] border-r-red-400">
               <div className="flex items-start gap-3">
                 <div className="p-2 rounded-xl bg-red-500/15 shrink-0"><Shield className="w-5 h-5 text-red-400" /></div>
                 <p className="text-sm text-gray-300 leading-relaxed">
-                  متوسط انحراف المنصة {s.avgPlatform}% | الاستلام {s.avgReceipt}% | الإتمام {s.avgCert}% | حجز 3 ساعات {s.avg3Hour}%.
+                  جميع الانحرافات محسوبة تلقائياً. أعلى متوسط انحراف: {
+                    devFields.sort((a, b) => Math.abs(b.avg ?? 0) - Math.abs(a.avg ?? 0))[0]?.label
+                  } بنسبة {Math.max(...devFields.map(d => Math.abs(d.avg ?? 0)))}%.
                 </p>
               </div>
             </div>
           )}
 
-          {/* Deviation KPI Cards */}
+          {/* 6 Deviation Cards */}
           {s && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { l: 'انحراف المنصة', v: s.latestPlatform },
-                { l: 'انحراف الاستلام', v: s.latestReceipt },
-                { l: 'انحراف الإتمام', v: s.latestCert },
-                { l: 'انحراف 3 ساعات', v: s.latest3Hour },
-              ].map((k, i) => {
-                const sev = DEV_SEV(k.v);
-                return (
-                  <div key={i} className="analytics-card">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-gray-400">{k.l}</span>
-                      <span className={cn('text-[10px] px-2 py-0.5 rounded-full', sev.bg, sev.color)}>{sev.label}</span>
-                    </div>
-                    <p className={cn('text-2xl font-bold tabular-nums', Math.abs(k.v) > 25 ? 'text-red-400' : Math.abs(k.v) > 10 ? 'text-amber-400' : 'text-emerald-400')}>
-                      {k.v > 0 ? '+' : ''}{k.v}%
-                    </p>
-                    <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
-                      <div className="h-full rounded-full" style={{
-                        width: `${Math.min(100, Math.abs(k.v) * 2)}%`,
-                        background: Math.abs(k.v) > 25 ? '#F87171' : Math.abs(k.v) > 10 ? '#FBBF24' : '#34D399',
-                      }} />
-                    </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {devFields.map((d, i) => (
+                <div key={i} className="analytics-card">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-gray-400 truncate">{d.label}</span>
+                    <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full', sevBg(d.latest ?? 0), sevColor(d.latest ?? 0))}>{sevLabel(d.latest ?? 0)}</span>
                   </div>
-                );
-              })}
+                  <p className={cn('text-xl font-bold tabular-nums', sevColor(d.latest ?? 0))}>{d.latest ?? 0}%</p>
+                  <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.abs(d.latest ?? 0) * 3)}%`, background: sevBar(d.latest ?? 0) }} />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -186,7 +169,7 @@ export default function DeviationSection() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
               <h4 className="text-sm font-semibold text-white mb-3">اتجاه الانحرافات</h4>
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={trendData}>
                   <CartesianGrid strokeDasharray={gridStrokeDash} stroke={gridStroke} />
                   <XAxis dataKey="name" tick={axisTickStyle} stroke={axisStroke} />
@@ -194,17 +177,19 @@ export default function DeviationSection() {
                   <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} />
                   <Legend wrapperStyle={legendStyle} />
                   <Line type="monotone" dataKey="المنصة" stroke="#38BDF8" strokeWidth={2} dot={{ r: 2, strokeWidth: 0 }} />
-                  <Line type="monotone" dataKey="الاستلام" stroke="#FBBF24" strokeWidth={2} dot={{ r: 2, strokeWidth: 0 }} />
-                  <Line type="monotone" dataKey="الإتمام" stroke="#A78BFA" strokeWidth={2} dot={{ r: 2, strokeWidth: 0 }} />
-                  <Line type="monotone" dataKey="3 ساعات" stroke="#F87171" strokeWidth={2} dot={{ r: 2, strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="المصنع" stroke="#FBBF24" strokeWidth={2} dot={{ r: 2, strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="التوزيع" stroke="#A78BFA" strokeWidth={2} dot={{ r: 2, strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="التسليم" stroke="#34D399" strokeWidth={2} dot={{ r: 2, strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="المواعيد" stroke="#F87171" strokeWidth={2} dot={{ r: 2, strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="الفرز" stroke="#FB923C" strokeWidth={2} dot={{ r: 2, strokeWidth: 0 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
 
             <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
-              <h4 className="text-sm font-semibold text-white mb-3">المنصة vs المصنع vs التوزيع</h4>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={compData}>
+              <h4 className="text-sm font-semibold text-white mb-3">مقارنة الجهات التشغيلية</h4>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={entries.slice(0, 8).reverse().map((e: any) => ({ name: e.hijriDate?.slice(-5) || '', 'المنصة': e.platformValue, 'المصنع': e.factoryValue, 'التوزيع': e.distributionValue }))}>
                   <CartesianGrid strokeDasharray={gridStrokeDash} stroke={gridStroke} />
                   <XAxis dataKey="name" tick={axisTickStyle} stroke={axisStroke} />
                   <YAxis tick={axisTickStyle} stroke={axisStroke} />
@@ -223,27 +208,26 @@ export default function DeviationSection() {
             <h3 className="text-sm font-semibold text-white mb-4">سجل بيانات الانحراف</h3>
             <table className="w-full text-sm">
               <thead><tr className="border-b border-white/10">
-                {['التاريخ', 'الهجري', 'شركات', 'المنصة', 'المصنع', 'التوزيع', 'IN', 'OUT', 'انحراف المنصة', 'الاستلام', 'الإتمام', '3 ساعات', ''].map((h, i) => (
-                  <th key={i} className="py-2 px-2 text-[10px] text-gray-400 font-medium text-right whitespace-nowrap">{h}</th>
+                {['التاريخ', 'شركات', 'المنصة', 'المصنع', 'التوزيع', 'التسليم', 'مواعيد', 'فعلي', 'فرز', 'انح.المنصة', 'انح.المصنع', 'انح.التوزيع', 'انح.التسليم', 'انح.المواعيد', 'انح.الفرز', ''].map((h, i) => (
+                  <th key={i} className="py-2 px-1.5 text-[9px] text-gray-400 font-medium text-right whitespace-nowrap">{h}</th>
                 ))}
               </tr></thead>
               <tbody>
                 {entries.map((e: any) => (
                   <tr key={e.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                    <td className="py-2 px-2 text-xs text-gray-300 tabular-nums">{new Date(e.gregorianDate).toLocaleDateString('ar-SA')}</td>
-                    <td className="py-2 px-2 text-xs text-gray-300">{e.hijriDate}</td>
-                    <td className="py-2 px-2 text-xs text-white tabular-nums">{e.companies}</td>
-                    <td className="py-2 px-2 text-xs text-white tabular-nums">{formatNumber(e.platformValue)}</td>
-                    <td className="py-2 px-2 text-xs text-white tabular-nums">{formatNumber(e.factoryValue)}</td>
-                    <td className="py-2 px-2 text-xs text-white tabular-nums">{formatNumber(e.distributionValue)}</td>
-                    <td className="py-2 px-2 text-xs text-white tabular-nums">{formatNumber(e.inValue)}</td>
-                    <td className="py-2 px-2 text-xs text-white tabular-nums">{formatNumber(e.outValue)}</td>
-                    {[e.platformDevPct, e.fullReceiptDevPct, e.completionCertDevPct, e.booking3HourDevPct].map((v: number, j: number) => (
-                      <td key={j} className={cn('py-2 px-2 text-xs font-medium tabular-nums', Math.abs(v) > 25 ? 'text-red-400' : Math.abs(v) > 10 ? 'text-amber-400' : 'text-emerald-400')}>
-                        {v > 0 ? '+' : ''}{v}%
-                      </td>
+                    <td className="py-2 px-1.5 text-[10px] text-gray-300">{e.hijriDate}</td>
+                    <td className="py-2 px-1.5 text-[10px] text-white tabular-nums">{e.companies}</td>
+                    <td className="py-2 px-1.5 text-[10px] text-white tabular-nums">{formatNumber(e.platformValue)}</td>
+                    <td className="py-2 px-1.5 text-[10px] text-white tabular-nums">{formatNumber(e.factoryValue)}</td>
+                    <td className="py-2 px-1.5 text-[10px] text-white tabular-nums">{formatNumber(e.distributionValue)}</td>
+                    <td className="py-2 px-1.5 text-[10px] text-white tabular-nums">{formatNumber(e.fullDeliveryCount)}</td>
+                    <td className="py-2 px-1.5 text-[10px] text-white tabular-nums">{e.scheduledAppointments}</td>
+                    <td className="py-2 px-1.5 text-[10px] text-white tabular-nums">{e.actualAppointments}</td>
+                    <td className="py-2 px-1.5 text-[10px] text-white tabular-nums">{e.sortingTime}</td>
+                    {[e.platformDev, e.factoryDev, e.distributionDev, e.deliveryDev, e.appointmentDev, e.sortingDev].map((v: number, j: number) => (
+                      <td key={j} className={cn('py-2 px-1.5 text-[10px] font-medium tabular-nums', sevColor(v))}>{v}%</td>
                     ))}
-                    <td className="py-2 px-2"><button onClick={() => handleDel(e.id)} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-500 hover:text-red-300"><Trash2 className="w-3.5 h-3.5" /></button></td>
+                    <td className="py-2 px-1.5"><button onClick={() => { distDeviationApi.delete(e.id).then(() => { toast.success('تم الحذف'); load(); }).catch(() => toast.error('فشل')); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-500 hover:text-red-300"><Trash2 className="w-3 h-3" /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -253,8 +237,4 @@ export default function DeviationSection() {
       )}
     </div>
   );
-
-  function handleDel(id: string) {
-    distDeviationApi.delete(id).then(() => { toast.success('تم الحذف'); load(); }).catch(() => toast.error('فشل الحذف'));
-  }
 }

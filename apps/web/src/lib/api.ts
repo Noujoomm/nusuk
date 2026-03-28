@@ -454,13 +454,11 @@ export const analyticsApi = {
 
 // ─── Distribution: Achievement + Deviation ───
 export const distAchievementApi = {
-  list: () => api.get('/distribution/achievement'),
   dashboard: () => api.get('/distribution/achievement/dashboard'),
   create: (data: any) => api.post('/distribution/achievement', data),
   delete: (id: string) => api.delete(`/distribution/achievement/${id}`),
 };
 export const distDeviationApi = {
-  list: () => api.get('/distribution/deviation'),
   dashboard: () => api.get('/distribution/deviation/dashboard'),
   create: (data: any) => api.post('/distribution/deviation', data),
   delete: (id: string) => api.delete(`/distribution/deviation/${id}`),

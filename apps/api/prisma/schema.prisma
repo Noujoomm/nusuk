@@ -1099,7 +1099,7 @@ model ExecutiveTask {
   @@map("executive_tasks")
 }
 
-// ─── DISTRIBUTION: ACHIEVEMENT ───
+// ─── DISTRIBUTION: RAW DATA (Achievement source) ───
 
 model DistributionAchievement {
   id                    String   @id @default(cuid())
@@ -1111,7 +1111,6 @@ model DistributionAchievement {
   cardsPerHour          Int      @map("cards_per_hour")
   duration              Int      @default(4)
   specialists           Int      @default(4)
-  achievementPct        Float    @map("achievement_pct")
   createdById           String   @map("created_by_id")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
@@ -1122,7 +1121,7 @@ model DistributionAchievement {
   @@map("distribution_achievements")
 }
 
-// ─── DISTRIBUTION: DEVIATION ───
+// ─── DISTRIBUTION: RAW DATA (Deviation source) ───
 
 model DistributionDeviation {
   id                       String   @id @default(cuid())
@@ -1132,12 +1131,12 @@ model DistributionDeviation {
   platformValue            Int      @map("platform_value")
   factoryValue             Int      @map("factory_value")
   distributionValue        Int      @map("distribution_value")
-  inValue                  Int      @map("in_value")
-  outValue                 Int      @map("out_value")
-  platformDevPct           Float    @map("platform_dev_pct")
-  fullReceiptDevPct        Float    @map("full_receipt_dev_pct")
-  completionCertDevPct     Float    @map("completion_cert_dev_pct")
-  booking3HourDevPct       Float    @map("booking_3hour_dev_pct")
+  fullDeliveryCount        Int      @map("full_delivery_count")
+  scheduledAppointments    Int      @map("scheduled_appointments")
+  actualAppointments       Int      @map("actual_appointments")
+  sortingTime              Int      @map("sorting_time")
+  expectedSortingTime      Int      @default(60) @map("expected_sorting_time")
+  systemDowntime           Int      @default(0)  @map("system_downtime")
   createdById              String   @map("created_by_id")
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")

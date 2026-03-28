@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsNumber, IsDateString, Min, Max, IsOptional } from 'class-validator';
+import { IsString, IsInt, IsDateString, Min, IsOptional } from 'class-validator';
 
 export class CreateAchievementDto {
   @IsDateString()
@@ -24,9 +24,6 @@ export class CreateAchievementDto {
 
   @IsOptional() @IsInt() @Min(1)
   specialists?: number;
-
-  @IsNumber() @Min(0)
-  achievementPct: number;
 }
 
 export class CreateDeviationDto {
@@ -49,20 +46,20 @@ export class CreateDeviationDto {
   distributionValue: number;
 
   @IsInt() @Min(0)
-  inValue: number;
+  fullDeliveryCount: number;
 
   @IsInt() @Min(0)
-  outValue: number;
+  scheduledAppointments: number;
 
-  @IsNumber()
-  platformDevPct: number;
+  @IsInt() @Min(0)
+  actualAppointments: number;
 
-  @IsNumber()
-  fullReceiptDevPct: number;
+  @IsInt() @Min(0)
+  sortingTime: number;
 
-  @IsNumber()
-  completionCertDevPct: number;
+  @IsOptional() @IsInt() @Min(0)
+  expectedSortingTime?: number;
 
-  @IsNumber()
-  booking3HourDevPct: number;
+  @IsOptional() @IsInt() @Min(0)
+  systemDowntime?: number;
 }

@@ -12,11 +12,6 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 export class DistributionController {
   constructor(private service: DistributionService) {}
 
-  // ═══ ACHIEVEMENT ═══
-
-  @Get('achievement')
-  listAchievements() { return this.service.listAchievements(); }
-
   @Get('achievement/dashboard')
   achievementDashboard() { return this.service.achievementDashboard(); }
 
@@ -27,11 +22,6 @@ export class DistributionController {
 
   @Delete('achievement/:id')
   deleteAchievement(@Param('id') id: string) { return this.service.deleteAchievement(id); }
-
-  // ═══ DEVIATION ═══
-
-  @Get('deviation')
-  listDeviations() { return this.service.listDeviations(); }
 
   @Get('deviation/dashboard')
   deviationDashboard() { return this.service.deviationDashboard(); }
