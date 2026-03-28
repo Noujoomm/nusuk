@@ -452,6 +452,14 @@ export const analyticsApi = {
   dashboard: () => api.get('/analytics/dashboard'),
 };
 
+// ─── Distribution Operations ───
+export const distributionApi = {
+  list: () => api.get('/distribution'),
+  dashboard: () => api.get('/distribution/dashboard'),
+  create: (data: any) => api.post('/distribution', data),
+  delete: (id: string) => api.delete(`/distribution/${id}`),
+};
+
 // ─── Admin System Export ───
 export const adminExportApi = {
   systemStats: () => api.get('/admin/system-stats'),

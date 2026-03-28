@@ -50,6 +50,7 @@ model User {
   adminNotes         AdminNote[]            @relation("AdminNoteAuthor")
   taskUpdates        TaskUpdate[]           @relation("TaskUpdateAuthor")
   aiReports          AIReport[]             @relation("AIReportAuthor")
+  distributionEntries DistributionEntry[]   @relation("DistributionEntryCreator")
 
   // Phase 3: Updates & Import
   dailyUpdates       DailyUpdate[]          @relation("DailyUpdateAuthor")
@@ -1094,4 +1095,27 @@ model ExecutiveTask {
   @@index([sheetName])
   @@index([status])
   @@map("executive_tasks")
+}
+
+// ─── DISTRIBUTION OPERATIONAL DATA ───
+
+model DistributionEntry {
+  id                    String   @id @default(cuid())
+  gregorianDate         DateTime @map("gregorian_date")
+  hijriDate             String   @map("hijri_date")
+  companies             Int
+  batches               Int
+  cardsPerHour          Int      @map("cards_per_hour")
+  platformActual        Int      @map("platform_actual")
+  factoryActual         Int      @map("factory_actual")
+  distributionActual    Int      @map("distribution_actual")
+  createdById           String   @map("created_by_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  createdBy User @relation("DistributionEntryCreator", fields: [createdById], references: [id])
+
+  @@index([gregorianDate])
+  @@index([createdById])
+  @@map("distribution_entries")
 }

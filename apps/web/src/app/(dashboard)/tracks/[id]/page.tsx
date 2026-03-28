@@ -21,6 +21,7 @@ import TaskModal from '@/components/tasks/task-modal';
 import TaskDetailPanel from '@/components/tasks/task-detail-panel';
 import { Task } from '@/stores/tasks';
 import CommentThread from '@/components/comments/comment-thread';
+import DistributionDashboard from '@/components/distribution/DistributionDashboard';
 
 interface Track {
   id: string;
@@ -41,7 +42,7 @@ export default function TrackDetailPage() {
   const { user, hasPermission } = useAuth();
   const [track, setTrack] = useState<Track | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'tasks' | 'details' | 'scope' | 'updates' | 'comments' | 'attachments' | 'reports'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'details' | 'scope' | 'updates' | 'comments' | 'attachments' | 'reports' | 'distribution'>('tasks');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   // Daily updates state
@@ -414,6 +415,8 @@ export default function TrackDetailPage() {
           { key: 'comments' as const, label: 'التعليقات' },
           { key: 'scope' as const, label: 'نطاق العمل' },
           { key: 'details' as const, label: 'تفاصيل المسار' },
+          ...(track?.name === 'distribution' && (user?.role === 'admin' || user?.role === 'pm')
+            ? [{ key: 'distribution' as const, label: 'الأداء التشغيلي' }] : []),
         ].map((tab) => (
           <button
             key={tab.key}
@@ -1709,6 +1712,11 @@ export default function TrackDetailPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Distribution Operations Tab */}
+      {activeTab === 'distribution' && track?.name === 'distribution' && (
+        <DistributionDashboard />
       )}
 
       {/* Delete Confirmation */}
