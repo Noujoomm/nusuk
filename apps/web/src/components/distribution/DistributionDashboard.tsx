@@ -32,18 +32,21 @@ const DEV_SEVERITY: Record<string, { label: string; color: string; bg: string }>
 
 function Ring({ value, size = 100 }: { value: number; size?: number }) {
   const r = (size - 7) / 2, c = 2 * Math.PI * r;
-  const clamped = Math.min(150, Math.max(0, value));
+  const fillRatio = Math.min(1, Math.max(0, value / 150)); // scale to 150% max for ring
   const color = value >= 100 ? '#34D399' : value >= 95 ? '#38BDF8' : value >= 85 ? '#FBBF24' : '#F87171';
+  const exceeded = value > 100;
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={6} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={6}
-          strokeDasharray={c} strokeDashoffset={c - (clamped / 150) * c} strokeLinecap="round"
-          className="transition-all duration-1000 ease-out" />
+          strokeDasharray={c} strokeDashoffset={c - fillRatio * c} strokeLinecap="round"
+          className="transition-all duration-1000 ease-out"
+          style={exceeded ? { filter: `drop-shadow(0 0 8px ${color}88)` } : undefined} />
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-xl font-bold tabular-nums text-white">{value}%</span>
+        {exceeded && <span className="text-[9px] text-emerald-400 font-medium">تجاوز الهدف</span>}
       </div>
     </div>
   );
@@ -136,7 +139,7 @@ export default function DistributionDashboard() {
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-violet-500/20"><Activity className="w-5 h-5 text-violet-400" /></div>
           <div>
-            <h2 className="text-lg font-bold text-white">الأداء التشغيلي لمسار التوزيع</h2>
+            <h2 className="text-lg font-bold text-white">التحليل التشغيلي لمسار التوزيع</h2>
             <p className="text-xs text-gray-400">المدة: {DURATION} ساعات | الأخصائيون: {SPECIALISTS}</p>
           </div>
         </div>
@@ -194,7 +197,7 @@ export default function DistributionDashboard() {
           {/*  SECTION 1 — ACHIEVEMENT ENGINE (نسبة الإنجاز)         */}
           {/* ════════════════════════════════════════════════════════ */}
           {ach && (
-            <Section title="أداء الإنجاز لمسار التوزيع" icon={TrendingUp} color="#34D399">
+            <Section title="نسبة الإنجاز — Achievement Percentage" icon={TrendingUp} color="#34D399">
               {/* Executive Summary */}
               <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 border-r-[3px] border-r-emerald-500">
                 <div className="flex items-start gap-3">
@@ -268,7 +271,7 @@ export default function DistributionDashboard() {
           {/*  SECTION 2 — DEVIATION ENGINE (نسبة الانحراف)           */}
           {/* ════════════════════════════════════════════════════════ */}
           {dev && (
-            <Section title="تحليل الانحراف لمسار التوزيع" icon={ArrowLeftRight} color="#F87171">
+            <Section title="نسبة الانحراف — Deviation Percentage" icon={ArrowLeftRight} color="#F87171">
               {/* Critical Alert */}
               {dev.hasCriticalDeviation && (
                 <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 flex items-center gap-3">

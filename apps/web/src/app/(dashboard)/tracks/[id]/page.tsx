@@ -416,7 +416,7 @@ export default function TrackDetailPage() {
           { key: 'scope' as const, label: 'نطاق العمل' },
           { key: 'details' as const, label: 'تفاصيل المسار' },
           ...(track?.name === 'distribution' && (user?.role === 'admin' || user?.role === 'pm')
-            ? [{ key: 'distribution' as const, label: 'الأداء التشغيلي' }] : []),
+            ? [{ key: 'distribution' as const, label: 'الإنجاز والانحراف' }] : []),
         ].map((tab) => (
           <button
             key={tab.key}
