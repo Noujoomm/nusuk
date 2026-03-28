@@ -218,12 +218,7 @@ export default function KPIsPage() {
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{
-                    background: '#1f2937',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '12px',
-                    direction: 'rtl',
-                  }}
+                  contentStyle={{ backgroundColor: 'rgba(10,18,32,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', color: '#F8FAFC', direction: 'rtl' as const, padding: '10px 14px', boxShadow: '0 10px 30px rgba(0,0,0,0.4)', fontSize: '12px' }}
                   formatter={(value: any) => [formatNumber(Number(value)), 'العدد']}
                 />
                 <Legend
@@ -263,12 +258,7 @@ export default function KPIsPage() {
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{
-                    background: '#1f2937',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '12px',
-                    direction: 'rtl',
-                  }}
+                  contentStyle={{ backgroundColor: 'rgba(10,18,32,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', color: '#F8FAFC', direction: 'rtl' as const, padding: '10px 14px', boxShadow: '0 10px 30px rgba(0,0,0,0.4)', fontSize: '12px' }}
                   formatter={(value: any) => [formatNumber(Number(value)), 'العدد']}
                 />
                 <Legend
