@@ -159,7 +159,7 @@ select.input-field:disabled {
   margin-inline-end: 12px !important;
 }
 .recharts-legend-item-text {
-  color: #CBD5E1 !important;
+  color: #ffffff !important;
   font-size: 11px !important;
   vertical-align: middle;
 }
@@ -170,12 +170,12 @@ select.input-field:disabled {
 /* Grid — ultra-subtle */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
-  stroke: rgba(148, 163, 184, 0.07);
+  stroke: rgba(255, 255, 255, 0.08);
 }
 
 /* Axis labels */
 .recharts-text.recharts-cartesian-axis-tick-value {
-  fill: #94A3B8;
+  fill: #e5e7eb !important;
   font-size: 10px;
 }
 

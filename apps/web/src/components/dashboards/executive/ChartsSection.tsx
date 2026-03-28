@@ -7,9 +7,10 @@ import {
 import { BarChart3, TrendingUp, PieChart as PieIcon, Activity } from 'lucide-react';
 import { TASK_STATUS_LABELS, PRIORITY_LABELS } from '@/lib/utils';
 import {
-  chartTooltipStyle, chartTooltipCursor, chartTooltipLineCursor,
+  chartTooltipStyle, chartTooltipLabelStyle, chartTooltipItemStyle,
+  chartTooltipCursor, chartTooltipLineCursor,
   STATUS_CHART_COLORS, PRIORITY_CHART_COLORS,
-  axisTickStyle, gridStroke, gridStrokeDash, legendStyle,
+  axisTickStyle, axisStroke, gridStroke, gridStrokeDash, legendStyle,
   formatChartDate, pieStroke, pieStrokeWidth, barFillOpacity,
   activeDotStyle, dotStyle, areaGradients,
 } from '@/lib/chart-theme';
@@ -20,7 +21,7 @@ function ChartCard({ title, icon: Icon, children, className }: {
 }) {
   return (
     <div className={`rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm p-5 ${className || ''}`}>
-      <h3 className="text-sm font-semibold mb-4 flex items-center gap-2 text-slate-300">
+      <h3 className="text-sm font-semibold mb-4 flex items-center gap-2 text-white">
         <Icon className="w-4 h-4 text-brand-400" />{title}
       </h3>
       {children}
@@ -29,7 +30,7 @@ function ChartCard({ title, icon: Icon, children, className }: {
 }
 
 function Empty() {
-  return <p className="text-sm text-slate-500 text-center py-16">لا توجد بيانات كافية</p>;
+  return <p className="text-sm text-gray-400 text-center py-16">لا توجد بيانات كافية</p>;
 }
 
 export default function ChartsSection({ data }: { data: Analytics }) {
@@ -49,16 +50,16 @@ export default function ChartsSection({ data }: { data: Analytics }) {
 
   return (
     <div className="space-y-4">
-      {/* ── Row 1: Track completion + Donuts ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Track Completion Bar */}
         <ChartCard title="إنجاز المسارات" icon={BarChart3} className="lg:col-span-1">
           {trackChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={Math.max(180, trackChartData.length * 44)}>
               <BarChart data={trackChartData} layout="vertical">
-                <XAxis type="number" hide />
-                <YAxis type="category" dataKey="name" width={100} tick={axisTickStyle} />
-                <Tooltip contentStyle={chartTooltipStyle} cursor={chartTooltipCursor}
-                  formatter={(v: any) => [`${v}%`, 'الإنجاز']} />
+                <XAxis type="number" hide stroke={axisStroke} />
+                <YAxis type="category" dataKey="name" width={100} tick={axisTickStyle} stroke={axisStroke} />
+                <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle}
+                  cursor={chartTooltipCursor} formatter={(v: any) => [`${v}%`, 'الإنجاز']} />
                 <Bar dataKey="نسبة الإنجاز" radius={[0, 6, 6, 0]} barSize={16}>
                   {trackChartData.map((e, i) => <Cell key={i} fill={e.color} fillOpacity={barFillOpacity} />)}
                 </Bar>
@@ -67,6 +68,7 @@ export default function ChartsSection({ data }: { data: Analytics }) {
           ) : <Empty />}
         </ChartCard>
 
+        {/* Status Donut */}
         <ChartCard title="المهام حسب الحالة" icon={PieIcon}>
           {taskStatusDonut.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
@@ -76,13 +78,14 @@ export default function ChartsSection({ data }: { data: Analytics }) {
                   stroke={pieStroke} strokeWidth={pieStrokeWidth}>
                   {taskStatusDonut.map((e, i) => <Cell key={i} fill={e.fill} />)}
                 </Pie>
-                <Tooltip contentStyle={chartTooltipStyle} />
+                <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} />
                 <Legend wrapperStyle={legendStyle} />
               </PieChart>
             </ResponsiveContainer>
           ) : <Empty />}
         </ChartCard>
 
+        {/* Priority Donut */}
         <ChartCard title="المهام حسب الأولوية" icon={PieIcon}>
           {taskPriorityDonut.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
@@ -92,7 +95,7 @@ export default function ChartsSection({ data }: { data: Analytics }) {
                   stroke={pieStroke} strokeWidth={pieStrokeWidth}>
                   {taskPriorityDonut.map((e, i) => <Cell key={i} fill={e.fill} />)}
                 </Pie>
-                <Tooltip contentStyle={chartTooltipStyle} />
+                <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} />
                 <Legend wrapperStyle={legendStyle} />
               </PieChart>
             </ResponsiveContainer>
@@ -100,7 +103,7 @@ export default function ChartsSection({ data }: { data: Analytics }) {
         </ChartCard>
       </div>
 
-      {/* ── Row 2: Timelines ── */}
+      {/* Timelines */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="التقارير — آخر ٣٠ يوم" icon={TrendingUp}>
           {data.reports.reports_timeline.length > 0 ? (
@@ -113,10 +116,10 @@ export default function ChartsSection({ data }: { data: Analytics }) {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray={gridStrokeDash} stroke={gridStroke} />
-                <XAxis dataKey="date" tick={axisTickStyle} tickFormatter={formatChartDate} />
-                <YAxis tick={axisTickStyle} allowDecimals={false} />
-                <Tooltip contentStyle={chartTooltipStyle} cursor={chartTooltipLineCursor}
-                  formatter={(v: any) => [v, 'تقارير']} />
+                <XAxis dataKey="date" tick={axisTickStyle} stroke={axisStroke} tickFormatter={formatChartDate} />
+                <YAxis tick={axisTickStyle} stroke={axisStroke} allowDecimals={false} />
+                <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle}
+                  cursor={chartTooltipLineCursor} formatter={(v: any) => [v, 'تقارير']} />
                 <Area type="monotone" dataKey="count" stroke={areaGradients.blue.color} strokeWidth={2.5}
                   fill={`url(#${areaGradients.blue.id})`} dot={false}
                   activeDot={activeDotStyle(areaGradients.blue.color)} />
@@ -130,10 +133,10 @@ export default function ChartsSection({ data }: { data: Analytics }) {
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={p.updates_timeline}>
                 <CartesianGrid strokeDasharray={gridStrokeDash} stroke={gridStroke} />
-                <XAxis dataKey="date" tick={axisTickStyle} tickFormatter={formatChartDate} />
-                <YAxis tick={axisTickStyle} allowDecimals={false} />
-                <Tooltip contentStyle={chartTooltipStyle} cursor={chartTooltipLineCursor}
-                  formatter={(v: any) => [v, 'تحديثات']} />
+                <XAxis dataKey="date" tick={axisTickStyle} stroke={axisStroke} tickFormatter={formatChartDate} />
+                <YAxis tick={axisTickStyle} stroke={axisStroke} allowDecimals={false} />
+                <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle}
+                  cursor={chartTooltipLineCursor} formatter={(v: any) => [v, 'تحديثات']} />
                 <Line type="monotone" dataKey="count" stroke={areaGradients.purple.color} strokeWidth={2.5}
                   dot={dotStyle(areaGradients.purple.color)}
                   activeDot={activeDotStyle(areaGradients.purple.color)} />
@@ -143,16 +146,17 @@ export default function ChartsSection({ data }: { data: Analytics }) {
         </ChartCard>
       </div>
 
-      {/* ── Row 3: By Track ── */}
+      {/* By Track */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="التقارير حسب المسار" icon={BarChart3}>
           {data.reports.reports_by_track.length > 0 ? (
             <ResponsiveContainer width="100%" height={Math.max(180, data.reports.reports_by_track.length * 38)}>
               <BarChart data={data.reports.reports_by_track} layout="vertical">
                 <CartesianGrid strokeDasharray={gridStrokeDash} stroke={gridStroke} horizontal={false} />
-                <XAxis type="number" tick={axisTickStyle} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" width={120} tick={axisTickStyle} />
-                <Tooltip contentStyle={chartTooltipStyle} cursor={chartTooltipCursor} />
+                <XAxis type="number" tick={axisTickStyle} stroke={axisStroke} allowDecimals={false} />
+                <YAxis type="category" dataKey="name" width={120} tick={axisTickStyle} stroke={axisStroke} />
+                <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle}
+                  cursor={chartTooltipCursor} />
                 <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={18}>
                   {data.reports.reports_by_track.map((e, i) => <Cell key={i} fill={e.color} fillOpacity={barFillOpacity} />)}
                 </Bar>
@@ -166,9 +170,10 @@ export default function ChartsSection({ data }: { data: Analytics }) {
             <ResponsiveContainer width="100%" height={Math.max(180, p.tasks_completed_by_track.length * 38)}>
               <BarChart data={p.tasks_completed_by_track} layout="vertical">
                 <CartesianGrid strokeDasharray={gridStrokeDash} stroke={gridStroke} horizontal={false} />
-                <XAxis type="number" tick={axisTickStyle} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" width={120} tick={axisTickStyle} />
-                <Tooltip contentStyle={chartTooltipStyle} cursor={chartTooltipCursor} />
+                <XAxis type="number" tick={axisTickStyle} stroke={axisStroke} allowDecimals={false} />
+                <YAxis type="category" dataKey="name" width={120} tick={axisTickStyle} stroke={axisStroke} />
+                <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle}
+                  cursor={chartTooltipCursor} />
                 <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={18}>
                   {p.tasks_completed_by_track.map((e, i) => <Cell key={i} fill={e.color} fillOpacity={barFillOpacity} />)}
                 </Bar>

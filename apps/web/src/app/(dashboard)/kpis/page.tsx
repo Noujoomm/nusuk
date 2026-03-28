@@ -218,7 +218,9 @@ export default function KPIsPage() {
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ backgroundColor: 'rgba(8,15,28,0.94)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '14px', color: '#F1F5F9', direction: 'rtl' as const, padding: '10px 16px', boxShadow: '0 8px 32px rgba(0,0,0,0.55)', backdropFilter: 'blur(16px)', fontSize: '12px' }}
+                  contentStyle={{ backgroundColor: 'rgba(15,23,42,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#ffffff', direction: 'rtl' as const, padding: '10px 14px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', fontSize: '12px' }}
+                  labelStyle={{ color: '#ffffff', fontWeight: 'bold' }}
+                  itemStyle={{ color: '#e5e7eb' }}
                   formatter={(value: any) => [formatNumber(Number(value)), 'العدد']}
                 />
                 <Legend
@@ -258,7 +260,9 @@ export default function KPIsPage() {
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ backgroundColor: 'rgba(8,15,28,0.94)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '14px', color: '#F1F5F9', direction: 'rtl' as const, padding: '10px 16px', boxShadow: '0 8px 32px rgba(0,0,0,0.55)', backdropFilter: 'blur(16px)', fontSize: '12px' }}
+                  contentStyle={{ backgroundColor: 'rgba(15,23,42,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#ffffff', direction: 'rtl' as const, padding: '10px 14px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', fontSize: '12px' }}
+                  labelStyle={{ color: '#ffffff', fontWeight: 'bold' }}
+                  itemStyle={{ color: '#e5e7eb' }}
                   formatter={(value: any) => [formatNumber(Number(value)), 'العدد']}
                 />
                 <Legend

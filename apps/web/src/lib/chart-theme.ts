@@ -1,18 +1,18 @@
 /**
- * Centralized chart theme — premium dark glassmorphism.
- * All Recharts components should import from here.
+ * Centralized chart theme — dark glassmorphism.
+ * All Recharts components import from here for consistency.
  */
 
 // ─── Semantic Status Colors ─────────────────────────
 export const STATUS_CHART_COLORS: Record<string, string> = {
-  new: '#38BDF8',        // sky-400
-  pending: '#A78BFA',    // violet-400
-  in_progress: '#38BDF8',// sky-400
-  under_review: '#FBBF24',// amber-400
-  completed: '#34D399',  // emerald-400
-  delayed: '#F87171',    // red-400
-  cancelled: '#94A3B8',  // slate-400
-  scheduled: '#22D3EE',  // cyan-400
+  new: '#38BDF8',
+  pending: '#A78BFA',
+  in_progress: '#38BDF8',
+  under_review: '#FBBF24',
+  completed: '#34D399',
+  delayed: '#F87171',
+  cancelled: '#94A3B8',
+  scheduled: '#22D3EE',
 };
 
 export const PRIORITY_CHART_COLORS: Record<string, string> = {
@@ -28,41 +28,53 @@ export const CHART_PALETTE = [
   '#F87171', '#2DD4BF', '#A3E635', '#818CF8',
 ];
 
-// ─── Tooltip ────────────────────────────────────────
+// ─── Tooltip (all text white, dark glass background) ─
 export const chartTooltipStyle: React.CSSProperties = {
-  backgroundColor: 'rgba(8, 15, 28, 0.94)',
-  border: '1px solid rgba(255, 255, 255, 0.10)',
-  borderRadius: '14px',
-  color: '#F1F5F9',
+  backgroundColor: 'rgba(15, 23, 42, 0.95)',
+  border: '1px solid rgba(255, 255, 255, 0.1)',
+  borderRadius: '12px',
+  color: '#ffffff',
   direction: 'rtl',
-  padding: '10px 16px',
-  boxShadow: '0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04)',
-  backdropFilter: 'blur(16px)',
+  padding: '10px 14px',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+  backdropFilter: 'blur(10px)',
   fontSize: '12px',
   lineHeight: '1.7',
+};
+
+export const chartTooltipLabelStyle: React.CSSProperties = {
+  color: '#ffffff',
+  fontWeight: 'bold',
+  fontSize: '12px',
+};
+
+export const chartTooltipItemStyle: React.CSSProperties = {
+  color: '#e5e7eb',
+  fontSize: '12px',
 };
 
 export const chartTooltipCursor = { fill: 'rgba(148, 163, 184, 0.06)' };
 export const chartTooltipLineCursor = { stroke: 'rgba(148, 163, 184, 0.2)', strokeWidth: 1, strokeDasharray: '4 4' };
 
-// ─── Axis ───────────────────────────────────────────
-export const axisTickStyle = { fill: '#94A3B8', fontSize: 10, fontFamily: 'inherit' };
-export const axisTickStyleSmall = { fill: '#64748B', fontSize: 9 };
+// ─── Axis (white/light gray text, visible strokes) ──
+export const axisStroke = '#e5e7eb';
+export const axisTickStyle = { fill: '#e5e7eb', fontSize: 10, fontFamily: 'inherit' };
+export const axisTickStyleSmall = { fill: '#e5e7eb', fontSize: 9 };
 
 // ─── Grid ───────────────────────────────────────────
-export const gridStroke = 'rgba(148, 163, 184, 0.07)';
+export const gridStroke = 'rgba(255, 255, 255, 0.08)';
 export const gridStrokeDash = '3 3';
 
-// ─── Legend ─────────────────────────────────────────
+// ─── Legend (white text) ────────────────────────────
 export const legendStyle: React.CSSProperties = {
-  color: '#CBD5E1',
+  color: '#ffffff',
   fontSize: 11,
   direction: 'rtl',
   paddingTop: '10px',
 };
 
 // ─── Pie / Donut ────────────────────────────────────
-export const pieStroke = 'rgba(8, 15, 28, 0.7)';
+export const pieStroke = 'rgba(15, 23, 42, 0.7)';
 export const pieStrokeWidth = 2;
 
 // ─── Active dot (Line/Area charts) ──────────────────
@@ -80,7 +92,7 @@ export const dotStyle = (color: string) => ({
   strokeWidth: 0,
 });
 
-// ─── Bar hover ──────────────────────────────────────
+// ─── Bar ────────────────────────────────────────────
 export const barFillOpacity = 0.88;
 
 // ─── Gradients ──────────────────────────────────────
