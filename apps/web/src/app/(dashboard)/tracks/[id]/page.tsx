@@ -537,8 +537,8 @@ export default function TrackDetailPage() {
                 ].filter(d => d.value > 0)} layout="vertical">
                   <XAxis type="number" hide />
                   <YAxis type="category" dataKey="name" width={90} tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                  <Tooltip contentStyle={{ backgroundColor: 'rgba(10,18,32,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', color: '#F8FAFC', direction: 'rtl', padding: '10px 14px', boxShadow: '0 10px 30px rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)', fontSize: '12px' } as any}
-                    cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                  <Tooltip contentStyle={{ backgroundColor: 'rgba(8,15,28,0.94)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '14px', color: '#F1F5F9', direction: 'rtl', padding: '10px 16px', boxShadow: '0 8px 32px rgba(0,0,0,0.55)', backdropFilter: 'blur(16px)', fontSize: '12px' } as any}
+                    cursor={{ fill: 'rgba(148,163,184,0.06)' }} />
                   <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
                     {[
                       { name: 'معلقة', fill: '#6b7280' },
