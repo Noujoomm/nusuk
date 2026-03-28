@@ -51,6 +51,8 @@ model User {
   taskUpdates        TaskUpdate[]           @relation("TaskUpdateAuthor")
   aiReports          AIReport[]             @relation("AIReportAuthor")
   distributionEntries DistributionEntry[]   @relation("DistributionEntryCreator")
+  distAchievements    DistributionAchievement[] @relation("DistAchievementCreator")
+  distDeviations      DistributionDeviation[]   @relation("DistDeviationCreator")
 
   // Phase 3: Updates & Import
   dailyUpdates       DailyUpdate[]          @relation("DailyUpdateAuthor")
@@ -1097,7 +1099,56 @@ model ExecutiveTask {
   @@map("executive_tasks")
 }
 
-// ─── DISTRIBUTION OPERATIONAL DATA ───
+// ─── DISTRIBUTION: ACHIEVEMENT ───
+
+model DistributionAchievement {
+  id                    String   @id @default(cuid())
+  gregorianDate         DateTime @map("gregorian_date")
+  hijriDate             String   @map("hijri_date")
+  companies             Int
+  batches               Int
+  totalCards            Int      @map("total_cards")
+  cardsPerHour          Int      @map("cards_per_hour")
+  duration              Int      @default(4)
+  specialists           Int      @default(4)
+  achievementPct        Float    @map("achievement_pct")
+  createdById           String   @map("created_by_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  createdBy User @relation("DistAchievementCreator", fields: [createdById], references: [id])
+
+  @@index([gregorianDate])
+  @@map("distribution_achievements")
+}
+
+// ─── DISTRIBUTION: DEVIATION ───
+
+model DistributionDeviation {
+  id                       String   @id @default(cuid())
+  gregorianDate            DateTime @map("gregorian_date")
+  hijriDate                String   @map("hijri_date")
+  companies                Int
+  platformValue            Int      @map("platform_value")
+  factoryValue             Int      @map("factory_value")
+  distributionValue        Int      @map("distribution_value")
+  inValue                  Int      @map("in_value")
+  outValue                 Int      @map("out_value")
+  platformDevPct           Float    @map("platform_dev_pct")
+  fullReceiptDevPct        Float    @map("full_receipt_dev_pct")
+  completionCertDevPct     Float    @map("completion_cert_dev_pct")
+  booking3HourDevPct       Float    @map("booking_3hour_dev_pct")
+  createdById              String   @map("created_by_id")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  createdBy User @relation("DistDeviationCreator", fields: [createdById], references: [id])
+
+  @@index([gregorianDate])
+  @@map("distribution_deviations")
+}
+
+// ─── LEGACY (kept for migration safety) ───
 
 model DistributionEntry {
   id                    String   @id @default(cuid())

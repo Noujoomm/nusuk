@@ -452,12 +452,18 @@ export const analyticsApi = {
   dashboard: () => api.get('/analytics/dashboard'),
 };
 
-// ─── Distribution Operations ───
-export const distributionApi = {
-  list: () => api.get('/distribution'),
-  dashboard: () => api.get('/distribution/dashboard'),
-  create: (data: any) => api.post('/distribution', data),
-  delete: (id: string) => api.delete(`/distribution/${id}`),
+// ─── Distribution: Achievement + Deviation ───
+export const distAchievementApi = {
+  list: () => api.get('/distribution/achievement'),
+  dashboard: () => api.get('/distribution/achievement/dashboard'),
+  create: (data: any) => api.post('/distribution/achievement', data),
+  delete: (id: string) => api.delete(`/distribution/achievement/${id}`),
+};
+export const distDeviationApi = {
+  list: () => api.get('/distribution/deviation'),
+  dashboard: () => api.get('/distribution/deviation/dashboard'),
+  create: (data: any) => api.post('/distribution/deviation', data),
+  delete: (id: string) => api.delete(`/distribution/deviation/${id}`),
 };
 
 // ─── Admin System Export ───

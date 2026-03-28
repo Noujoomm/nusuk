@@ -21,7 +21,8 @@ import TaskModal from '@/components/tasks/task-modal';
 import TaskDetailPanel from '@/components/tasks/task-detail-panel';
 import { Task } from '@/stores/tasks';
 import CommentThread from '@/components/comments/comment-thread';
-import DistributionDashboard from '@/components/distribution/DistributionDashboard';
+import AchievementSection from '@/components/distribution/AchievementSection';
+import DeviationSection from '@/components/distribution/DeviationSection';
 
 interface Track {
   id: string;
@@ -42,7 +43,7 @@ export default function TrackDetailPage() {
   const { user, hasPermission } = useAuth();
   const [track, setTrack] = useState<Track | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'tasks' | 'details' | 'scope' | 'updates' | 'comments' | 'attachments' | 'reports' | 'distribution'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'details' | 'scope' | 'updates' | 'comments' | 'attachments' | 'reports' | 'achievement' | 'deviation'>('tasks');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   // Daily updates state
@@ -416,7 +417,10 @@ export default function TrackDetailPage() {
           { key: 'scope' as const, label: 'نطاق العمل' },
           { key: 'details' as const, label: 'تفاصيل المسار' },
           ...(track?.name === 'distribution' && (user?.role === 'admin' || user?.role === 'pm')
-            ? [{ key: 'distribution' as const, label: 'الإنجاز والانحراف' }] : []),
+            ? [
+                { key: 'achievement' as const, label: 'نسبة الإنجاز' },
+                { key: 'deviation' as const, label: 'نسبة الانحراف' },
+              ] : []),
         ].map((tab) => (
           <button
             key={tab.key}
@@ -1714,9 +1718,14 @@ export default function TrackDetailPage() {
         </div>
       )}
 
-      {/* Distribution Operations Tab */}
-      {activeTab === 'distribution' && track?.name === 'distribution' && (
-        <DistributionDashboard />
+      {/* Achievement Tab */}
+      {activeTab === 'achievement' && track?.name === 'distribution' && (
+        <AchievementSection />
+      )}
+
+      {/* Deviation Tab */}
+      {activeTab === 'deviation' && track?.name === 'distribution' && (
+        <DeviationSection />
       )}
 
       {/* Delete Confirmation */}

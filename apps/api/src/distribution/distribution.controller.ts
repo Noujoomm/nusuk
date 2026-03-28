@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { DistributionService } from './distribution.service';
-import { CreateDistributionEntryDto } from './distribution.dto';
+import { CreateAchievementDto, CreateDeviationDto } from './distribution.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -12,23 +12,35 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 export class DistributionController {
   constructor(private service: DistributionService) {}
 
-  @Get()
-  findAll() {
-    return this.service.findAll();
+  // ═══ ACHIEVEMENT ═══
+
+  @Get('achievement')
+  listAchievements() { return this.service.listAchievements(); }
+
+  @Get('achievement/dashboard')
+  achievementDashboard() { return this.service.achievementDashboard(); }
+
+  @Post('achievement')
+  createAchievement(@Body() dto: CreateAchievementDto, @CurrentUser() user: any) {
+    return this.service.createAchievement(dto, user.id);
   }
 
-  @Get('dashboard')
-  getDashboard() {
-    return this.service.getDashboard();
+  @Delete('achievement/:id')
+  deleteAchievement(@Param('id') id: string) { return this.service.deleteAchievement(id); }
+
+  // ═══ DEVIATION ═══
+
+  @Get('deviation')
+  listDeviations() { return this.service.listDeviations(); }
+
+  @Get('deviation/dashboard')
+  deviationDashboard() { return this.service.deviationDashboard(); }
+
+  @Post('deviation')
+  createDeviation(@Body() dto: CreateDeviationDto, @CurrentUser() user: any) {
+    return this.service.createDeviation(dto, user.id);
   }
 
-  @Post()
-  create(@Body() dto: CreateDistributionEntryDto, @CurrentUser() user: any) {
-    return this.service.create(dto, user.id);
-  }
-
-  @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.service.delete(id);
-  }
+  @Delete('deviation/:id')
+  deleteDeviation(@Param('id') id: string) { return this.service.deleteDeviation(id); }
 }

@@ -1,34 +1,68 @@
-import { IsString, IsInt, IsDateString, Min, Max } from 'class-validator';
+import { IsString, IsInt, IsNumber, IsDateString, Min, Max, IsOptional } from 'class-validator';
 
-export class CreateDistributionEntryDto {
+export class CreateAchievementDto {
   @IsDateString()
   gregorianDate: string;
 
   @IsString()
   hijriDate: string;
 
-  @IsInt()
-  @Min(0)
+  @IsInt() @Min(0)
   companies: number;
 
-  @IsInt()
-  @Min(0)
+  @IsInt() @Min(0)
   batches: number;
 
-  @IsInt()
-  @Min(0)
-  @Max(4000, { message: 'لا يمكن أن يتجاوز عدد بطاقات التوزيع في الساعة 4000' })
+  @IsInt() @Min(0)
+  totalCards: number;
+
+  @IsInt() @Min(0)
   cardsPerHour: number;
 
-  @IsInt()
-  @Min(0)
-  platformActual: number;
+  @IsOptional() @IsInt() @Min(1)
+  duration?: number;
 
-  @IsInt()
-  @Min(0)
-  factoryActual: number;
+  @IsOptional() @IsInt() @Min(1)
+  specialists?: number;
 
-  @IsInt()
-  @Min(0)
-  distributionActual: number;
+  @IsNumber() @Min(0)
+  achievementPct: number;
+}
+
+export class CreateDeviationDto {
+  @IsDateString()
+  gregorianDate: string;
+
+  @IsString()
+  hijriDate: string;
+
+  @IsInt() @Min(0)
+  companies: number;
+
+  @IsInt() @Min(0)
+  platformValue: number;
+
+  @IsInt() @Min(0)
+  factoryValue: number;
+
+  @IsInt() @Min(0)
+  distributionValue: number;
+
+  @IsInt() @Min(0)
+  inValue: number;
+
+  @IsInt() @Min(0)
+  outValue: number;
+
+  @IsNumber()
+  platformDevPct: number;
+
+  @IsNumber()
+  fullReceiptDevPct: number;
+
+  @IsNumber()
+  completionCertDevPct: number;
+
+  @IsNumber()
+  booking3HourDevPct: number;
 }
