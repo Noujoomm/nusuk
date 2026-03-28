@@ -5,6 +5,20 @@ import { CreateDistributionEntryDto } from './distribution.dto';
 const DURATION = 4;
 const SPECIALISTS = 4;
 
+function achievementStatus(pct: number): string {
+  if (pct >= 100) return 'excellent';
+  if (pct >= 95) return 'on_track';
+  if (pct >= 85) return 'warning';
+  return 'critical';
+}
+
+function deviationSeverity(pct: number): string {
+  const abs = Math.abs(pct);
+  if (abs <= 10) return 'low';
+  if (abs <= 25) return 'medium';
+  return 'high';
+}
+
 @Injectable()
 export class DistributionService {
   constructor(private prisma: PrismaService) {}
@@ -37,16 +51,11 @@ export class DistributionService {
 
     const computed = entries.map((e) => {
       const expected = e.cardsPerHour * DURATION * SPECIALISTS;
-      const achievement = expected > 0 ? Math.round((e.distributionActual / expected) * 100 * 10) / 10 : 0;
-      const platVsFact = e.factoryActual > 0 ? Math.round(((e.platformActual - e.factoryActual) / e.factoryActual) * 100 * 10) / 10 : 0;
-      const platVsDist = e.distributionActual > 0 ? Math.round(((e.platformActual - e.distributionActual) / e.distributionActual) * 100 * 10) / 10 : 0;
-      const factVsDist = e.distributionActual > 0 ? Math.round(((e.factoryActual - e.distributionActual) / e.distributionActual) * 100 * 10) / 10 : 0;
+      const achievement = expected > 0 ? Math.round((e.distributionActual / expected) * 1000) / 10 : 0;
 
-      let status: string;
-      if (achievement >= 95) status = 'excellent';
-      else if (achievement >= 85) status = 'on_track';
-      else if (achievement >= 70) status = 'warning';
-      else status = 'critical';
+      const platVsFact = e.factoryActual > 0 ? Math.round(((e.platformActual - e.factoryActual) / e.factoryActual) * 1000) / 10 : 0;
+      const platVsDist = e.distributionActual > 0 ? Math.round(((e.platformActual - e.distributionActual) / e.distributionActual) * 1000) / 10 : 0;
+      const factVsDist = e.distributionActual > 0 ? Math.round(((e.factoryActual - e.distributionActual) / e.distributionActual) * 1000) / 10 : 0;
 
       return {
         ...e,
@@ -54,51 +63,64 @@ export class DistributionService {
         specialists: SPECIALISTS,
         expectedCapacity: expected,
         achievement,
+        achievementStatus: achievementStatus(achievement),
         platVsFact,
         platVsDist,
         factVsDist,
-        status,
+        platVsFactSeverity: deviationSeverity(platVsFact),
+        platVsDistSeverity: deviationSeverity(platVsDist),
+        factVsDistSeverity: deviationSeverity(factVsDist),
+        platVsFactAbs: Math.abs(e.platformActual - e.factoryActual),
+        platVsDistAbs: Math.abs(e.platformActual - e.distributionActual),
+        factVsDistAbs: Math.abs(e.factoryActual - e.distributionActual),
         overLimit: e.cardsPerHour > 4000,
       };
     });
 
-    // Aggregates
     const total = computed.length;
-    if (total === 0) {
-      return { entries: [], summary: null };
-    }
+    if (total === 0) return { entries: [], achievement: null, deviation: null };
 
+    // Achievement aggregates
     const avgAchievement = Math.round(computed.reduce((s, e) => s + e.achievement, 0) / total * 10) / 10;
     const totalExpected = computed.reduce((s, e) => s + e.expectedCapacity, 0);
-    const totalPlatform = computed.reduce((s, e) => s + e.platformActual, 0);
-    const totalFactory = computed.reduce((s, e) => s + e.factoryActual, 0);
     const totalDistribution = computed.reduce((s, e) => s + e.distributionActual, 0);
     const overLimitCount = computed.filter((e) => e.overLimit).length;
 
-    const maxDeviation = [
-      { pair: 'المنصة والمصنع', value: Math.abs(computed.reduce((s, e) => s + e.platVsFact, 0) / total) },
-      { pair: 'المنصة والتوزيع', value: Math.abs(computed.reduce((s, e) => s + e.platVsDist, 0) / total) },
-      { pair: 'المصنع والتوزيع', value: Math.abs(computed.reduce((s, e) => s + e.factVsDist, 0) / total) },
-    ].sort((a, b) => b.value - a.value)[0];
+    // Deviation aggregates
+    const avgPlatVsFact = Math.round(computed.reduce((s, e) => s + e.platVsFact, 0) / total * 10) / 10;
+    const avgPlatVsDist = Math.round(computed.reduce((s, e) => s + e.platVsDist, 0) / total * 10) / 10;
+    const avgFactVsDist = Math.round(computed.reduce((s, e) => s + e.factVsDist, 0) / total * 10) / 10;
+    const totalPlatform = computed.reduce((s, e) => s + e.platformActual, 0);
+    const totalFactory = computed.reduce((s, e) => s + e.factoryActual, 0);
 
-    let overallStatus: string;
-    if (avgAchievement >= 95) overallStatus = 'excellent';
-    else if (avgAchievement >= 85) overallStatus = 'on_track';
-    else if (avgAchievement >= 70) overallStatus = 'warning';
-    else overallStatus = 'critical';
+    const deviations = [
+      { pair: 'المنصة والمصنع', pairEn: 'platform_factory', avg: avgPlatVsFact, severity: deviationSeverity(avgPlatVsFact) },
+      { pair: 'المنصة والتوزيع', pairEn: 'platform_distribution', avg: avgPlatVsDist, severity: deviationSeverity(avgPlatVsDist) },
+      { pair: 'المصنع والتوزيع', pairEn: 'factory_distribution', avg: avgFactVsDist, severity: deviationSeverity(avgFactVsDist) },
+    ];
+    const highestDeviation = [...deviations].sort((a, b) => Math.abs(b.avg) - Math.abs(a.avg))[0];
+    const hasCriticalDeviation = deviations.some((d) => d.severity === 'high');
 
     return {
       entries: computed,
-      summary: {
-        totalEntries: total,
+      achievement: {
         avgAchievement,
         totalExpected,
+        totalDistribution,
+        overallStatus: achievementStatus(avgAchievement),
+        overLimitCount,
+        totalEntries: total,
+      },
+      deviation: {
+        avgPlatVsFact,
+        avgPlatVsDist,
+        avgFactVsDist,
         totalPlatform,
         totalFactory,
         totalDistribution,
-        overLimitCount,
-        maxDeviation,
-        overallStatus,
+        deviations,
+        highestDeviation,
+        hasCriticalDeviation,
       },
     };
   }
