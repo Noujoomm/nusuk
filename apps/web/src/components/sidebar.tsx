@@ -39,6 +39,7 @@ const NAV_ITEMS = [
   { href: '/tasks', label: 'المهام', icon: CheckSquare, roles: ['admin', 'pm', 'track_lead', 'employee'] },
   { href: '/gantt', label: 'مخطط جانت', icon: GanttChart, roles: ['admin', 'pm', 'track_lead'] },
   { href: '/achievements-progress', label: 'التقدم والإنجازات', icon: TrendingUp, roles: ['admin', 'pm', 'track_lead', 'employee'] },
+  { href: '/track-performance', label: 'أداء المسارات', icon: Target, roles: ['admin', 'pm'] },
   { href: '/reports', label: 'التقارير', icon: FileText, roles: ['admin', 'pm', 'track_lead'] },
   { href: '/ai-reports', label: 'التقارير الذكية', icon: Brain, roles: ['admin', 'pm'] },
   { href: '/penalties', label: 'الغرامات', icon: AlertTriangle, roles: ['admin', 'pm'] },

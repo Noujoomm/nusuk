@@ -450,6 +450,8 @@ export const executiveTasksApi = {
 // ─── Analytics ───
 export const analyticsApi = {
   dashboard: () => api.get('/analytics/dashboard'),
+  trackPerformance: () => api.get('/analytics/track-performance'),
+  trackPerformanceById: (id: string) => api.get(`/analytics/track-performance/${id}`),
 };
 
 // ─── Distribution: Achievement + Deviation ───
