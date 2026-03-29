@@ -22,6 +22,9 @@ export class AiEngineController {
   @Get('executive')
   getExecutiveSummary() { return this.engine.getExecutiveSummary(); }
 
+  @Get('command-center')
+  getCommandCenter() { return this.engine.getCommandCenter(); }
+
   @Post('ask')
   askQuestion(@Body('question') question: string) { return this.engine.askQuestion(question || ''); }
 

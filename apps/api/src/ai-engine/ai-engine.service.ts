@@ -335,4 +335,142 @@ export class AiEngineService {
       riskMessage: (predictions as any).riskMessage || '',
     };
   }
+
+  /** Command Center — 4 layers: descriptive + diagnostic + predictive + prescriptive */
+  async getCommandCenter() {
+    const now = new Date();
+    const taskWhere = { isDeleted: false };
+
+    // ── Collect track-level data ──
+    const tracks = await this.prisma.track.findMany({
+      where: { isActive: true },
+      select: { id: true, nameAr: true, color: true },
+    });
+
+    const trackIntel = await Promise.all(tracks.map(async (track) => {
+      const tasks = await this.prisma.task.findMany({
+        where: { ...taskWhere, trackId: track.id },
+        select: { id: true, status: true, priority: true, startDate: true, dueDate: true, completionDate: true, createdById: true, progress: true },
+      });
+
+      const total = tasks.length;
+      if (total === 0) return null;
+
+      const completed = tasks.filter((t) => t.status === 'completed').length;
+      const delayed = tasks.filter((t) => t.dueDate && new Date(t.dueDate) < now && t.status !== 'completed' && t.status !== 'cancelled').length;
+      const inProgress = tasks.filter((t) => t.status === 'in_progress').length;
+      const notStarted = tasks.filter((t) => t.status === 'new' || t.status === 'pending').length;
+      const completionRate = Math.round((completed / total) * 100);
+      const delayRate = Math.round((delayed / total) * 100);
+
+      // Priority-weighted completion
+      const priorities = ['critical', 'high', 'medium', 'low'] as const;
+      const weights = { critical: 0.4, high: 0.3, medium: 0.2, low: 0.1 };
+      let weightedCompletion = 0;
+      priorities.forEach((p) => {
+        const pTotal = tasks.filter((t) => t.priority === p).length;
+        const pDone = tasks.filter((t) => t.priority === p && t.status === 'completed').length;
+        const pRate = pTotal > 0 ? (pDone / pTotal) * 100 : 0;
+        weightedCompletion += pRate * weights[p];
+      });
+      weightedCompletion = Math.round(weightedCompletion);
+
+      // Avg completion time
+      const doneTasks = tasks.filter((t) => t.status === 'completed' && t.startDate && t.completionDate);
+      const avgDays = doneTasks.length > 0
+        ? Math.round(doneTasks.reduce((s, t) => s + Math.max(0, Math.round((new Date(t.completionDate!).getTime() - new Date(t.startDate!).getTime()) / 86400000)), 0) / doneTasks.length * 10) / 10
+        : 0;
+
+      // On-time rate
+      const onTime = doneTasks.filter((t) => t.dueDate && new Date(t.completionDate!) <= new Date(t.dueDate)).length;
+      const onTimeRate = doneTasks.length > 0 ? Math.round((onTime / doneTasks.length) * 100) : 0;
+
+      // High-priority delay %
+      const highPriTasks = tasks.filter((t) => t.priority === 'critical' || t.priority === 'high');
+      const highPriDelayed = highPriTasks.filter((t) => t.dueDate && new Date(t.dueDate) < now && t.status !== 'completed' && t.status !== 'cancelled').length;
+      const highPriDelayRate = highPriTasks.length > 0 ? Math.round((highPriDelayed / highPriTasks.length) * 100) : 0;
+
+      // Bottleneck: which stage has most tasks
+      const stages = [
+        { name: 'لم تبدأ', count: notStarted },
+        { name: 'قيد التنفيذ', count: inProgress },
+        { name: 'متأخرة', count: delayed },
+      ];
+      const bottleneck = stages.sort((a, b) => b.count - a.count)[0];
+
+      // Reports count (last 7 days)
+      const reports = await this.prisma.report.count({ where: { trackId: track.id, createdAt: { gte: new Date(now.getTime() - 7 * 86400000) } } });
+
+      // ── DIAGNOSTIC: Root cause ──
+      const rootCauses: string[] = [];
+      if (highPriDelayRate > 30) rootCauses.push(`${highPriDelayRate}% من المهام ذات الأولوية العالية متأخرة`);
+      if (bottleneck.count > total * 0.4) rootCauses.push(`عنق الزجاجة: ${bottleneck.count} مهمة عالقة في "${bottleneck.name}"`);
+      if (reports < 2) rootCauses.push('ضعف في التقارير — أقل من تقريرين خلال الأسبوع');
+      if (avgDays > 7) rootCauses.push(`متوسط وقت الإنجاز مرتفع: ${avgDays} يوم`);
+
+      // ── RISK SCORE (0-100) ──
+      let risk = 0;
+      risk += delayRate * 0.4;
+      risk += (100 - onTimeRate) * 0.2;
+      risk += highPriDelayRate * 0.3;
+      if (reports < 2) risk += 10;
+      risk = Math.max(0, Math.min(100, Math.round(risk)));
+      const riskLabel = risk >= 70 ? 'مرتفع' : risk >= 40 ? 'متوسط' : 'منخفض';
+
+      // ── PRESCRIPTIVE: Actions ──
+      const actions: string[] = [];
+      if (delayRate > 30) actions.push('إعادة توزيع المهام المتأخرة على أعضاء الفريق');
+      if (highPriDelayRate > 20) actions.push('تصعيد المهام ذات الأولوية العالية لمدير المسار');
+      if (reports < 2) actions.push('تفعيل التقارير الإلزامية اليومية');
+      if (avgDays > 7) actions.push('تقليل حجم المهام المسندة لكل موظف');
+      if (notStarted > total * 0.3) actions.push('بدء المهام المعلقة فوراً');
+      if (actions.length === 0) actions.push('الأداء جيد — استمرار المتابعة الدورية');
+
+      // ── Performance DNA ──
+      const speedScore = Math.max(0, Math.min(100, Math.round(100 - avgDays * 8)));
+      const disciplineScore = Math.min(100, reports * 15);
+      const executionScore = completionRate;
+
+      return {
+        trackId: track.id, trackName: track.nameAr, trackColor: track.color || '#6366f1',
+        // Descriptive
+        total, completed, delayed, inProgress, notStarted,
+        completionRate, weightedCompletion, avgDays, onTimeRate,
+        // Diagnostic
+        highPriDelayRate, bottleneck: bottleneck.name, bottleneckCount: bottleneck.count,
+        rootCauses, reportsLast7: reports,
+        // Risk
+        risk, riskLabel,
+        // Prescriptive
+        actions,
+        // DNA
+        speedScore, disciplineScore, executionScore, riskScore: risk,
+      };
+    }));
+
+    const validTracks = trackIntel.filter(Boolean) as NonNullable<typeof trackIntel[number]>[];
+    validTracks.sort((a, b) => b!.weightedCompletion - a!.weightedCompletion);
+
+    // ── Global metrics ──
+    const globalCompletion = validTracks.length > 0 ? Math.round(validTracks.reduce((s, t) => s + t!.completionRate, 0) / validTracks.length) : 0;
+    const globalRisk = validTracks.length > 0 ? Math.round(validTracks.reduce((s, t) => s + t!.risk, 0) / validTracks.length) : 0;
+
+    // ── Predictive (from existing) ──
+    const predictions = await this.getPredictions();
+
+    // ── All actions combined ──
+    const allActions = validTracks.flatMap((t) => t!.actions.map((a) => ({ track: t!.trackName, action: a, risk: t!.risk })));
+    allActions.sort((a, b) => b.risk - a.risk);
+
+    return {
+      globalCompletion,
+      globalRisk,
+      globalRiskLabel: globalRisk >= 70 ? 'مرتفع' : globalRisk >= 40 ? 'متوسط' : 'منخفض',
+      tracks: validTracks,
+      predictions: (predictions as any).predictions || [],
+      predictionsRisk: (predictions as any).risk || false,
+      predictionsMessage: (predictions as any).riskMessage || '',
+      topActions: allActions.slice(0, 8),
+    };
+  }
 }

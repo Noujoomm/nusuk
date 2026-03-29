@@ -474,6 +474,7 @@ export const aiEngineApi = {
   executive: () => api.get('/ai-engine/executive'),
   ask: (question: string) => api.post('/ai-engine/ask', { question }),
   simulate: (params: any) => api.post('/ai-engine/simulate', params),
+  commandCenter: () => api.get('/ai-engine/command-center'),
 };
 
 // ─── Admin System Export ───
