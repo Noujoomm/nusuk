@@ -31,6 +31,7 @@ import { GanttModule } from './gantt/gantt.module';
 import { ExecutiveTasksModule } from './executive-tasks/executive-tasks.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { DistributionModule } from './distribution/distribution.module';
+import { AiEngineModule } from './ai-engine/ai-engine.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -66,6 +67,7 @@ import { HealthController } from './health.controller';
     ExecutiveTasksModule,
     AnalyticsModule,
     DistributionModule,
+    AiEngineModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -464,6 +464,13 @@ export const distDeviationApi = {
   delete: (id: string) => api.delete(`/distribution/deviation/${id}`),
 };
 
+// ─── AI Engine ───
+export const aiEngineApi = {
+  insights: () => api.get('/ai-engine/insights'),
+  ask: (question: string) => api.post('/ai-engine/ask', { question }),
+  simulate: (params: any) => api.post('/ai-engine/simulate', params),
+};
+
 // ─── Admin System Export ───
 export const adminExportApi = {
   systemStats: () => api.get('/admin/system-stats'),
