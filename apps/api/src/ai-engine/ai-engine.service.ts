@@ -242,4 +242,97 @@ export class AiEngineService {
 
     return { expectedCapacity: expected, achievementPct, status, recommendation };
   }
+
+  /** Smart alerts — auto-detected issues with context */
+  async getSmartAlerts() {
+    const { insights } = await this.generateInsights();
+    return {
+      alerts: insights.filter((i) => i.severity === 'critical' || i.severity === 'high'),
+      total: insights.length,
+      critical: insights.filter((i) => i.severity === 'critical').length,
+      high: insights.filter((i) => i.severity === 'high').length,
+    };
+  }
+
+  /** Lightweight predictions based on recent trends */
+  async getPredictions() {
+    const achEntries = await this.prisma.distributionAchievement.findMany({
+      orderBy: { gregorianDate: 'desc' }, take: 14,
+    });
+
+    if (achEntries.length < 3) {
+      return { predictions: [], message: 'بيانات غير كافية للتنبؤ (يحتاج 3 أيام على الأقل)' };
+    }
+
+    // Simple moving average prediction
+    const values = achEntries.map((e) => {
+      const exp = e.cardsPerHour * e.duration * e.specialists;
+      return exp > 0 ? Math.round((e.totalCards / exp) * 1000) / 10 : 0;
+    }).reverse(); // oldest first
+
+    const last3Avg = Math.round(values.slice(-3).reduce((s, v) => s + v, 0) / 3 * 10) / 10;
+    const last7Avg = values.length >= 7
+      ? Math.round(values.slice(-7).reduce((s, v) => s + v, 0) / 7 * 10) / 10
+      : last3Avg;
+
+    const trend = last3Avg > last7Avg ? 'improving' : last3Avg < last7Avg ? 'declining' : 'stable';
+    const delta = Math.round((last3Avg - last7Avg) * 10) / 10;
+
+    const predictions: Array<{ day: number; label: string; predictedAchievement: number; confidence: string }> = [];
+    for (let day = 1; day <= 7; day++) {
+      // Linear extrapolation from trend
+      const predicted = Math.round((last3Avg + delta * day * 0.3) * 10) / 10;
+      predictions.push({
+        day,
+        label: `اليوم +${day}`,
+        predictedAchievement: Math.max(0, predicted),
+        confidence: day <= 3 ? 'high' : day <= 5 ? 'medium' : 'low',
+      });
+    }
+
+    const risk = predictions.some((p) => p.predictedAchievement < 85);
+
+    return {
+      predictions,
+      trend,
+      last3Avg,
+      last7Avg,
+      delta,
+      risk,
+      riskMessage: risk
+        ? `⚠️ توقع انخفاض الأداء تحت 85% خلال ${predictions.findIndex((p) => p.predictedAchievement < 85) + 1} أيام`
+        : '✅ الأداء المتوقع ضمن النطاق المقبول',
+    };
+  }
+
+  /** Executive summary — CEO view */
+  async getExecutiveSummary() {
+    const [{ snapshot, insights, summary }, predictions] = await Promise.all([
+      this.generateInsights(),
+      this.getPredictions(),
+    ]);
+
+    // Performance score (0-100)
+    let score = 50;
+    score += (snapshot.tasks.rate - 50) * 0.3; // task completion weight
+    if (snapshot.achievement.latest >= 100) score += 15;
+    else if (snapshot.achievement.latest >= 85) score += 5;
+    else score -= 15;
+    if (snapshot.deviation.hasCritical) score -= 20;
+    if (snapshot.tasks.overdue > 10) score -= 10;
+    score = Math.max(0, Math.min(100, Math.round(score)));
+
+    const scoreLabel = score >= 80 ? 'ممتاز' : score >= 60 ? 'جيد' : score >= 40 ? 'يحتاج تحسين' : 'حرج';
+
+    return {
+      score,
+      scoreLabel,
+      summary,
+      topIssues: insights.filter((i) => i.severity === 'critical' || i.severity === 'high').slice(0, 5),
+      topRecommendations: insights.map((i) => i.recommendation).slice(0, 5),
+      snapshot,
+      predictions: predictions.predictions?.slice(0, 3) || [],
+      riskMessage: (predictions as any).riskMessage || '',
+    };
+  }
 }

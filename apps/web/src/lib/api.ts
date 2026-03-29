@@ -467,6 +467,9 @@ export const distDeviationApi = {
 // ─── AI Engine ───
 export const aiEngineApi = {
   insights: () => api.get('/ai-engine/insights'),
+  alerts: () => api.get('/ai-engine/alerts'),
+  predictions: () => api.get('/ai-engine/predictions'),
+  executive: () => api.get('/ai-engine/executive'),
   ask: (question: string) => api.post('/ai-engine/ask', { question }),
   simulate: (params: any) => api.post('/ai-engine/simulate', params),
 };

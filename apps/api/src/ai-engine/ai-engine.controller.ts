@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
 import { AiEngineService } from './ai-engine.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -11,14 +11,19 @@ export class AiEngineController {
   constructor(private engine: AiEngineService) {}
 
   @Get('insights')
-  getInsights() {
-    return this.engine.generateInsights();
-  }
+  getInsights() { return this.engine.generateInsights(); }
+
+  @Get('alerts')
+  getAlerts() { return this.engine.getSmartAlerts(); }
+
+  @Get('predictions')
+  getPredictions() { return this.engine.getPredictions(); }
+
+  @Get('executive')
+  getExecutiveSummary() { return this.engine.getExecutiveSummary(); }
 
   @Post('ask')
-  askQuestion(@Body('question') question: string) {
-    return this.engine.askQuestion(question || '');
-  }
+  askQuestion(@Body('question') question: string) { return this.engine.askQuestion(question || ''); }
 
   @Post('simulate')
   simulate(@Body() params: { companies: number; employees: number; hours: number; cardsPerHour: number }) {

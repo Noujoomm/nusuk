@@ -27,13 +27,19 @@ export default function AiInsightsPage() {
   const [simForm, setSimForm] = useState({ companies: '10', employees: '4', hours: '4', cardsPerHour: '4000' });
   const [simResult, setSimResult] = useState<any>(null);
   const [simulating, setSimulating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'insights' | 'ask' | 'simulate'>('insights');
+  const [predictions, setPredictions] = useState<any>(null);
+  const [executive, setExecutive] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'executive' | 'insights' | 'predictions' | 'ask' | 'simulate'>('executive');
 
   const isAuthorized = user?.role === 'admin' || user?.role === 'pm';
 
   const load = useCallback(async () => {
-    try { const { data: d } = await aiEngineApi.insights(); setData(d); }
-    catch {} finally { setLoading(false); }
+    try {
+      const [insRes, predRes, execRes] = await Promise.all([
+        aiEngineApi.insights(), aiEngineApi.predictions(), aiEngineApi.executive(),
+      ]);
+      setData(insRes.data); setPredictions(predRes.data); setExecutive(execRes.data);
+    } catch {} finally { setLoading(false); }
   }, []);
 
   useEffect(() => { if (isAuthorized) load(); }, [isAuthorized, load]);
@@ -83,9 +89,11 @@ export default function AiInsightsPage() {
   const summary = data?.summary || '';
 
   const tabs = [
-    { key: 'insights' as const, label: 'التحليلات الذكية', icon: Zap },
+    { key: 'executive' as const, label: 'الملخص التنفيذي', icon: Shield },
+    { key: 'insights' as const, label: 'التحليلات', icon: Zap },
+    { key: 'predictions' as const, label: 'التنبؤات', icon: TrendingUp },
     { key: 'ask' as const, label: 'اسأل النظام', icon: MessageSquare },
-    { key: 'simulate' as const, label: 'محاكاة سيناريو', icon: Sliders },
+    { key: 'simulate' as const, label: 'المحاكاة', icon: Sliders },
   ];
 
   return (
@@ -111,6 +119,62 @@ export default function AiInsightsPage() {
           </button>
         ))}
       </div>
+
+      {/* ═══ EXECUTIVE TAB ═══ */}
+      {activeTab === 'executive' && executive && (
+        <div className="space-y-5">
+          {/* Score */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-8 flex flex-col items-center justify-center col-span-1">
+              <div className="text-5xl font-bold tabular-nums" style={{ color: executive.score >= 70 ? '#34D399' : executive.score >= 40 ? '#FBBF24' : '#F87171' }}>{executive.score}</div>
+              <p className="text-sm text-gray-400 mt-2">درجة الأداء العام</p>
+              <span className={cn('text-xs mt-1 px-3 py-1 rounded-full',
+                executive.score >= 70 ? 'bg-emerald-500/20 text-emerald-400' : executive.score >= 40 ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400')}>
+                {executive.scoreLabel}
+              </span>
+            </div>
+            <div className="col-span-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 border-r-[3px] border-r-violet-500">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-violet-500/15 shrink-0"><Brain className="w-5 h-5 text-violet-400" /></div>
+                <div><h3 className="text-sm font-semibold text-violet-300 mb-2">الملخص التنفيذي</h3>
+                  <p className="text-sm text-gray-300 leading-relaxed">{executive.summary}</p>
+                  {executive.riskMessage && <p className="text-xs text-amber-400 mt-2">{executive.riskMessage}</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Issues + Recommendations */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+              <h3 className="text-sm font-semibold text-red-300 mb-3">أهم المشاكل</h3>
+              {executive.topIssues.length === 0 ? <p className="text-sm text-gray-500">لا توجد مشاكل حرجة</p> : (
+                <div className="space-y-2">
+                  {executive.topIssues.map((issue: any, i: number) => (
+                    <div key={i} className="flex items-start gap-2 p-2.5 rounded-xl bg-white/[0.02]">
+                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                      <div><p className="text-xs text-white font-medium">{issue.title}</p><p className="text-[10px] text-gray-400 mt-0.5">{issue.recommendation}</p></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+              <h3 className="text-sm font-semibold text-emerald-300 mb-3">أهم التوصيات</h3>
+              {executive.topRecommendations.length === 0 ? <p className="text-sm text-gray-500">لا توجد توصيات</p> : (
+                <div className="space-y-2">
+                  {executive.topRecommendations.map((rec: string, i: number) => (
+                    <div key={i} className="flex items-start gap-2 p-2.5 rounded-xl bg-white/[0.02]">
+                      <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      <p className="text-xs text-gray-300">{rec}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══ INSIGHTS TAB ═══ */}
       {activeTab === 'insights' && (
@@ -179,6 +243,37 @@ export default function AiInsightsPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* ═══ PREDICTIONS TAB ═══ */}
+      {activeTab === 'predictions' && predictions && (
+        <div className="space-y-4">
+          {predictions.message ? (
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-12 text-center">
+              <TrendingUp className="w-10 h-10 text-gray-500 mx-auto mb-3" /><p className="text-sm text-gray-400">{predictions.message}</p>
+            </div>
+          ) : (<>
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 border-r-[3px]"
+              style={{ borderRightColor: predictions.risk ? '#F87171' : '#34D399' }}>
+              <p className="text-sm text-gray-300">{predictions.riskMessage}</p>
+              <p className="text-xs text-gray-500 mt-1">الاتجاه: {predictions.trend === 'improving' ? 'تحسن ↑' : predictions.trend === 'declining' ? 'تراجع ↓' : 'مستقر →'} | متوسط ٣ أيام: {predictions.last3Avg}% | متوسط ٧ أيام: {predictions.last7Avg}%</p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              {predictions.predictions.map((p: any) => (
+                <div key={p.day} className="analytics-card text-center">
+                  <p className="text-[10px] text-gray-500">{p.label}</p>
+                  <p className={cn('text-lg font-bold tabular-nums mt-1', p.predictedAchievement >= 100 ? 'text-emerald-400' : p.predictedAchievement >= 85 ? 'text-amber-400' : 'text-red-400')}>
+                    {p.predictedAchievement}%
+                  </p>
+                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full mt-1 inline-block',
+                    p.confidence === 'high' ? 'bg-emerald-500/20 text-emerald-400' : p.confidence === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-gray-500/20 text-gray-400')}>
+                    {p.confidence === 'high' ? 'ثقة عالية' : p.confidence === 'medium' ? 'متوسطة' : 'منخفضة'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>)}
+        </div>
       )}
 
       {/* ═══ ASK TAB ═══ */}
