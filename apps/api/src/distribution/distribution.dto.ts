@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsDateString, Min, IsOptional } from 'class-validator';
+import { IsString, IsInt, IsDateString, Min, Max, IsOptional } from 'class-validator';
 
 export class CreateAchievementDto {
   @IsDateString() gregorianDate: string;
@@ -15,12 +15,20 @@ export class CreateAchievementDto {
 export class CreateDeviationDto {
   @IsDateString() gregorianDate: string;
   @IsString() hijriDate: string;
+  // Section 1: Inputs
   @IsInt() @Min(0) companies: number;
-  @IsInt() @Min(0) parcels: number;
   @IsInt() @Min(0) platformValue: number;
   @IsInt() @Min(0) factoryValue: number;
   @IsInt() @Min(0) distributionValue: number;
-  @IsInt() @Min(0) threeHourValue: number;
+  // Section 2A: Appointment 3H
+  @IsOptional() @IsInt() @Min(0) totalCompanies3h?: number;
+  @IsOptional() @IsInt() @Min(0) attendedCompanies3h?: number;
+  // Section 2B: Completion
+  @IsOptional() @IsInt() @Min(0) @Max(100) completionPct?: number;
+  // Section 2C: Receiving
+  @IsOptional() @IsInt() @Min(0) totalReceiving?: number;
+  @IsOptional() @IsInt() @Min(0) completedReceiving?: number;
+  // Section 3: System Reports
   @IsOptional() @IsInt() @Min(0) reportsPlatform?: number;
   @IsOptional() @IsInt() @Min(0) reportsApple?: number;
   @IsOptional() @IsInt() @Min(0) reportsAndroid?: number;

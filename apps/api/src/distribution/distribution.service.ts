@@ -73,7 +73,7 @@ export class DistributionService {
   }
 
   // ═══════════════════════════════════════════
-  //  DEVIATION
+  //  DEVIATION (4 independent subsections)
   // ═══════════════════════════════════════════
 
   async createDeviation(dto: CreateDeviationDto, userId: string) {
@@ -81,6 +81,11 @@ export class DistributionService {
       data: {
         ...dto,
         gregorianDate: new Date(dto.gregorianDate),
+        totalCompanies3h: dto.totalCompanies3h ?? 0,
+        attendedCompanies3h: dto.attendedCompanies3h ?? 0,
+        completionPct: dto.completionPct ?? 100,
+        totalReceiving: dto.totalReceiving ?? 0,
+        completedReceiving: dto.completedReceiving ?? 0,
         reportsPlatform: dto.reportsPlatform ?? 0,
         reportsApple: dto.reportsApple ?? 0,
         reportsAndroid: dto.reportsAndroid ?? 0,
@@ -101,64 +106,66 @@ export class DistributionService {
     if (raw.length === 0) return { entries: [], summary: null };
 
     const entries = raw.map((e) => {
-      const p = e.parcels; // denominator
-      // Deviation % = (value / parcels) × 100
-      const calc = (v: number) => p > 0 ? r1((v / p) * 100) : 0;
+      // ── Section 1: Input deviations (|A-B|/B × 100) ──
+      const platVsFact = e.factoryValue > 0 ? r1(Math.abs(e.platformValue - e.factoryValue) / e.factoryValue * 100) : 0;
+      const factVsDist = e.distributionValue > 0 ? r1(Math.abs(e.factoryValue - e.distributionValue) / e.distributionValue * 100) : 0;
+      const platVsDist = e.distributionValue > 0 ? r1(Math.abs(e.platformValue - e.distributionValue) / e.distributionValue * 100) : 0;
 
-      const platformDev = calc(e.platformValue);
-      const factoryDev = calc(e.factoryValue);
-      const distributionDev = calc(e.distributionValue);
-      const threeHourDev = calc(e.threeHourValue);
-      const reportsPlatformDev = calc(e.reportsPlatform);
-      const reportsAppleDev = calc(e.reportsApple);
-      const reportsAndroidDev = calc(e.reportsAndroid);
+      // ── Section 2A: Appointment 3H ──
+      const appointmentDev = e.totalCompanies3h > 0
+        ? r1(((e.totalCompanies3h - e.attendedCompanies3h) / e.totalCompanies3h) * 100) : 0;
 
-      const allDevs = [platformDev, factoryDev, distributionDev, threeHourDev, reportsPlatformDev, reportsAppleDev, reportsAndroidDev];
-      const totalDev = r1(allDevs.reduce((s, v) => s + v, 0) / allDevs.length);
+      // ── Section 2B: Completion Certificate ──
+      const completionDev = r1(100 - e.completionPct);
 
-      const noDenom = p === 0;
+      // ── Section 2C: Receiving ──
+      const receivingDev = e.totalReceiving > 0
+        ? r1(((e.totalReceiving - e.completedReceiving) / e.totalReceiving) * 100) : 0;
+
+      // ── Section 3: System Reports ──
+      const totalReports = e.reportsPlatform + e.reportsApple + e.reportsAndroid;
+      const reportsPlatformPct = totalReports > 0 ? r1(e.reportsPlatform / totalReports * 100) : 0;
+      const reportsApplePct = totalReports > 0 ? r1(e.reportsApple / totalReports * 100) : 0;
+      const reportsAndroidPct = totalReports > 0 ? r1(e.reportsAndroid / totalReports * 100) : 0;
 
       return {
         ...e,
-        platformDev, factoryDev, distributionDev, threeHourDev,
-        reportsPlatformDev, reportsAppleDev, reportsAndroidDev,
-        totalDev, noDenom,
+        // Section 1
+        platVsFact, factVsDist, platVsDist,
+        // Section 2
+        appointmentDev, completionDev, receivingDev,
+        // Section 3
+        totalReports, reportsPlatformPct, reportsApplePct, reportsAndroidPct,
       };
     });
 
     const n = entries.length;
-    const avg = (field: string) => r1(entries.reduce((s, e) => s + ((e as any)[field] ?? 0), 0) / n);
+    const avg = (f: string) => r1(entries.reduce((s, e) => s + ((e as any)[f] ?? 0), 0) / n);
     const latest = entries[0];
-    const hasCritical = entries.some((e) =>
-      e.platformDev >= 30 || e.factoryDev >= 30 || e.distributionDev >= 30 ||
-      e.threeHourDev >= 30 || e.reportsPlatformDev >= 30 || e.reportsAppleDev >= 30 || e.reportsAndroidDev >= 30
-    );
 
-    // Find highest deviation source
-    const devSources = [
-      { name: 'المنصة', val: latest?.platformDev ?? 0 },
-      { name: 'المصنع', val: latest?.factoryDev ?? 0 },
-      { name: 'التوزيع', val: latest?.distributionDev ?? 0 },
-      { name: '3HOUR', val: latest?.threeHourDev ?? 0 },
-      { name: 'بلاغات المنصة', val: latest?.reportsPlatformDev ?? 0 },
-      { name: 'Apple', val: latest?.reportsAppleDev ?? 0 },
-      { name: 'Android', val: latest?.reportsAndroidDev ?? 0 },
-    ];
-    const highestSource = devSources.sort((a, b) => b.val - a.val)[0];
+    // Collect all deviation values to find critical
+    const hasCritical = entries.some((e) =>
+      e.platVsFact >= 30 || e.factVsDist >= 30 || e.platVsDist >= 30 ||
+      e.appointmentDev >= 30 || e.receivingDev >= 30
+    );
 
     return {
       entries,
       summary: {
-        avgPlatform: avg('platformDev'),
-        avgFactory: avg('factoryDev'),
-        avgDistribution: avg('distributionDev'),
-        avg3Hour: avg('threeHourDev'),
-        avgReportsPlatform: avg('reportsPlatformDev'),
-        avgApple: avg('reportsAppleDev'),
-        avgAndroid: avg('reportsAndroidDev'),
-        avgTotal: avg('totalDev'),
+        // Section 1 averages
+        avgPlatVsFact: avg('platVsFact'),
+        avgFactVsDist: avg('factVsDist'),
+        avgPlatVsDist: avg('platVsDist'),
+        // Section 2 latest
+        latestAppointment: latest?.appointmentDev ?? 0,
+        latestCompletion: latest?.completionDev ?? 0,
+        latestReceiving: latest?.receivingDev ?? 0,
+        // Section 3 latest
+        latestReportsPlatform: latest?.reportsPlatformPct ?? 0,
+        latestReportsApple: latest?.reportsApplePct ?? 0,
+        latestReportsAndroid: latest?.reportsAndroidPct ?? 0,
+        latestTotalReports: latest?.totalReports ?? 0,
         hasCritical,
-        highestSource,
         total: n,
       },
     };
