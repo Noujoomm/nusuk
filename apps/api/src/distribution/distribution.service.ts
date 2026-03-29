@@ -2,27 +2,25 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { CreateAchievementDto, CreateDeviationDto } from './distribution.dto';
 
-const EXPECTED_PER_HOUR = 4000;
-
-function pct(actual: number, expected: number): number {
-  return expected > 0 ? Math.round((actual / expected) * 1000) / 10 : 0;
-}
-
-function devPct(expected: number, actual: number): number {
-  return expected > 0 ? Math.round((Math.abs(expected - actual) / expected) * 1000) / 10 : 0;
+/** Round to 1 decimal place using standard rounding */
+function r1(v: number): number {
+  return Math.round(v * 10) / 10;
 }
 
 @Injectable()
 export class DistributionService {
   constructor(private prisma: PrismaService) {}
 
-  // ═══ ACHIEVEMENT ═══
+  // ═══════════════════════════════════════════
+  //  ACHIEVEMENT
+  // ═══════════════════════════════════════════
 
   async createAchievement(dto: CreateAchievementDto, userId: string) {
     return this.prisma.distributionAchievement.create({
       data: {
         ...dto,
         gregorianDate: new Date(dto.gregorianDate),
+        batch: dto.batch ?? '',
         duration: dto.duration ?? 4,
         specialists: dto.specialists ?? 4,
         createdById: userId,
@@ -42,43 +40,50 @@ export class DistributionService {
     if (raw.length === 0) return { entries: [], summary: null };
 
     const entries = raw.map((e) => {
-      const expected = EXPECTED_PER_HOUR * e.duration;
-      const achievementPct = pct(e.totalCards, expected);
-      return {
-        ...e,
-        expectedCards: expected,
-        achievementPct,
-        overLimit: e.cardsPerHour > 4000,
-      };
+      // Expected = cardsPerHour × duration × specialists
+      const expected = e.cardsPerHour * e.duration * e.specialists;
+      // Achievement = (totalCards / expected) × 100, rounded to 1 decimal
+      const achievementPct = expected > 0 ? r1((e.totalCards / expected) * 100) : 0;
+      const gap = expected - e.totalCards;
+
+      let status: string;
+      if (achievementPct >= 100) status = 'excellent';
+      else if (achievementPct >= 85) status = 'warning';
+      else status = 'critical';
+
+      return { ...e, expected, achievementPct, gap, status, overLimit: e.cardsPerHour > 4000 };
     });
 
     const n = entries.length;
-    const avg = Math.round(entries.reduce((s, e) => s + e.achievementPct, 0) / n * 10) / 10;
-    const highest = Math.max(...entries.map((e) => e.achievementPct));
-    const latest = entries[0]?.achievementPct ?? 0;
-    const aboveTarget = entries.filter((e) => e.achievementPct >= 100).length;
-    const overLimitDays = entries.filter((e) => e.overLimit).length;
-
     return {
       entries,
       summary: {
-        avg, highest, latest, aboveTarget, overLimitDays, total: n,
-        totalCompanies: entries.reduce((s, e) => s + e.companies, 0),
-        totalBatches: entries.reduce((s, e) => s + e.batches, 0),
+        avg: r1(entries.reduce((s, e) => s + e.achievementPct, 0) / n),
+        highest: Math.max(...entries.map((e) => e.achievementPct)),
+        latest: entries[0]?.achievementPct ?? 0,
+        latestGap: entries[0]?.gap ?? 0,
+        aboveTarget: entries.filter((e) => e.achievementPct >= 100).length,
+        overLimitDays: entries.filter((e) => e.overLimit).length,
+        total: n,
         totalCards: entries.reduce((s, e) => s + e.totalCards, 0),
+        totalExpected: entries.reduce((s, e) => s + e.expected, 0),
+        totalCompanies: entries.reduce((s, e) => s + e.companies, 0),
       },
     };
   }
 
-  // ═══ DEVIATION ═══
+  // ═══════════════════════════════════════════
+  //  DEVIATION
+  // ═══════════════════════════════════════════
 
   async createDeviation(dto: CreateDeviationDto, userId: string) {
     return this.prisma.distributionDeviation.create({
       data: {
         ...dto,
         gregorianDate: new Date(dto.gregorianDate),
-        expectedSortingTime: dto.expectedSortingTime ?? 60,
-        systemDowntime: dto.systemDowntime ?? 0,
+        reportsPlatform: dto.reportsPlatform ?? 0,
+        reportsApple: dto.reportsApple ?? 0,
+        reportsAndroid: dto.reportsAndroid ?? 0,
         createdById: userId,
       },
     });
@@ -96,30 +101,50 @@ export class DistributionService {
     if (raw.length === 0) return { entries: [], summary: null };
 
     const entries = raw.map((e) => {
-      const total = e.platformValue + e.factoryValue + e.distributionValue;
-      const avgBase = total > 0 ? Math.round(total / 3) : 1;
+      const p = e.parcels; // denominator
+      // Deviation % = (value / parcels) × 100
+      const calc = (v: number) => p > 0 ? r1((v / p) * 100) : 0;
 
-      const platformDev = devPct(avgBase, e.platformValue);
-      const factoryDev = devPct(avgBase, e.factoryValue);
-      const distributionDev = devPct(avgBase, e.distributionValue);
-      const deliveryDev = devPct(e.companies, e.fullDeliveryCount);
-      const appointmentDev = devPct(e.scheduledAppointments, e.actualAppointments);
-      const sortingDev = devPct(e.expectedSortingTime, e.sortingTime);
+      const platformDev = calc(e.platformValue);
+      const factoryDev = calc(e.factoryValue);
+      const distributionDev = calc(e.distributionValue);
+      const threeHourDev = calc(e.threeHourValue);
+      const reportsPlatformDev = calc(e.reportsPlatform);
+      const reportsAppleDev = calc(e.reportsApple);
+      const reportsAndroidDev = calc(e.reportsAndroid);
+
+      const allDevs = [platformDev, factoryDev, distributionDev, threeHourDev, reportsPlatformDev, reportsAppleDev, reportsAndroidDev];
+      const totalDev = r1(allDevs.reduce((s, v) => s + v, 0) / allDevs.length);
+
+      const noDenom = p === 0;
 
       return {
         ...e,
-        platformDev, factoryDev, distributionDev,
-        deliveryDev, appointmentDev, sortingDev,
+        platformDev, factoryDev, distributionDev, threeHourDev,
+        reportsPlatformDev, reportsAppleDev, reportsAndroidDev,
+        totalDev, noDenom,
       };
     });
 
     const n = entries.length;
-    const avg = (field: string) => Math.round(entries.reduce((s, e) => s + (e as any)[field], 0) / n * 10) / 10;
+    const avg = (field: string) => r1(entries.reduce((s, e) => s + ((e as any)[field] ?? 0), 0) / n);
     const latest = entries[0];
     const hasCritical = entries.some((e) =>
-      e.platformDev > 15 || e.factoryDev > 15 || e.distributionDev > 15 ||
-      e.deliveryDev > 15 || e.appointmentDev > 15 || e.sortingDev > 15
+      e.platformDev >= 30 || e.factoryDev >= 30 || e.distributionDev >= 30 ||
+      e.threeHourDev >= 30 || e.reportsPlatformDev >= 30 || e.reportsAppleDev >= 30 || e.reportsAndroidDev >= 30
     );
+
+    // Find highest deviation source
+    const devSources = [
+      { name: 'المنصة', val: latest?.platformDev ?? 0 },
+      { name: 'المصنع', val: latest?.factoryDev ?? 0 },
+      { name: 'التوزيع', val: latest?.distributionDev ?? 0 },
+      { name: '3HOUR', val: latest?.threeHourDev ?? 0 },
+      { name: 'بلاغات المنصة', val: latest?.reportsPlatformDev ?? 0 },
+      { name: 'Apple', val: latest?.reportsAppleDev ?? 0 },
+      { name: 'Android', val: latest?.reportsAndroidDev ?? 0 },
+    ];
+    const highestSource = devSources.sort((a, b) => b.val - a.val)[0];
 
     return {
       entries,
@@ -127,17 +152,14 @@ export class DistributionService {
         avgPlatform: avg('platformDev'),
         avgFactory: avg('factoryDev'),
         avgDistribution: avg('distributionDev'),
-        avgDelivery: avg('deliveryDev'),
-        avgAppointment: avg('appointmentDev'),
-        avgSorting: avg('sortingDev'),
+        avg3Hour: avg('threeHourDev'),
+        avgReportsPlatform: avg('reportsPlatformDev'),
+        avgApple: avg('reportsAppleDev'),
+        avgAndroid: avg('reportsAndroidDev'),
+        avgTotal: avg('totalDev'),
         hasCritical,
+        highestSource,
         total: n,
-        latestPlatform: latest?.platformDev ?? 0,
-        latestFactory: latest?.factoryDev ?? 0,
-        latestDistribution: latest?.distributionDev ?? 0,
-        latestDelivery: latest?.deliveryDev ?? 0,
-        latestAppointment: latest?.appointmentDev ?? 0,
-        latestSorting: latest?.sortingDev ?? 0,
       },
     };
   }

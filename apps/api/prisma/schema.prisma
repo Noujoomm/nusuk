@@ -1106,7 +1106,8 @@ model DistributionAchievement {
   gregorianDate         DateTime @map("gregorian_date")
   hijriDate             String   @map("hijri_date")
   companies             Int
-  batches               Int
+  parcels               Int      @default(0)
+  batch                 String   @default("")
   totalCards            Int      @map("total_cards")
   cardsPerHour          Int      @map("cards_per_hour")
   duration              Int      @default(4)
@@ -1128,15 +1129,14 @@ model DistributionDeviation {
   gregorianDate            DateTime @map("gregorian_date")
   hijriDate                String   @map("hijri_date")
   companies                Int
+  parcels                  Int
   platformValue            Int      @map("platform_value")
   factoryValue             Int      @map("factory_value")
   distributionValue        Int      @map("distribution_value")
-  fullDeliveryCount        Int      @map("full_delivery_count")
-  scheduledAppointments    Int      @map("scheduled_appointments")
-  actualAppointments       Int      @map("actual_appointments")
-  sortingTime              Int      @map("sorting_time")
-  expectedSortingTime      Int      @default(60) @map("expected_sorting_time")
-  systemDowntime           Int      @default(0)  @map("system_downtime")
+  threeHourValue           Int      @map("three_hour_value")
+  reportsPlatform          Int      @default(0) @map("reports_platform")
+  reportsApple             Int      @default(0) @map("reports_apple")
+  reportsAndroid           Int      @default(0) @map("reports_android")
   createdById              String   @map("created_by_id")
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")
