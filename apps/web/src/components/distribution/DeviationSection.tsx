@@ -38,7 +38,7 @@ function SubSection({ title, icon: Icon, color, children }: { title: string; ico
   );
 }
 
-const EMPTY = { gregorianDate: '', hijriDate: '', companies: '', platformValue: '', factoryValue: '', distributionValue: '', totalCompanies3h: '', attendedCompanies3h: '', completionPct: '100', totalReceiving: '', completedReceiving: '', reportsPlatform: '0', reportsApple: '0', reportsAndroid: '0' };
+const EMPTY = { gregorianDate: '', hijriDate: '', platformValue: '', factoryValue: '', distributionValue: '', totalCompanies3h: '', attendedCompanies3h: '', completionPct: '100', totalReceiving: '', completedReceiving: '', reportsPlatform: '0', reportsApple: '0', reportsAndroid: '0' };
 
 export default function DeviationSection() {
   const [data, setData] = useState<any>(null);
@@ -55,11 +55,14 @@ export default function DeviationSection() {
 
   const submit = async () => {
     if (!form.gregorianDate || !form.hijriDate) { toast.error('التاريخ مطلوب'); return; }
+    const recv = parseInt(form.totalReceiving) || 0;
+    const booked = parseInt(form.attendedCompanies3h) || 0;
+    if (recv > booked && booked > 0) { toast.error('الاستلام الكامل للحبال لا يمكن أن يتجاوز عدد الشركات التي حجزت موعد'); return; }
     setSubmitting(true);
     try {
       await distDeviationApi.create({
         gregorianDate: form.gregorianDate, hijriDate: form.hijriDate,
-        companies: parseInt(form.companies) || 0,
+        companies: parseInt(form.totalCompanies3h) || 0,
         platformValue: parseInt(form.platformValue) || 0,
         factoryValue: parseInt(form.factoryValue) || 0,
         distributionValue: parseInt(form.distributionValue) || 0,
@@ -92,9 +95,9 @@ export default function DeviationSection() {
     { name: 'منصة↔مصنع', value: latest.platVsFact },
     { name: 'مصنع↔توزيع', value: latest.factVsDist },
     { name: 'منصة↔توزيع', value: latest.platVsDist },
-    { name: 'حجز 3H', value: latest.appointmentDev },
+    { name: 'حجز موعد', value: latest.appointmentDev },
     { name: 'شهادة إنجاز', value: latest.completionDev },
-    { name: 'الاستلام', value: latest.receivingDev },
+    { name: 'استلام الحبال', value: latest.receivingDev },
   ] : [];
 
   return (
@@ -120,7 +123,6 @@ export default function DeviationSection() {
               {[
                 { k: 'gregorianDate', l: 'التاريخ', t: 'date' },
                 { k: 'hijriDate', l: 'الموافق', t: 'text', ph: '1447/09/28' },
-                { k: 'companies', l: 'عدد الشركات', t: 'number' },
                 { k: 'platformValue', l: 'المنصة', t: 'number' },
                 { k: 'factoryValue', l: 'المصنع', t: 'number' },
                 { k: 'distributionValue', l: 'التوزيع', t: 'number' },
@@ -135,13 +137,22 @@ export default function DeviationSection() {
             <p className="text-xs text-gray-400 mb-2 font-medium">القسم ٢: المخرجات</p>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
-                { k: 'totalCompanies3h', l: 'إجمالي شركات 3H', t: 'number' },
-                { k: 'attendedCompanies3h', l: 'شركات حضرت 3H', t: 'number' },
+                { k: 'totalCompanies3h', l: 'إجمالي الشركات', t: 'number' },
+                { k: 'attendedCompanies3h', l: 'شركات حجزت موعد', t: 'number' },
                 { k: 'completionPct', l: 'نسبة شهادة الإنجاز %', t: 'number' },
-                { k: 'totalReceiving', l: 'إجمالي الاستلام', t: 'number' },
+                { k: 'totalReceiving', l: 'الاستلام الكامل للحبال', t: 'number', hint: 'من أصل الشركات التي حجزت موعد' },
                 { k: 'completedReceiving', l: 'استلام مكتمل', t: 'number' },
-              ].map((f) => (
-                <div key={f.k}><label className="block text-xs text-gray-400 mb-1">{f.l}</label><input type={f.t} value={(form as any)[f.k]} className="input-field text-sm" onChange={(e) => setForm({ ...form, [f.k]: e.target.value })} /></div>
+              ].map((f: any) => (
+                <div key={f.k}>
+                  <label className="block text-xs text-gray-400 mb-1">{f.l}</label>
+                  <input type={f.t} value={(form as any)[f.k]} className={cn('input-field text-sm',
+                    f.k === 'totalReceiving' && parseInt(form.totalReceiving) > parseInt(form.attendedCompanies3h) && parseInt(form.attendedCompanies3h) > 0 && 'border-red-500 ring-1 ring-red-500/30')}
+                    onChange={(e) => setForm({ ...form, [f.k]: e.target.value })} />
+                  {f.hint && <p className="text-[9px] text-gray-500 mt-0.5">{f.hint}</p>}
+                  {f.k === 'totalReceiving' && parseInt(form.totalReceiving) > parseInt(form.attendedCompanies3h) && parseInt(form.attendedCompanies3h) > 0 && (
+                    <p className="text-[9px] text-red-400 mt-0.5">لا يمكن أن يتجاوز عدد الشركات التي حجزت موعد ({form.attendedCompanies3h})</p>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -183,9 +194,9 @@ export default function DeviationSection() {
         {/* ── SECTION 2: Output Deviations ── */}
         <SubSection title="انحراف المخرجات" icon={FileCheck} color="#FBBF24">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <DevCard label="حجز موعد 3 Hours" value={latest?.appointmentDev ?? 0} icon={Clock} />
+            <DevCard label="شركات حجزت موعد" value={latest?.appointmentDev ?? 0} icon={Clock} />
             <DevCard label="شهادة الإنجاز" value={latest?.completionDev ?? 0} icon={FileCheck} />
-            <DevCard label="الاستلام الكامل" value={latest?.receivingDev ?? 0} icon={Package} />
+            <DevCard label="الاستلام الكامل للحبال" value={latest?.receivingDev ?? 0} icon={Package} />
           </div>
         </SubSection>
 
@@ -241,14 +252,13 @@ export default function DeviationSection() {
         {/* ── TABLE ── */}
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 overflow-x-auto">
           <table className="w-full text-sm"><thead><tr className="border-b border-white/10">
-            {['التاريخ', 'شركات', 'المنصة', 'المصنع', 'التوزيع', 'م↔ص', 'ص↔ت', 'م↔ت', '3H', 'شهادة', 'استلام', 'بلاغات', ''].map((h, i) => (
+            {['التاريخ', 'المنصة', 'المصنع', 'التوزيع', 'م↔ص', 'ص↔ت', 'م↔ت', 'حجز موعد', 'شهادة', 'الحبال', 'بلاغات', ''].map((h, i) => (
               <th key={i} className="py-2 px-1.5 text-[9px] text-gray-400 font-medium text-right whitespace-nowrap">{h}</th>
             ))}
           </tr></thead><tbody>
             {entries.map((e: any) => (
               <tr key={e.id} className="border-b border-white/5 hover:bg-white/[0.02]">
                 <td className="py-2 px-1.5 text-[10px] text-gray-300">{e.hijriDate}</td>
-                <td className="py-2 px-1.5 text-[10px] text-white tabular-nums">{e.companies}</td>
                 <td className="py-2 px-1.5 text-[10px] text-white tabular-nums">{formatNumber(e.platformValue)}</td>
                 <td className="py-2 px-1.5 text-[10px] text-white tabular-nums">{formatNumber(e.factoryValue)}</td>
                 <td className="py-2 px-1.5 text-[10px] text-white tabular-nums">{formatNumber(e.distributionValue)}</td>
