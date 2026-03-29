@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { Plus, Trash2, Loader2, AlertTriangle, CheckCircle, TrendingUp, Target, X, Shield, Award } from 'lucide-react';
+import DatePairInput from '@/components/ui/date-pair-input';
 import toast from 'react-hot-toast';
 import { distAchievementApi } from '@/lib/api';
 import { cn, formatNumber } from '@/lib/utils';
@@ -82,10 +83,14 @@ export default function AchievementSection() {
       {showForm && (
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 space-y-4">
           <div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-white">إدخال البيانات الخام</h3><button onClick={() => setShowForm(false)} className="p-1 rounded-lg hover:bg-white/10"><X className="w-4 h-4 text-gray-400" /></button></div>
+          <DatePairInput
+            gregorianDate={form.gregorianDate} hijriDate={form.hijriDate}
+            onGregorianChange={(v) => setForm({ ...form, gregorianDate: v })}
+            onHijriChange={(v) => setForm({ ...form, hijriDate: v })}
+            gregorianLabel="التاريخ" hijriLabel="الموافق"
+          />
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {[
-              { k: 'gregorianDate', l: 'التاريخ', t: 'date' },
-              { k: 'hijriDate', l: 'الموافق', t: 'text', ph: '1447/09/28' },
               { k: 'batch', l: 'الدفعة', t: 'text', ph: 'الدفعة 1' },
               { k: 'cardsPerHour', l: 'البطاقات المسندة / أخصائي / ساعة', t: 'number' },
               { k: 'duration', l: 'المدة الزمنية (ساعات)', t: 'number' },

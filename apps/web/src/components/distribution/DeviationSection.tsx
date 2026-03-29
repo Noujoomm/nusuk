@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Plus, Trash2, Loader2, AlertCircle, ArrowLeftRight, X, Shield, Clock, FileCheck, Package, Bug } from 'lucide-react';
+import DatePairInput from '@/components/ui/date-pair-input';
 import toast from 'react-hot-toast';
 import { distDeviationApi } from '@/lib/api';
 import { cn, formatNumber } from '@/lib/utils';
@@ -119,15 +120,20 @@ export default function DeviationSection() {
           {/* Section 1 inputs */}
           <div>
             <p className="text-xs text-gray-400 mb-2 font-medium">القسم ١: المدخلات الأساسية</p>
+            <DatePairInput
+              gregorianDate={form.gregorianDate} hijriDate={form.hijriDate}
+              onGregorianChange={(v) => setForm({ ...form, gregorianDate: v })}
+              onHijriChange={(v) => setForm({ ...form, hijriDate: v })}
+              gregorianLabel="التاريخ" hijriLabel="الموافق"
+              className="mb-3"
+            />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { k: 'gregorianDate', l: 'التاريخ', t: 'date' },
-                { k: 'hijriDate', l: 'الموافق', t: 'text', ph: '1447/09/28' },
                 { k: 'platformValue', l: 'المنصة', t: 'number' },
                 { k: 'factoryValue', l: 'المصنع', t: 'number' },
                 { k: 'distributionValue', l: 'التوزيع', t: 'number' },
               ].map((f) => (
-                <div key={f.k}><label className="block text-xs text-gray-400 mb-1">{f.l}</label><input type={f.t} placeholder={f.ph || ''} value={(form as any)[f.k]} className="input-field text-sm" onChange={(e) => setForm({ ...form, [f.k]: e.target.value })} /></div>
+                <div key={f.k}><label className="block text-xs text-gray-400 mb-1">{f.l}</label><input type={f.t} value={(form as any)[f.k]} className="input-field text-sm" onChange={(e) => setForm({ ...form, [f.k]: e.target.value })} /></div>
               ))}
             </div>
           </div>
