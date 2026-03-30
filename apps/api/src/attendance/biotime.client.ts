@@ -27,10 +27,13 @@ export class BioTimeClient {
 
     const config = await this.getConfig();
     const username = config.username || process.env.BIOTIME_USERNAME || '';
-    const password = process.env.BIOTIME_PASSWORD || '';
+    const password = config.password || process.env.BIOTIME_PASSWORD || '';
 
-    if (!baseUrl || !username || !password) {
-      throw new Error('BioTime credentials not configured');
+    if (!baseUrl) {
+      throw new Error('BioTime Base URL غير محدد — أدخله من إعدادات الحضور');
+    }
+    if (!username || !password) {
+      throw new Error('بيانات الدخول غير مكتملة — أدخل اسم المستخدم وكلمة المرور من إعدادات الحضور');
     }
 
     this.logger.log(`Authenticating with BioTime at ${baseUrl}`);

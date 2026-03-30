@@ -1243,8 +1243,9 @@ model AttendanceSyncLog {
 
 model AttendanceConfig {
   id            String @id @default("default")
-  baseUrl       String @default("") @map("base_url")
-  username      String @default("")
+  baseUrl       String @default("http://127.0.0.1:1403") @map("base_url")
+  username      String @default("Admin")
+  password      String @default("Hussain123")
   workStartTime String @default("09:00") @map("work_start_time")
   graceMinutes  Int    @default(15) @map("grace_minutes")
   syncInterval  Int    @default(30) @map("sync_interval")
