@@ -67,7 +67,7 @@ export class BioTimeClient {
     if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
     const res = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `JWT ${token}`, 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(parseInt(process.env.BIOTIME_TIMEOUT || '30000')),
     });
 
@@ -115,8 +115,8 @@ export class BioTimeClient {
 
     while (true) {
       const data = await this.get(endpoint, {
-        start_date: fromDate,
-        end_date: toDate,
+        start_time: fromDate,
+        end_time: toDate,
         page: String(page),
         page_size: String(pageSize),
       });
