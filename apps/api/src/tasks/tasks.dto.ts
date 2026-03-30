@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsBoolean, IsArray, IsDateString, Min, Max, MinLength, ValidateIf } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsNumber, IsBoolean, IsArray, IsDateString, IsInt, Min, Max, MinLength, ValidateIf } from 'class-validator';
 
 export class CreateTaskDto {
   @IsString()
@@ -77,6 +77,26 @@ export class CreateTaskDto {
   @IsOptional()
   @IsBoolean()
   isDirective?: boolean;
+
+  @IsOptional()
+  @IsEnum(['agreement', 'agent', 'additional'])
+  taskSource?: string;
+
+  @IsOptional()
+  @IsEnum(['approved', 'approved_with_notes', 'pending', 'resubmit'])
+  approvalStatus?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isBlocked?: boolean;
+
+  @IsOptional()
+  @IsString()
+  blockReason?: string;
+
+  @IsOptional()
+  @IsInt() @Min(0)
+  resubmitCount?: number;
 
   @IsOptional()
   @IsArray()
@@ -161,6 +181,26 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsBoolean()
   isDirective?: boolean;
+
+  @IsOptional()
+  @IsEnum(['agreement', 'agent', 'additional'])
+  taskSource?: string;
+
+  @IsOptional()
+  @IsEnum(['approved', 'approved_with_notes', 'pending', 'resubmit'])
+  approvalStatus?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isBlocked?: boolean;
+
+  @IsOptional()
+  @IsString()
+  blockReason?: string;
+
+  @IsOptional()
+  @IsInt() @Min(0)
+  resubmitCount?: number;
 
   @IsOptional()
   @IsArray()

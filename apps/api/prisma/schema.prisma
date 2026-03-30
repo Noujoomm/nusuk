@@ -738,6 +738,12 @@ model Task {
   createdById   String       @map("created_by_id")
   isGlobal      Boolean      @default(false) @map("is_global")
   isDirective   Boolean      @default(false) @map("is_directive")
+  // Productivity model fields
+  taskSource    String       @default("additional") @map("task_source") // agreement, agent, additional
+  approvalStatus String      @default("pending") @map("approval_status") // approved, approved_with_notes, pending, resubmit
+  isBlocked     Boolean      @default(false) @map("is_blocked")
+  blockReason   String?      @map("block_reason")
+  resubmitCount Int          @default(0) @map("resubmit_count")
   isDeleted     Boolean      @default(false) @map("is_deleted")
   deletedAt     DateTime?    @map("deleted_at")
   lastOverdueNotifiedAt DateTime? @map("last_overdue_notified_at")
