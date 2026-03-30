@@ -1183,3 +1183,77 @@ model DistributionEntry {
   @@index([createdById])
   @@map("distribution_entries")
 }
+
+// ─── ATTENDANCE INTEGRATION (ZKTeco BioTime) ───
+
+model AttendanceRawLog {
+  id            String   @id @default(cuid())
+  empCode       String   @map("emp_code")
+  empName       String   @default("") @map("emp_name")
+  punchTime     DateTime @map("punch_time")
+  punchState    String   @default("") @map("punch_state")
+  terminalSn    String   @default("") @map("terminal_sn")
+  sourceSyncId  String?  @map("source_sync_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([empCode, punchTime])
+  @@index([empCode])
+  @@index([punchTime])
+  @@map("attendance_raw_logs")
+}
+
+model AttendanceDaily {
+  id              String   @id @default(cuid())
+  empCode         String   @map("emp_code")
+  empName         String   @default("") @map("emp_name")
+  attendanceDate  DateTime @map("attendance_date")
+  checkIn         DateTime? @map("check_in")
+  checkOut        DateTime? @map("check_out")
+  workMinutes     Int      @default(0) @map("work_minutes")
+  lateMinutes     Int      @default(0) @map("late_minutes")
+  status          String   @default("absent") // present, late, absent, incomplete
+  department      String   @default("")
+  trackId         String?  @map("track_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([empCode, attendanceDate])
+  @@index([attendanceDate])
+  @@index([empCode])
+  @@index([status])
+  @@index([trackId])
+  @@map("attendance_daily")
+}
+
+model AttendanceSyncLog {
+  id          String   @id @default(cuid())
+  syncType    String   @map("sync_type") // manual, scheduled
+  status      String   // success, partial, failed
+  recordsFetched Int   @default(0) @map("records_fetched")
+  recordsProcessed Int @default(0) @map("records_processed")
+  errorMessage String? @map("error_message") @db.Text
+  syncFrom    DateTime? @map("sync_from")
+  syncTo      DateTime? @map("sync_to")
+  durationMs  Int      @default(0) @map("duration_ms")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("attendance_sync_logs")
+}
+
+model AttendanceConfig {
+  id            String @id @default("default")
+  baseUrl       String @default("") @map("base_url")
+  username      String @default("")
+  workStartTime String @default("09:00") @map("work_start_time")
+  graceMinutes  Int    @default(15) @map("grace_minutes")
+  syncInterval  Int    @default(30) @map("sync_interval")
+  employeesEndpoint    String @default("/api/v2/iclock/api/employees/") @map("employees_endpoint")
+  transactionsEndpoint String @default("/api/v2/iclock/api/transactions/") @map("transactions_endpoint")
+  lastSyncAt    DateTime? @map("last_sync_at")
+  lastSyncStatus String? @map("last_sync_status")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("attendance_config")
+}
+
