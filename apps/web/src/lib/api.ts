@@ -484,16 +484,6 @@ export const productivityApi = {
   copilot: (question: string) => api.post('/productivity/copilot', { question }),
 };
 
-// ─── Attendance ───
-export const attendanceApi = {
-  daily: (date?: string) => api.get('/attendance', { params: { date } }),
-  summary: (date?: string) => api.get('/attendance/summary', { params: { date } }),
-  sync: () => api.post('/attendance/sync'),
-  testConnection: () => api.post('/attendance/test-connection'),
-  getConfig: () => api.get('/attendance/config'),
-  updateConfig: (data: any) => api.post('/attendance/config', data),
-  syncLogs: (limit?: number) => api.get('/attendance/sync-logs', { params: { limit } }),
-};
 
 // ─── Admin System Export ───
 export const adminExportApi = {
