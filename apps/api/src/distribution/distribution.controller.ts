@@ -8,7 +8,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('distribution')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('admin', 'pm')
+@Roles('admin', 'pm', 'track_lead')
 export class DistributionController {
   constructor(private service: DistributionService) {}
 

@@ -416,7 +416,7 @@ export default function TrackDetailPage() {
           { key: 'comments' as const, label: 'التعليقات' },
           { key: 'scope' as const, label: 'نطاق العمل' },
           { key: 'details' as const, label: 'تفاصيل المسار' },
-          ...(track?.name === 'distribution' && (user?.role === 'admin' || user?.role === 'pm')
+          ...(track?.name === 'distribution' && (user?.role === 'admin' || user?.role === 'pm' || user?.role === 'track_lead')
             ? [
                 { key: 'achievement' as const, label: 'نسبة الإنجاز' },
                 { key: 'deviation' as const, label: 'نسبة الانحراف' },
