@@ -32,7 +32,6 @@ import { ExecutiveTasksModule } from './executive-tasks/executive-tasks.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { DistributionModule } from './distribution/distribution.module';
 import { AiEngineModule } from './ai-engine/ai-engine.module';
-import { ProductivityModule } from './productivity/productivity.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -69,7 +68,6 @@ import { HealthController } from './health.controller';
     AnalyticsModule,
     DistributionModule,
     AiEngineModule,
-    ProductivityModule,
   ],
   controllers: [HealthController],
   providers: [

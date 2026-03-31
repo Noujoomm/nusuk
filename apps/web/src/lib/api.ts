@@ -477,12 +477,6 @@ export const aiEngineApi = {
   commandCenter: () => api.get('/ai-engine/command-center'),
 };
 
-// ─── Productivity Engine ───
-export const productivityApi = {
-  getAll: () => api.get('/productivity'),
-  getTrack: (trackId: string) => api.get(`/productivity/${trackId}`),
-  copilot: (question: string) => api.post('/productivity/copilot', { question }),
-};
 
 
 // ─── Admin System Export ───
