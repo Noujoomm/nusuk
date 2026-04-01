@@ -38,6 +38,7 @@ const NAV_ITEMS = [
   { href: '/tracks', label: 'المسارات', icon: GitBranch, roles: ['admin', 'pm', 'track_lead', 'employee'] },
   { href: '/tasks', label: 'المهام', icon: CheckSquare, roles: ['admin', 'pm', 'track_lead', 'employee'] },
   { href: '/gantt', label: 'مخطط جانت', icon: GanttChart, roles: ['admin', 'pm', 'track_lead'] },
+  { href: '/productivity', label: 'الإنتاجية', icon: Activity, roles: ['admin', 'pm'] },
   { href: '/reports', label: 'التقارير', icon: FileText, roles: ['admin', 'pm', 'track_lead'] },
   { href: '/ai-reports', label: 'التقارير الذكية', icon: Brain, roles: ['admin', 'pm'] },
   { href: '/penalties', label: 'الغرامات', icon: AlertTriangle, roles: ['admin', 'pm'] },

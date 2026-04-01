@@ -125,6 +125,8 @@ model Track {
   assignedTasks Task[]              @relation("TaskAssigneeTrack")
   aiReports    AIReport[]
   dailyUpdates DailyUpdate[]
+  contractValue Float?       @map("contract_value")
+  productivitySnapshots ProductivitySnapshot[]
 
   @@map("tracks")
 }
@@ -1258,3 +1260,20 @@ model AttendanceConfig {
   @@map("attendance_config")
 }
 
+// ─── PRODUCTIVITY SNAPSHOTS ───
+
+model ProductivitySnapshot {
+  id                  String   @id @default(cuid())
+  trackId             String   @map("track_id")
+  track               Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  snapshotDate        DateTime @default(now()) @map("snapshot_date")
+  productivityPercent Float    @map("productivity_percent")
+  velocityPoints      Float    @default(0) @map("velocity_points")
+  completedTaskCount  Int      @default(0) @map("completed_task_count")
+  totalScore          Float    @default(0) @map("total_score")
+  maxPossibleScore    Float    @default(0) @map("max_possible_score")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@index([trackId, snapshotDate])
+  @@map("productivity_snapshots")
+}

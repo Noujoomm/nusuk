@@ -479,6 +479,16 @@ export const aiEngineApi = {
 
 
 
+// ─── Productivity Engine ───
+export const productivityApi = {
+  getProject: () => api.get('/productivity'),
+  getTrack: (trackId: string) => api.get(`/productivity/tracks/${trackId}`),
+  saveSnapshot: () => api.post('/productivity/snapshot'),
+  exportExcel: () => api.get('/productivity/export/excel', { responseType: 'blob' }),
+  exportPptx: () => api.get('/productivity/export/pptx', { responseType: 'blob' }),
+  exportTrackExcel: (trackId: string) => api.get(`/productivity/export/tracks/${trackId}/excel`, { responseType: 'blob' }),
+};
+
 // ─── Admin System Export ───
 export const adminExportApi = {
   systemStats: () => api.get('/admin/system-stats'),
