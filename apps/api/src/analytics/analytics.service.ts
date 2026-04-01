@@ -244,33 +244,71 @@ export class AnalyticsService {
       description_ar: string;
     }> = [];
 
-    // Best performing track
-    const trackTaskCounts = await this.prisma.task.groupBy({
-      by: ['trackId'],
-      where: { ...taskWhere, trackId: { not: null } },
-      _count: true,
-    });
+    // Top 3 tracks by COMPOSITE performance score
+    // Score = 50% task completion + 25% reports activity + 25% platform engagement (updates)
+    const [trackTaskCounts, allReportsByTrack, allUpdatesByTrack] = await Promise.all([
+      this.prisma.task.groupBy({
+        by: ['trackId'],
+        where: { ...taskWhere, trackId: { not: null } },
+        _count: true,
+      }),
+      this.prisma.report.groupBy({
+        by: ['trackId'],
+        _count: true,
+      }),
+      this.prisma.dailyUpdate.groupBy({
+        by: ['trackId'],
+        where: { trackId: { not: null } },
+        _count: true,
+      }),
+    ]);
     const trackTotalMap = Object.fromEntries(trackTaskCounts.map((t) => [t.trackId, t._count]));
+    const reportCountMap = Object.fromEntries(allReportsByTrack.map((r) => [r.trackId, r._count]));
+    const updateCountMap = Object.fromEntries(allUpdatesByTrack.map((u) => [u.trackId, u._count]));
 
-    // Top 3 tracks by cumulative completion rate
+    // Find max reports/updates across tracks for normalization
+    const maxReports = Math.max(1, ...Object.values(reportCountMap) as number[]);
+    const maxUpdates = Math.max(1, ...Object.values(updateCountMap) as number[]);
+
     const rankedTracks = allTracks
       .map((t) => {
-        const total = trackTotalMap[t.id] || 0;
-        const completed = completedByTrackMap[t.id] || 0;
-        const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
-        return { name: t.nameAr, rate, total };
+        const totalTasks = trackTotalMap[t.id] || 0;
+        const completedTasks = completedByTrackMap[t.id] || 0;
+        const reports = reportCountMap[t.id] || 0;
+        const updates = updateCountMap[t.id] || 0;
+
+        // Normalize each dimension to 0-100
+        const taskRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+        const reportRate = (reports / maxReports) * 100;
+        const engagementRate = (updates / maxUpdates) * 100;
+
+        // Composite: 50% tasks + 25% reports + 25% engagement
+        const compositeScore = Math.round(
+          (taskRate * 0.50 + reportRate * 0.25 + engagementRate * 0.25) * 10,
+        ) / 10;
+
+        return {
+          name: t.nameAr,
+          score: compositeScore,
+          taskRate: Math.round(taskRate),
+          reports,
+          updates,
+          hasActivity: totalTasks > 0 || reports > 0 || updates > 0,
+        };
       })
-      .filter((t) => t.total >= 1 && t.rate > 0)
-      .sort((a, b) => b.rate - a.rate)
+      .filter((t) => t.hasActivity && t.score > 0)
+      .sort((a, b) => b.score - a.score)
       .slice(0, 3);
 
     if (rankedTracks.length > 0) {
-      const topList = rankedTracks.map((t, i) => `${i + 1}. ${t.name} (${t.rate}%)`).join(' — ');
+      const topList = rankedTracks
+        .map((t, i) => `${i + 1}. ${t.name} (${t.score}%)`)
+        .join(' — ');
       insights.push({
         type: 'success',
         icon: 'trophy',
-        title_ar: 'أفضل ٣ مسارات أداءً (تراكمي)',
-        description_ar: topList,
+        title_ar: 'أفضل ٣ مسارات أداءً (شامل)',
+        description_ar: `${topList}\n(إنجاز المهام 50% + التقارير 25% + التفاعل 25%)`,
       });
     }
 
