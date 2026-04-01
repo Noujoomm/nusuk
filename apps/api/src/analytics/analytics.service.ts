@@ -252,21 +252,25 @@ export class AnalyticsService {
     });
     const trackTotalMap = Object.fromEntries(trackTaskCounts.map((t) => [t.trackId, t._count]));
 
-    let bestTrack: { name: string; rate: number } | null = null;
-    for (const t of allTracks) {
-      const total = trackTotalMap[t.id] || 0;
-      const completed = completedByTrackMap[t.id] || 0;
-      const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
-      if (total >= 1 && (!bestTrack || rate > bestTrack.rate)) {
-        bestTrack = { name: t.nameAr, rate };
-      }
-    }
-    if (bestTrack && bestTrack.rate > 0) {
+    // Top 3 tracks by cumulative completion rate
+    const rankedTracks = allTracks
+      .map((t) => {
+        const total = trackTotalMap[t.id] || 0;
+        const completed = completedByTrackMap[t.id] || 0;
+        const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+        return { name: t.nameAr, rate, total };
+      })
+      .filter((t) => t.total >= 1 && t.rate > 0)
+      .sort((a, b) => b.rate - a.rate)
+      .slice(0, 3);
+
+    if (rankedTracks.length > 0) {
+      const topList = rankedTracks.map((t, i) => `${i + 1}. ${t.name} (${t.rate}%)`).join(' — ');
       insights.push({
         type: 'success',
         icon: 'trophy',
-        title_ar: 'أفضل مسار أداءً',
-        description_ar: `${bestTrack.name} بنسبة إنجاز ${bestTrack.rate}%`,
+        title_ar: 'أفضل ٣ مسارات أداءً (تراكمي)',
+        description_ar: topList,
       });
     }
 
