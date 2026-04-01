@@ -771,8 +771,8 @@ function ActivityLogTab() {
               if (entityName && entityName.length > 60) entityName = entityName.substring(0, 60) + '...';
             }
 
-            const entryDate = new Date(entry.createdAt).toLocaleDateString('ar-SA');
-            const prevDate = i > 0 ? new Date(entries[i - 1].createdAt).toLocaleDateString('ar-SA') : null;
+            const entryDate = new Date(entry.createdAt).toLocaleDateString('ar-SA-u-nu-latn');
+            const prevDate = i > 0 ? new Date(entries[i - 1].createdAt).toLocaleDateString('ar-SA-u-nu-latn') : null;
             const showDateSeparator = entryDate !== prevDate;
 
             return (

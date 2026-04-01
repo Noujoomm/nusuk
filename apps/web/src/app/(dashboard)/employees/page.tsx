@@ -87,7 +87,7 @@ function isContractExpiringSoon(contractEndDate: string | null | undefined): boo
 
 function formatDate(date: string | null | undefined): string {
   if (!date) return '-';
-  return new Date(date).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(date).toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 export default function EmployeesPage() {

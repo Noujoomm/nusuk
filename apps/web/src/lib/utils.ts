@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDate(date: string | Date) {
-  return new Intl.DateTimeFormat('ar-SA', {
+  return new Intl.DateTimeFormat('ar-SA-u-nu-latn', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -14,7 +14,7 @@ export function formatDate(date: string | Date) {
 }
 
 export function formatDateTime(date: string | Date) {
-  return new Intl.DateTimeFormat('ar-SA', {
+  return new Intl.DateTimeFormat('ar-SA-u-nu-latn', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -148,10 +148,23 @@ export const CHECKLIST_STATUS_COLORS: Record<string, string> = {
   needs_revision: 'bg-amber-500/20 text-amber-300',
 };
 
+/** Convert any Arabic/Persian numerals to English */
+export function toEnglishDigits(str: string): string {
+  return str
+    .replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (c) => String(c.charCodeAt(0) - 0x06F0));
+}
+
 export function formatNumber(n: number) {
-  return new Intl.NumberFormat('ar-SA').format(n);
+  return new Intl.NumberFormat('en-US').format(n);
 }
 
 export function formatPercent(n: number) {
   return `${Math.round(n)}%`;
+}
+
+/** Safe division — returns 0 on divide-by-zero or invalid inputs */
+export function safeDivide(a: number, b: number, multiplier = 100): number {
+  if (!b || !isFinite(a) || !isFinite(b)) return 0;
+  return Math.round((a / b) * multiplier * 10) / 10;
 }

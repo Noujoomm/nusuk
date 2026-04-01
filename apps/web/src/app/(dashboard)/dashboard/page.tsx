@@ -126,7 +126,7 @@ export default function ExecutiveDashboardPage() {
         <div className="flex items-center gap-3">
           {lastRefresh && (
             <span className="text-[10px] text-gray-500 tabular-nums" dir="ltr">
-              {lastRefresh.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              {lastRefresh.toLocaleTimeString('ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
           )}
           <button onClick={() => setAutoRefresh(!autoRefresh)}

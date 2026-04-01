@@ -783,7 +783,7 @@ export default function TrackDetailPage() {
                         <div>
                           <span className="text-sm text-white font-medium">{update.author?.nameAr || update.author?.name}</span>
                           <span className="text-xs text-gray-500 mr-2">
-                            {new Date(update.createdAt).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            {new Date(update.createdAt).toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                       </div>
@@ -1005,7 +1005,7 @@ export default function TrackDetailPage() {
                             {REPORT_TYPE_LABELS[report.type] || report.type}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {new Date(report.reportDate).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' })}
+                            {new Date(report.reportDate).toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric' })}
                           </span>
                         </div>
                         <h4 className="text-white font-semibold truncate">{report.title}</h4>

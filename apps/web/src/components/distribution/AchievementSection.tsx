@@ -190,7 +190,7 @@ export default function AchievementSection() {
           </tr></thead><tbody>
             {entries.map((e: any) => (
               <tr key={e.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                <td className="py-2 px-2 text-xs text-gray-300 tabular-nums">{new Date(e.gregorianDate).toLocaleDateString('ar-SA')}</td>
+                <td className="py-2 px-2 text-xs text-gray-300 tabular-nums">{new Date(e.gregorianDate).toLocaleDateString('ar-SA-u-nu-latn')}</td>
                 <td className="py-2 px-2 text-xs text-gray-300">{e.hijriDate}</td>
                 <td className="py-2 px-2 text-xs text-gray-300">{e.batch || '—'}</td>
                 <td className="py-2 px-2 text-xs text-white tabular-nums">{e.companies}</td>

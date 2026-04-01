@@ -183,7 +183,7 @@ export default function ExecutiveTasksPage() {
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '—';
     try {
-      return new Date(dateStr).toLocaleDateString('ar-SA', {
+      return new Date(dateStr).toLocaleDateString('ar-SA-u-nu-latn', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',

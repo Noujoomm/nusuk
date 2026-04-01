@@ -613,7 +613,7 @@ export default function ImportPage() {
                       ) : '-'}
                     </td>
                     <td className="px-4 py-3 text-gray-500">
-                      {new Date(item.createdAt).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(item.createdAt).toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
                   </tr>
                 ))}

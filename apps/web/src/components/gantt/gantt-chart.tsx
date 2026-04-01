@@ -449,10 +449,10 @@ export default function GanttChart({
                 </span>
               </div>
               <div className="w-20 text-center text-gray-400">
-                {task.startDate ? new Date(task.startDate).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' }) : '-'}
+                {task.startDate ? new Date(task.startDate).toLocaleDateString('ar-SA-u-nu-latn', { day: 'numeric', month: 'short' }) : '-'}
               </div>
               <div className="w-20 text-center text-gray-400">
-                {task.dueDate ? new Date(task.dueDate).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' }) : '-'}
+                {task.dueDate ? new Date(task.dueDate).toLocaleDateString('ar-SA-u-nu-latn', { day: 'numeric', month: 'short' }) : '-'}
               </div>
               <div className="w-14 text-center text-gray-400">
                 {task.isMilestone ? '◆' : task.duration ? `${task.duration}ي` : '-'}

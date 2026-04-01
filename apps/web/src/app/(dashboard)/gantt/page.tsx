@@ -456,8 +456,8 @@ export default function GanttPage() {
                     <div className="bg-white/5 rounded-lg p-3 text-xs">
                       <div className="text-gray-500 mb-1 font-medium">خط الأساس</div>
                       <div className="flex justify-between text-gray-400">
-                        <span>البداية: {new Date(selectedTask.baselineStart).toLocaleDateString('ar-SA')}</span>
-                        <span>النهاية: {selectedTask.baselineFinish ? new Date(selectedTask.baselineFinish).toLocaleDateString('ar-SA') : '-'}</span>
+                        <span>البداية: {new Date(selectedTask.baselineStart).toLocaleDateString('ar-SA-u-nu-latn')}</span>
+                        <span>النهاية: {selectedTask.baselineFinish ? new Date(selectedTask.baselineFinish).toLocaleDateString('ar-SA-u-nu-latn') : '-'}</span>
                       </div>
                     </div>
                   )}

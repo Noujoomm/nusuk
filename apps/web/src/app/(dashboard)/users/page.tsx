@@ -33,7 +33,7 @@ function formatTimeAgo(date: string | null): string {
   if (diffMin < 60) return `منذ ${diffMin} دقيقة`;
   if (diffHr < 24) return `منذ ${diffHr} ساعة`;
   if (diffDay < 30) return `منذ ${diffDay} يوم`;
-  return d.toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric' });
 }
 
 export default function UsersPage() {
