@@ -459,8 +459,11 @@ export default function GanttChart({
               </div>
               <div className="w-14 text-center">
                 <span
-                  className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium"
-                  style={{ backgroundColor: `${STATUS_COLORS[task.status]}30`, color: STATUS_COLORS[task.status] }}
+                  className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium tabular-nums ${
+                    task.progress >= 71 ? 'bg-emerald-500/20 text-emerald-300' :
+                    task.progress >= 31 ? 'bg-amber-500/20 text-amber-300' :
+                    'bg-red-500/20 text-red-300'
+                  }`}
                 >
                   {Math.round(task.progress)}%
                 </span>

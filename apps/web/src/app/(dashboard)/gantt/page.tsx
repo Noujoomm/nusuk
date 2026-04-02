@@ -390,15 +390,43 @@ export default function GanttPage() {
                     </div>
                     <div>
                       <label className="text-[10px] text-gray-500 block mb-1">التقدم</label>
-                      <div className="flex items-center gap-2">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={0} max={100} step={1}
+                            value={Math.round(selectedTask.progress)}
+                            onChange={(e) => {
+                              const v = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                              handleDetailSave('progress', v);
+                            }}
+                            className="input-field text-xs py-1 w-16 text-center tabular-nums"
+                            dir="ltr"
+                          />
+                          <span className="text-xs text-gray-400">%</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                            selectedTask.progress >= 71 ? 'bg-emerald-500/20 text-emerald-300' :
+                            selectedTask.progress >= 31 ? 'bg-amber-500/20 text-amber-300' :
+                            'bg-red-500/20 text-red-300'
+                          }`}>
+                            {selectedTask.progress >= 100 ? 'مكتمل' : selectedTask.progress >= 71 ? 'جيد' : selectedTask.progress >= 31 ? 'متوسط' : 'منخفض'}
+                          </span>
+                        </div>
                         <input
                           type="range"
-                          min={0} max={100}
-                          value={selectedTask.progress}
-                          onChange={(e) => handleDetailSave('progress', parseInt(e.target.value))}
-                          className="flex-1"
+                          min={0} max={100} step={1}
+                          value={Math.round(selectedTask.progress)}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value) || 0;
+                            handleDetailSave('progress', v);
+                          }}
+                          className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                          style={{
+                            background: `linear-gradient(to right, ${
+                              selectedTask.progress >= 71 ? '#22c55e' : selectedTask.progress >= 31 ? '#f59e0b' : '#ef4444'
+                            } ${selectedTask.progress}%, rgba(255,255,255,0.1) ${selectedTask.progress}%)`,
+                          }}
                         />
-                        <span className="text-xs text-gray-400 w-8">{Math.round(selectedTask.progress)}%</span>
                       </div>
                     </div>
                   </div>

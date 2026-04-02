@@ -289,17 +289,22 @@ export class GanttService {
 
     // Progress
     if (data.progress !== undefined) {
-      updateData.progress = data.progress;
+      const prog = Math.min(100, Math.max(0, Math.round(Number(data.progress) || 0)));
+      updateData.progress = prog;
       // Auto-status derivation
       if (data.status === undefined) {
         updateData.status = engine.deriveStatus(
-          data.progress,
+          prog,
           updateData.dueDate || existing.dueDate,
           updateData.startDate || existing.startDate,
         );
       }
-      if (data.progress >= 100) {
+      if (prog >= 100) {
         updateData.completionDate = new Date();
+      } else if (existing.status === 'completed' && prog < 100) {
+        // Revert from completed when progress drops below 100
+        updateData.status = 'in_progress';
+        updateData.completionDate = null;
       }
     }
 
