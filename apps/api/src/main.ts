@@ -41,7 +41,7 @@ process.on('unhandledRejection', (reason) => {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    logger: ['log', 'error', 'warn', 'debug'],
+    logger: ['error', 'warn', 'log'],
   });
   const config = app.get(ConfigService);
 
@@ -59,10 +59,7 @@ async function bootstrap() {
   if (missing.length) {
     Logger.warn(`Missing env vars: ${missing.join(', ')}`, 'Bootstrap');
   }
-  Logger.log(`Environment: ${isProduction ? 'production' : 'development'}`, 'Bootstrap');
-  Logger.log(`Port: ${port}`, 'Bootstrap');
-  Logger.log(`CORS_ORIGINS: ${origins}`, 'Bootstrap');
-  Logger.log(`DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'MISSING'}`, 'Bootstrap');
+  Logger.log(`ENV: ${isProduction ? 'production' : 'dev'} | PORT: ${port} | DB: ${process.env.DATABASE_URL ? 'SET' : 'MISSING'}`, 'Bootstrap');
 
   // Trust proxy for Railway / Render / reverse proxies
   const expressApp = app.getHttpAdapter().getInstance();

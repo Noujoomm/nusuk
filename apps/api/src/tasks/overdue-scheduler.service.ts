@@ -18,9 +18,8 @@ export class OverdueSchedulerService {
    * Every 15 minutes: detect newly overdue tasks and notify assignees.
    * Uses lastOverdueNotifiedAt for idempotency — only notifies once per task.
    */
-  @Cron('0 0 * * * *') // Every hour (was every 15 minutes — reduces pool pressure)
+  @Cron('0 0 * * * *') // Every hour
   async detectOverdueTasks() {
-    this.logger.debug('Scheduler: detectOverdueTasks starting');
 
     try {
       const now = new Date();
@@ -106,7 +105,6 @@ export class OverdueSchedulerService {
    */
   @Cron('0 6 * * *') // 6:00 UTC = 9:00 Riyadh
   async sendDailyOverdueReminders() {
-    this.logger.debug('Scheduler: sendDailyOverdueReminders starting');
 
     try {
       const now = new Date();

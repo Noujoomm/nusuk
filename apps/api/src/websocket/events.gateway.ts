@@ -48,7 +48,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.onlineUsers.get(payload.sub)!.add(client.id);
 
       this.server.emit('user.online', { userId: payload.sub, count: this.onlineUsers.size });
-      this.logger.log(`Client connected: ${client.id} (user: ${payload.sub})`);
     } catch {
       client.disconnect();
     }
@@ -66,13 +65,12 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
     }
-    this.logger.log(`Client disconnected: ${client.id}`);
   }
 
   @SubscribeMessage('track.join')
   handleJoinTrack(@ConnectedSocket() client: Socket, @MessageBody() data: { trackId: string }) {
     client.join(`track:${data.trackId}`);
-    this.logger.debug(`${client.data.userId} joined track:${data.trackId}`);
+    // Silenced — too noisy for Railway log limits
   }
 
   @SubscribeMessage('track.leave')
