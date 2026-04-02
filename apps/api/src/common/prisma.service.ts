@@ -14,6 +14,10 @@ const TRANSIENT_ERROR_CODES = new Set([
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
+  /** Throttle map: message-key → last-logged timestamp */
+  private logThrottle = new Map<string, number>();
+  private static readonly THROTTLE_WINDOW_MS = 30_000; // 30 seconds per unique message
+
   constructor() {
     const rawUrl = process.env.DATABASE_URL || '';
 
@@ -23,7 +27,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       throw new Error(msg);
     }
 
-    // Detect external managed PostgreSQL
     const isExternalDb =
       rawUrl.includes('.render.com') ||
       rawUrl.includes('.onrender.com') ||
@@ -31,7 +34,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       rawUrl.includes('.neon.tech') ||
       rawUrl.includes('.supabase.co');
 
-    // Auto-append SSL and connection pool params for external databases
     let url = rawUrl;
     if (isExternalDb) {
       const separator = url.includes('?') ? '&' : '?';
@@ -48,20 +50,17 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       datasources: { db: { url } },
       log: [
         { emit: 'event', level: 'error' },
-        { emit: 'event', level: 'warn' },
       ],
     });
 
+    // Throttled Prisma error event — prevents log flood from repeated pool errors
     (this as any).$on('error', (e: any) => {
-      this.logger.error(`Prisma error: ${e.message}`, e.target);
-    });
-    (this as any).$on('warn', (e: any) => {
-      this.logger.warn(`Prisma warning: ${e.message}`);
+      this.logThrottled('error', `Prisma: ${e.message}`);
     });
 
-    // Startup diagnostics (no secrets)
+    // One-time startup diagnostic
     const parsed = (() => { try { return new URL(url); } catch { return null; } })();
-    this.logger.log(`DB: ${parsed?.hostname || 'unknown'}:${parsed?.port || '5432'}/${parsed?.pathname?.slice(1) || '?'} | SSL: ${url.includes('sslmode=require') ? 'yes' : 'no'} | External: ${isExternalDb ? 'yes' : 'no'}`);
+    this.logger.log(`DB: ${parsed?.hostname || 'unknown'}:${parsed?.port || '5432'}/${parsed?.pathname?.slice(1) || '?'} | SSL: ${url.includes('sslmode=require') ? 'yes' : 'no'} | Pool: 20`);
   }
 
   async onModuleInit() {
@@ -79,9 +78,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         this.logger.log(`Connected to PostgreSQL (attempt ${attempt}/${maxRetries})`);
         return;
       } catch (error: any) {
-        this.logger.error(`DB connection attempt ${attempt}/${maxRetries} failed: ${error?.message}`);
+        this.logger.error(`DB connect attempt ${attempt}/${maxRetries} failed: ${error?.message}`);
         if (attempt === maxRetries) {
-          this.logger.error('All DB connection attempts exhausted — aborting startup');
+          this.logger.error('All DB connection attempts exhausted — aborting');
           throw error;
         }
         const delay = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
@@ -113,11 +112,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   /**
    * Execute a DB operation with up to 3 retries on transient failures.
-   * Backoff: 1s → 2s → 4s
+   * Retry logs are throttled to prevent flood.
    */
   async withRetry<T>(
     operation: () => Promise<T>,
-    context = 'DB operation',
+    context = 'DB',
     maxRetries = 3,
   ): Promise<T> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -126,7 +125,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       } catch (error) {
         if (PrismaService.isTransientError(error) && attempt < maxRetries) {
           const delay = 1000 * Math.pow(2, attempt - 1);
-          this.logger.warn(`[${context}] Transient DB error (attempt ${attempt}/${maxRetries}) — retrying in ${delay}ms...`);
+          this.logThrottled('warn', `[${context}] Transient DB error, retry ${attempt}/${maxRetries} in ${delay}ms`);
           await new Promise((r) => setTimeout(r, delay));
           continue;
         }
@@ -142,6 +141,37 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Log at most once per THROTTLE_WINDOW_MS for each unique message key.
+   * Prevents Railway log flood from repeated Prisma pool errors.
+   */
+  private logThrottled(level: 'error' | 'warn', message: string) {
+    // Use first 80 chars as throttle key to group similar messages
+    const key = message.slice(0, 80);
+    const now = Date.now();
+    const lastLogged = this.logThrottle.get(key);
+
+    if (lastLogged && now - lastLogged < PrismaService.THROTTLE_WINDOW_MS) {
+      return; // Suppress duplicate
+    }
+
+    this.logThrottle.set(key, now);
+
+    // Cleanup old entries periodically (prevent memory leak)
+    if (this.logThrottle.size > 100) {
+      const cutoff = now - PrismaService.THROTTLE_WINDOW_MS;
+      for (const [k, v] of this.logThrottle) {
+        if (v < cutoff) this.logThrottle.delete(k);
+      }
+    }
+
+    if (level === 'error') {
+      this.logger.error(message);
+    } else {
+      this.logger.warn(message);
     }
   }
 }

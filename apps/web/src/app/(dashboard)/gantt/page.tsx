@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ganttApi, tracksApi } from '@/lib/api';
 import { useAuth } from '@/stores/auth';
 import GanttChart, { GanttTask } from '@/components/gantt/gantt-chart';
@@ -279,7 +279,23 @@ export default function GanttPage() {
     }
   };
 
-  // Save detail edits
+  // Debounced save for slider/range inputs (prevents request storms)
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const handleDebouncedSave = useCallback((field: string, value: any) => {
+    if (!selectedTask) return;
+    // Update local state immediately for responsive UI
+    setSelectedTask((prev: any) => prev ? { ...prev, [field]: value } : prev);
+    // Debounce the API call
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        await ganttApi.updateTask(selectedTask.id, { [field]: value });
+        loadTasks();
+      } catch { toast.error('فشل الحفظ'); }
+    }, 500);
+  }, [selectedTask, loadTasks]);
+
+  // Save detail edits (immediate — for dropdowns, dates, etc.)
   const handleDetailSave = async (field: string, value: any) => {
     if (!selectedTask) return;
     try {
@@ -398,7 +414,7 @@ export default function GanttPage() {
                             value={Math.round(selectedTask.progress)}
                             onChange={(e) => {
                               const v = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
-                              handleDetailSave('progress', v);
+                              handleDebouncedSave('progress', v);
                             }}
                             className="input-field text-xs py-1 w-16 text-center tabular-nums"
                             dir="ltr"
@@ -418,7 +434,7 @@ export default function GanttPage() {
                           value={Math.round(selectedTask.progress)}
                           onChange={(e) => {
                             const v = parseInt(e.target.value) || 0;
-                            handleDetailSave('progress', v);
+                            handleDebouncedSave('progress', v);
                           }}
                           className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
                           style={{
@@ -460,7 +476,7 @@ export default function GanttPage() {
                       <input
                         type="number" min={0}
                         value={selectedTask.duration || ''}
-                        onChange={(e) => handleDetailSave('duration', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleDebouncedSave('duration', parseFloat(e.target.value) || 0)}
                         className="input-field text-xs py-1 w-full"
                         dir="ltr"
                       />
