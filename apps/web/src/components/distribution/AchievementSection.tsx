@@ -6,6 +6,7 @@ import { Plus, Trash2, Loader2, AlertTriangle, CheckCircle, TrendingUp, Target, 
 import DatePairInput from '@/components/ui/date-pair-input';
 import toast from 'react-hot-toast';
 import { distAchievementApi } from '@/lib/api';
+import { useAuth } from '@/stores/auth';
 import { cn, formatNumber } from '@/lib/utils';
 import { chartTooltipStyle, chartTooltipLabelStyle, chartTooltipItemStyle, axisTickStyle, axisStroke, gridStroke, gridStrokeDash, legendStyle } from '@/lib/chart-theme';
 
@@ -28,9 +29,11 @@ function Ring({ value, size = 110 }: { value: number; size?: number }) {
   );
 }
 
-const EMPTY = { gregorianDate: '', hijriDate: '', batch: '', companies: '', parcels: '', totalCards: '', cardsPerHour: '', duration: '4', specialists: '4' };
+const EMPTY = { gregorianDate: '', hijriDate: '', batch: '', companies: '', parcels: '', totalCards: '', cardsPerHour: '', duration: '4', specialists: '4', notes: '' };
 
 export default function AchievementSection() {
+  const { user } = useAuth();
+  const canEdit = user?.role === 'admin' || user?.role === 'track_lead';
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -60,6 +63,7 @@ export default function AchievementSection() {
         companies: parseInt(form.companies) || 0, parcels: parseInt(form.parcels) || 0,
         totalCards: cards, cardsPerHour: cph,
         duration: dur, specialists: spec,
+        ...(form.notes ? { notes: form.notes } : {}),
       });
       toast.success('تم الحفظ — نسبة الإنجاز محسوبة تلقائياً');
       setShowForm(false); setForm(EMPTY); load();
@@ -77,7 +81,7 @@ export default function AchievementSection() {
           <div className="p-2 rounded-xl bg-emerald-500/20"><TrendingUp className="w-5 h-5 text-emerald-400" /></div>
           <div><h2 className="text-base font-bold text-white">نسبة الإنجاز</h2><p className="text-[10px] text-gray-500">البيانات الخام فقط — النسب تُحسب تلقائياً</p></div>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إدخال بيانات</button>
+        {canEdit && <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إدخال بيانات</button>}
       </div>
 
       {showForm && (
@@ -118,6 +122,11 @@ export default function AchievementSection() {
               </div>
             </div>
           )}
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">ملاحظات (اختياري)</label>
+            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} maxLength={1000}
+              rows={2} className="input-field text-sm w-full resize-none" placeholder="أضف ملاحظات..." />
+          </div>
           <div className="flex justify-end"><button onClick={submit} disabled={submitting} className="btn-primary px-6 py-2 text-sm disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ'}</button></div>
         </div>
       )}
@@ -201,7 +210,7 @@ export default function AchievementSection() {
                 <td className="py-2 px-2 text-xs text-gray-400">{e.specialists}</td>
                 <td className="py-2 px-2 text-xs text-gray-300 tabular-nums">{formatNumber(e.expected)}</td>
                 <td className={cn('py-2 px-2 text-xs font-bold tabular-nums', e.achievementPct >= 100 ? 'text-emerald-400' : e.achievementPct >= 85 ? 'text-amber-400' : 'text-red-400')}>{e.achievementPct}%</td>
-                <td className="py-2 px-2"><button onClick={() => { distAchievementApi.delete(e.id).then(() => { toast.success('تم'); load(); }).catch(() => toast.error('فشل')); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-500 hover:text-red-300"><Trash2 className="w-3.5 h-3.5" /></button></td>
+                {canEdit && <td className="py-2 px-2"><button onClick={() => { distAchievementApi.delete(e.id).then(() => { toast.success('تم'); load(); }).catch(() => toast.error('فشل')); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-500 hover:text-red-300"><Trash2 className="w-3.5 h-3.5" /></button></td>}
               </tr>
             ))}
           </tbody></table>

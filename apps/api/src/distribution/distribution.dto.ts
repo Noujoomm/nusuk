@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsDateString, Min, Max, IsOptional } from 'class-validator';
+import { IsString, IsInt, IsDateString, Min, Max, IsOptional, MaxLength } from 'class-validator';
 
 export class CreateAchievementDto {
   @IsDateString() gregorianDate: string;
@@ -10,6 +10,7 @@ export class CreateAchievementDto {
   @IsInt() @Min(0) cardsPerHour: number;
   @IsOptional() @IsInt() @Min(1) duration?: number;
   @IsOptional() @IsInt() @Min(1) specialists?: number;
+  @IsOptional() @IsString() @MaxLength(1000) notes?: string;
 }
 
 export class CreateDeviationDto {
@@ -32,4 +33,5 @@ export class CreateDeviationDto {
   @IsOptional() @IsInt() @Min(0) reportsPlatform?: number;
   @IsOptional() @IsInt() @Min(0) reportsApple?: number;
   @IsOptional() @IsInt() @Min(0) reportsAndroid?: number;
+  @IsOptional() @IsString() @MaxLength(1000) notes?: string;
 }

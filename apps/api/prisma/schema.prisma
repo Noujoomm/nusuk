@@ -1120,6 +1120,7 @@ model DistributionAchievement {
   cardsPerHour          Int      @map("cards_per_hour")
   duration              Int      @default(4)
   specialists           Int      @default(4)
+  notes                 String?  @db.Text
   createdById           String   @map("created_by_id")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
@@ -1153,6 +1154,7 @@ model DistributionDeviation {
   reportsPlatform          Int      @default(0) @map("reports_platform")
   reportsApple             Int      @default(0) @map("reports_apple")
   reportsAndroid           Int      @default(0) @map("reports_android")
+  notes                    String?  @db.Text
   createdById              String   @map("created_by_id")
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")

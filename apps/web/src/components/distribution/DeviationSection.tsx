@@ -6,6 +6,7 @@ import { Plus, Trash2, Loader2, AlertCircle, ArrowLeftRight, X, Shield, Clock, F
 import DatePairInput from '@/components/ui/date-pair-input';
 import toast from 'react-hot-toast';
 import { distDeviationApi } from '@/lib/api';
+import { useAuth } from '@/stores/auth';
 import { cn, formatNumber } from '@/lib/utils';
 import { chartTooltipStyle, chartTooltipLabelStyle, chartTooltipItemStyle, axisTickStyle, axisStroke, gridStroke, gridStrokeDash, legendStyle } from '@/lib/chart-theme';
 
@@ -39,9 +40,11 @@ function SubSection({ title, icon: Icon, color, children }: { title: string; ico
   );
 }
 
-const EMPTY = { gregorianDate: '', hijriDate: '', platformValue: '', factoryValue: '', distributionValue: '', totalCompanies3h: '', attendedCompanies3h: '', completionPct: '100', totalReceiving: '', completedReceiving: '', reportsPlatform: '0', reportsApple: '0', reportsAndroid: '0' };
+const EMPTY = { gregorianDate: '', hijriDate: '', platformValue: '', factoryValue: '', distributionValue: '', totalCompanies3h: '', attendedCompanies3h: '', completionPct: '100', totalReceiving: '', completedReceiving: '', reportsPlatform: '0', reportsApple: '0', reportsAndroid: '0', notes: '' };
 
 export default function DeviationSection() {
+  const { user } = useAuth();
+  const canEdit = user?.role === 'admin' || user?.role === 'track_lead';
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -75,6 +78,7 @@ export default function DeviationSection() {
         reportsPlatform: parseInt(form.reportsPlatform) || 0,
         reportsApple: parseInt(form.reportsApple) || 0,
         reportsAndroid: parseInt(form.reportsAndroid) || 0,
+        ...(form.notes ? { notes: form.notes } : {}),
       });
       toast.success('تم الحفظ — الانحرافات محسوبة تلقائياً');
       setShowForm(false); setForm(EMPTY); load();
@@ -109,7 +113,7 @@ export default function DeviationSection() {
           <div className="p-2 rounded-xl bg-red-500/20"><ArrowLeftRight className="w-5 h-5 text-red-400" /></div>
           <div><h2 className="text-base font-bold text-white">نسبة الانحراف</h2><p className="text-[10px] text-gray-500">كل فئة تُحسب بمعادلة مستقلة — لا يتم دمج الانحرافات</p></div>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إدخال بيانات</button>
+        {canEdit && <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إدخال بيانات</button>}
       </div>
 
       {/* Form */}
@@ -177,6 +181,11 @@ export default function DeviationSection() {
             </div>
           </div>
 
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">ملاحظات (اختياري)</label>
+            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} maxLength={1000}
+              rows={2} className="input-field text-sm w-full resize-none" placeholder="أضف ملاحظات..." />
+          </div>
           <div className="flex justify-end"><button onClick={submit} disabled={submitting} className="btn-primary px-6 py-2 text-sm disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ'}</button></div>
         </div>
       )}
@@ -272,7 +281,7 @@ export default function DeviationSection() {
                   <td key={j} className={cn('py-2 px-1.5 text-[10px] font-medium tabular-nums', sevColor(v))}>{v}%</td>
                 ))}
                 <td className="py-2 px-1.5 text-[10px] text-gray-300 tabular-nums">{e.totalReports}</td>
-                <td className="py-2 px-1.5"><button onClick={() => { distDeviationApi.delete(e.id).then(() => { toast.success('تم'); load(); }).catch(() => toast.error('فشل')); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-500 hover:text-red-300"><Trash2 className="w-3 h-3" /></button></td>
+                {canEdit && <td className="py-2 px-1.5"><button onClick={() => { distDeviationApi.delete(e.id).then(() => { toast.success('تم'); load(); }).catch(() => toast.error('فشل')); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-500 hover:text-red-300"><Trash2 className="w-3 h-3" /></button></td>}
               </tr>
             ))}
           </tbody></table>
