@@ -396,9 +396,24 @@ export class AnalyticsService {
     });
     const recentUpdatesMap = Object.fromEntries(recentUpdatesByTrack.map((u) => [u.trackId, u._count]));
 
+    // Reports per track (all time)
+    const reportsByTrackAll = await this.prisma.report.groupBy({
+      by: ['trackId'],
+      _count: true,
+    });
+    const reportsByTrackMap = Object.fromEntries(reportsByTrackAll.map((r) => [r.trackId, r._count]));
+
+    // Daily reports rate: reports submitted in last 30 days / (tracks × 30 expected)
+    const reportsLast30 = await this.prisma.report.count({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+    });
+    const expectedReports30 = trackCount * 30; // 1 report per track per day
+    const dailyReportsRate = expectedReports30 > 0 ? Math.round((reportsLast30 / expectedReports30) * 100) : 0;
+
     const trackPerformance = allTracks.map((t) => {
       const tTotal = trackTotalMap[t.id] || 0;
       const tCompleted = completedByTrackMap[t.id] || 0;
+      const tReports = reportsByTrackMap[t.id] || 0;
       return {
         id: t.id,
         name_ar: t.nameAr,
@@ -409,6 +424,7 @@ export class AnalyticsService {
         recent_updates: recentUpdatesMap[t.id] || 0,
         employee_count: t._count.employees,
         task_completion_rate: tTotal > 0 ? Math.round((tCompleted / tTotal) * 100) : 0,
+        reports_count: tReports,
       };
     });
 
@@ -513,6 +529,7 @@ export class AnalyticsService {
         active_users: activeUsersCount,
         total_users: totalUsers,
         engagement_rate: engagementRate,
+        daily_reports_rate: dailyReportsRate,
         overdue_tasks: overdueTasks,
         total_tasks: totalTasks,
         completed_tasks: completedTasks,

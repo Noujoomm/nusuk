@@ -147,8 +147,8 @@ export default function ExecutiveDashboardPage() {
       {/* ─── Performance Gauges ──────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="glass p-6 flex flex-col items-center">
-          <ProgressRing value={p.task_completion_rate} color="#10B981" label="نسبة إنجاز المهام" />
-          <p className="text-[10px] text-gray-500 mt-1">{formatNumber(p.completed_tasks)} من {formatNumber(p.total_tasks)}</p>
+          <ProgressRing value={p.daily_reports_rate || 0} color="#10B981" label="نسبة التقارير اليومية" />
+          <p className="text-[10px] text-gray-500 mt-1">التقارير المسلّمة خلال ٣٠ يوم</p>
         </div>
         <div className="glass p-6 flex flex-col items-center">
           <ProgressRing value={p.engagement_rate} color="#0EA5E9" label="نسبة الالتزام بالمتابعة" />

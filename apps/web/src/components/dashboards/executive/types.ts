@@ -5,7 +5,7 @@ export interface Insight { type: 'success' | 'warning' | 'info'; icon: string; t
 export interface TrackPerf {
   id: string; name_ar: string; color: string;
   total_tasks: number; completed_tasks: number; overdue_tasks: number;
-  recent_updates: number; employee_count: number; task_completion_rate: number;
+  recent_updates: number; employee_count: number; task_completion_rate: number; reports_count: number;
 }
 
 export interface ActivityItem {
@@ -28,7 +28,7 @@ export interface Analytics {
   };
   performance: {
     task_completion_rate: number; avg_completion_days: number;
-    active_users: number; total_users: number; engagement_rate: number;
+    active_users: number; total_users: number; engagement_rate: number; daily_reports_rate: number;
     overdue_tasks: number; total_tasks: number; completed_tasks: number;
     tasks_by_status: Record<string, number>; tasks_by_priority: Record<string, number>;
     tasks_completed_by_track: ChartItem[]; updates_timeline: TimelinePoint[];
