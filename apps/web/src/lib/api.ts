@@ -489,6 +489,20 @@ export const productivityApi = {
   exportTrackExcel: (trackId: string) => api.get(`/productivity/export/tracks/${trackId}/excel`, { responseType: 'blob' }),
 };
 
+// ─── Support Services (خدمات مساندة) ───
+export const supportServicesApi = {
+  dashboard: () => api.get('/support-services/dashboard'),
+  listCustodies: (params?: any) => api.get('/support-services/custodies', { params }),
+  getCustody: (id: string) => api.get(`/support-services/custodies/${id}`),
+  createCustody: (data: any) => api.post('/support-services/custodies', data),
+  updateCustody: (id: string, data: any) => api.patch(`/support-services/custodies/${id}`, data),
+  deleteCustody: (id: string) => api.delete(`/support-services/custodies/${id}`),
+  addExpense: (data: any) => api.post('/support-services/expenses', data),
+  deleteExpense: (id: string) => api.delete(`/support-services/expenses/${id}`),
+  addSettlement: (data: any) => api.post('/support-services/settlements', data),
+  getAuditLogs: (custodyId: string) => api.get(`/support-services/custodies/${custodyId}/audit`),
+};
+
 // ─── Admin System Export ───
 export const adminExportApi = {
   systemStats: () => api.get('/admin/system-stats'),

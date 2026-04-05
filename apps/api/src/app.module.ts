@@ -33,6 +33,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { DistributionModule } from './distribution/distribution.module';
 import { AiEngineModule } from './ai-engine/ai-engine.module';
 import { ProductivityModule } from './productivity/productivity.module';
+import { SupportServicesModule } from './support-services/support-services.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -70,6 +71,7 @@ import { HealthController } from './health.controller';
     DistributionModule,
     AiEngineModule,
     ProductivityModule,
+    SupportServicesModule,
   ],
   controllers: [HealthController],
   providers: [

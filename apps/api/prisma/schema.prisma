@@ -70,6 +70,13 @@ model User {
   scopeBlockAttachments ScopeBlockAttachment[] @relation("ScopeBlockAttachmentUploader")
   scopeBlockUpdates     ScopeBlockUpdate[]     @relation("ScopeBlockUpdateAuthor")
 
+  // Support Services (خدمات مساندة)
+  custodies           Custody[]             @relation("CustodyCreator")
+  custodyExpenses     CustodyExpense[]      @relation("ExpenseCreator")
+  custodySettlements  CustodySettlement[]   @relation("SettlementCreator")
+  custodyFiles        CustodyAttachment[]   @relation("CustodyFileUploader")
+  custodyAuditLogs    CustodyAuditLog[]     @relation("CustodyAuditActor")
+
   @@map("users")
 }
 
@@ -127,6 +134,7 @@ model Track {
   dailyUpdates DailyUpdate[]
   contractValue Float?       @map("contract_value")
   productivitySnapshots ProductivitySnapshot[]
+  custodies    Custody[]
 
   @@map("tracks")
 }
@@ -1278,4 +1286,131 @@ model ProductivitySnapshot {
 
   @@index([trackId, snapshotDate])
   @@map("productivity_snapshots")
+}
+
+// ─── SUPPORT SERVICES (خدمات مساندة) ───
+
+enum CustodyCategory {
+  OPERATIONAL_SUPPLIES
+  EVENTS
+  TRACK_NEEDS
+}
+
+enum CustodySubCategory {
+  CLEANING
+  BUFFET
+  OFFICE_SUPPLIES
+  PHOTOGRAPHY
+  HOSPITALITY
+  OTHER
+}
+
+enum CustodyStatus {
+  ACTIVE
+  LOW_BALANCE
+  CLOSED
+  SETTLED
+}
+
+model Custody {
+  id               String           @id @default(cuid())
+  name             String
+  description      String?          @db.Text
+  totalAmount      Float            @map("total_amount")
+  remainingAmount  Float            @map("remaining_amount")
+  spentAmount      Float            @default(0) @map("spent_amount")
+  category         CustodyCategory
+  subCategory      CustodySubCategory @default(OTHER) @map("sub_category")
+  trackId          String?          @map("track_id")
+  status           CustodyStatus    @default(ACTIVE)
+  createdById      String           @map("created_by_id")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  track       Track?              @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  createdBy   User                @relation("CustodyCreator", fields: [createdById], references: [id])
+  expenses    CustodyExpense[]
+  settlements CustodySettlement[]
+  attachments CustodyAttachment[]
+  auditLogs   CustodyAuditLog[]
+
+  @@index([status])
+  @@index([category])
+  @@index([trackId])
+  @@map("custodies")
+}
+
+model CustodyExpense {
+  id          String   @id @default(cuid())
+  custodyId   String   @map("custody_id")
+  amount      Float
+  description String
+  notes       String?  @db.Text
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  custody     Custody             @relation(fields: [custodyId], references: [id], onDelete: Cascade)
+  createdBy   User                @relation("ExpenseCreator", fields: [createdById], references: [id])
+  attachments CustodyAttachment[]
+
+  @@index([custodyId])
+  @@map("custody_expenses")
+}
+
+model CustodySettlement {
+  id          String   @id @default(cuid())
+  custodyId   String   @map("custody_id")
+  amount      Float
+  date        DateTime
+  reference   String?
+  notes       String?  @db.Text
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  custody     Custody              @relation(fields: [custodyId], references: [id], onDelete: Cascade)
+  createdBy   User                 @relation("SettlementCreator", fields: [createdById], references: [id])
+  attachments CustodyAttachment[]
+
+  @@index([custodyId])
+  @@map("custody_settlements")
+}
+
+model CustodyAttachment {
+  id           String   @id @default(cuid())
+  custodyId    String?  @map("custody_id")
+  expenseId    String?  @map("expense_id")
+  settlementId String?  @map("settlement_id")
+  fileName     String   @map("file_name")
+  fileSize     Int      @map("file_size")
+  mimeType     String   @map("mime_type")
+  filePath     String   @map("file_path")
+  uploadedById String   @map("uploaded_by_id")
+  uploadedAt   DateTime @default(now()) @map("uploaded_at")
+
+  custody    Custody?           @relation(fields: [custodyId], references: [id], onDelete: Cascade)
+  expense    CustodyExpense?    @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  settlement CustodySettlement? @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  uploadedBy User               @relation("CustodyFileUploader", fields: [uploadedById], references: [id])
+
+  @@index([custodyId])
+  @@index([expenseId])
+  @@map("custody_attachments")
+}
+
+model CustodyAuditLog {
+  id         String   @id @default(cuid())
+  custodyId  String   @map("custody_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  userId     String   @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  custody Custody @relation(fields: [custodyId], references: [id], onDelete: Cascade)
+  user    User    @relation("CustodyAuditActor", fields: [userId], references: [id])
+
+  @@index([custodyId])
+  @@map("custody_audit_logs")
 }
