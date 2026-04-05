@@ -1,10 +1,19 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Res, UseGuards, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { mkdirSync } from 'fs';
+import { extname, join } from 'path';
+import { Response } from 'express';
 import { SupportServicesService } from './support-services.service';
 import { CreateCustodyDto, UpdateCustodyDto, CreateExpenseDto, CreateSettlementDto } from './support-services.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { fixMulterFilename } from '../common/fix-filename';
+
+const UPLOADS_DIR = join(process.cwd(), 'uploads', 'support-services');
+try { mkdirSync(UPLOADS_DIR, { recursive: true }); } catch {}
 
 @Controller('support-services')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -66,6 +75,57 @@ export class SupportServicesController {
   @Post('settlements')
   addSettlement(@Body() dto: CreateSettlementDto, @CurrentUser() user: any) {
     return this.service.addSettlement(dto, user.id);
+  }
+
+  // ─── File Upload ───────────────────────────────────────
+  @Post('attachments/:custodyId')
+  @UseInterceptors(FilesInterceptor('files', 10, {
+    storage: diskStorage({
+      destination: (_req, _file, cb) => {
+        const dir = UPLOADS_DIR;
+        try { mkdirSync(dir, { recursive: true }); } catch {}
+        cb(null, dir);
+      },
+      filename: (_req, file, cb) => {
+        const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, unique + extname(file.originalname));
+      },
+    }),
+    limits: { fileSize: 20 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
+      cb(null, allowed.includes(extname(file.originalname).toLowerCase()));
+    },
+  }))
+  uploadFiles(
+    @Param('custodyId') custodyId: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body('expenseId') expenseId: string | undefined,
+    @Body('settlementId') settlementId: string | undefined,
+    @CurrentUser() user: any,
+  ) {
+    if (files) files.forEach((f) => fixMulterFilename(f));
+    return this.service.uploadFiles(custodyId, files || [], user.id, expenseId, settlementId);
+  }
+
+  @Delete('attachments/:id')
+  deleteAttachment(@Param('id') id: string) {
+    return this.service.deleteAttachment(id);
+  }
+
+  // ─── ZIP Download ──────────────────────────────────────
+  @Get('attachments/download-all')
+  async downloadAll(
+    @Query('custodyId') custodyId: string,
+    @Query('expenseId') expenseId: string | undefined,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.service.downloadAllAsZip(custodyId, expenseId);
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent('مرفقات')}-${Date.now()}.zip`,
+    });
+    res.send(buffer);
   }
 
   // ─── Audit ─────────────────────────────────────────────

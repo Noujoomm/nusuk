@@ -9,7 +9,7 @@ import {
 import { supportServicesApi, tracksApi } from '@/lib/api';
 import { useAuth } from '@/stores/auth';
 import { cn, formatNumber } from '@/lib/utils';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid } from 'recharts';
 import { chartTooltipStyle, chartTooltipLabelStyle, chartTooltipItemStyle, axisTickStyle, axisStroke, gridStroke, gridStrokeDash } from '@/lib/chart-theme';
 import toast from 'react-hot-toast';
 
@@ -219,6 +219,39 @@ export default function SupportServicesPage() {
             )}
           </div>
 
+          {/* Track Distribution + Budget Comparison */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {d.byTrack?.length > 0 && (
+              <div className="glass p-5">
+                <h3 className="text-sm font-semibold mb-4 text-gray-300">توزيع الصرف حسب المسار</h3>
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie data={d.byTrack.map((t: any) => ({ name: t.trackName, value: Math.round(t.spent) }))}
+                      cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={3} dataKey="value">
+                      {d.byTrack.map((t: any, i: number) => <Cell key={i} fill={t.trackColor || PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} />
+                    <Legend wrapperStyle={{ color: '#9ca3af', fontSize: 11, direction: 'rtl' as const }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {d.monthlySpending?.length > 1 && (
+              <div className="glass p-5">
+                <h3 className="text-sm font-semibold mb-4 text-gray-300">اتجاه الصرف الشهري</h3>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={d.monthlySpending}>
+                    <CartesianGrid strokeDasharray={gridStrokeDash} stroke={gridStroke} />
+                    <XAxis dataKey="month" tick={axisTickStyle} stroke={axisStroke} />
+                    <YAxis tick={axisTickStyle} stroke={axisStroke} />
+                    <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} />
+                    <Line type="monotone" dataKey="amount" name="المصروف" stroke="#8B5CF6" strokeWidth={2.5} dot={{ r: 3, fill: '#8B5CF6' }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
           {/* Custody List */}
           <div className="glass p-5">
             <h3 className="text-sm font-semibold mb-4 text-gray-300">قائمة العهد</h3>
@@ -229,7 +262,7 @@ export default function SupportServicesPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/10">
-                      {['العهدة', 'الفئة', 'الميزانية', 'المصروف', 'المتبقي', 'النسبة', 'الحالة', ''].map((h) => (
+                      {['العهدة', 'المسار', 'الفئة', 'الميزانية', 'المصروف', 'المتبقي', 'النسبة', 'الحالة', ''].map((h) => (
                         <th key={h} className="py-3 px-3 text-gray-400 font-medium text-right">{h}</th>
                       ))}
                     </tr>
@@ -240,6 +273,11 @@ export default function SupportServicesPage() {
                       return (
                         <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                           <td className="py-3 px-3 font-medium">{c.name}</td>
+                          <td className="py-3 px-3">
+                            {c.track ? (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${c.track.color}20`, color: c.track.color }}>{c.track.nameAr}</span>
+                            ) : <span className="text-gray-600">—</span>}
+                          </td>
                           <td className="py-3 px-3 text-gray-400">{CATEGORY_AR[c.category] || c.category}</td>
                           <td className="py-3 px-3 tabular-nums">{formatNumber(Math.round(c.totalAmount))}</td>
                           <td className="py-3 px-3 tabular-nums text-amber-400">{formatNumber(Math.round(c.spentAmount))}</td>
@@ -338,7 +376,12 @@ export default function SupportServicesPage() {
                 <h2 className="text-lg font-bold">{selected.name}</h2>
                 <p className="text-xs text-gray-400">{CATEGORY_AR[selected.category]} — {SUB_CATEGORY_AR[selected.subCategory] || 'أخرى'}</p>
               </div>
-              <span className={cn('text-xs px-3 py-1 rounded-full', STATUS_COLORS[selected.status])}>{STATUS_AR[selected.status]}</span>
+              <div className="flex items-center gap-2">
+                {selected.track && (
+                  <span className="text-xs px-3 py-1 rounded-full font-medium" style={{ background: `${selected.track.color}20`, color: selected.track.color }}>{selected.track.nameAr}</span>
+                )}
+                <span className={cn('text-xs px-3 py-1 rounded-full', STATUS_COLORS[selected.status])}>{STATUS_AR[selected.status]}</span>
+              </div>
             </div>
             {selected.description && <p className="text-sm text-gray-300 mb-4">{selected.description}</p>}
 
@@ -428,6 +471,67 @@ export default function SupportServicesPage() {
                 ))}
               </div>
             ) : <p className="text-sm text-gray-500 text-center py-6">لا يوجد تسديد</p>}
+          </div>
+
+          {/* Attachments Section */}
+          <div className="glass p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-300">المرفقات ({selected.attachments?.length || 0})</h3>
+              <div className="flex gap-2">
+                {selected.attachments?.length > 0 && (
+                  <button onClick={async () => {
+                    try {
+                      const res = await supportServicesApi.downloadAllZip(selected.id);
+                      const href = URL.createObjectURL(res.data);
+                      const a = document.createElement('a'); a.href = href; a.download = `مرفقات-${selected.name}.zip`;
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(href);
+                    } catch { toast.error('فشل التحميل'); }
+                  }} className="btn-secondary text-xs flex items-center gap-1">
+                    <Package className="w-3 h-3" /> تحميل الكل ZIP
+                  </button>
+                )}
+                <label className="btn-primary text-xs flex items-center gap-1 cursor-pointer">
+                  <Plus className="w-3 h-3" /> رفع ملفات
+                  <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" onChange={async (e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (files.length === 0) return;
+                    try {
+                      await supportServicesApi.uploadFiles(selected.id, files);
+                      toast.success(`تم رفع ${files.length} ملف`);
+                      openDetail(selected.id);
+                    } catch { toast.error('فشل الرفع'); }
+                    e.target.value = '';
+                  }} />
+                </label>
+              </div>
+            </div>
+            {selected.attachments?.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {selected.attachments.map((att: any) => {
+                  const isImage = att.mimeType?.startsWith('image/');
+                  return (
+                    <div key={att.id} className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-2 group relative">
+                      {isImage ? (
+                        <div className="h-24 rounded-lg overflow-hidden bg-gray-900 flex items-center justify-center">
+                          <img src={`/uploads/support-services/${att.filePath.split('/').pop()}`} alt={att.fileName} className="h-full w-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="h-24 rounded-lg bg-gray-900 flex items-center justify-center">
+                          <Receipt className="w-8 h-8 text-gray-500" />
+                        </div>
+                      )}
+                      <p className="text-[10px] text-gray-400 mt-1.5 truncate">{att.fileName}</p>
+                      <button onClick={async () => {
+                        try { await supportServicesApi.deleteAttachment(att.id); toast.success('تم'); openDetail(selected.id); }
+                        catch { toast.error('فشل'); }
+                      }} className="absolute top-1 left-1 p-1 rounded-lg bg-red-500/80 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : <p className="text-sm text-gray-500 text-center py-6">لا توجد مرفقات</p>}
           </div>
         </div>
       )}

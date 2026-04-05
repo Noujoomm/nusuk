@@ -500,6 +500,15 @@ export const supportServicesApi = {
   addExpense: (data: any) => api.post('/support-services/expenses', data),
   deleteExpense: (id: string) => api.delete(`/support-services/expenses/${id}`),
   addSettlement: (data: any) => api.post('/support-services/settlements', data),
+  uploadFiles: (custodyId: string, files: File[], expenseId?: string) => {
+    const fd = new FormData();
+    files.forEach((f) => fd.append('files', f));
+    if (expenseId) fd.append('expenseId', expenseId);
+    return api.post(`/support-services/attachments/${custodyId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  deleteAttachment: (id: string) => api.delete(`/support-services/attachments/${id}`),
+  downloadAllZip: (custodyId: string, expenseId?: string) =>
+    api.get('/support-services/attachments/download-all', { params: { custodyId, expenseId }, responseType: 'blob' }),
   getAuditLogs: (custodyId: string) => api.get(`/support-services/custodies/${custodyId}/audit`),
 };
 

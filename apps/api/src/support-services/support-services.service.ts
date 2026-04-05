@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { CreateCustodyDto, UpdateCustodyDto, CreateExpenseDto, CreateSettlementDto } from './support-services.dto';
+import * as fs from 'fs';
+import archiver from 'archiver';
 
 @Injectable()
 export class SupportServicesService {
@@ -299,6 +301,67 @@ export class SupportServicesService {
       include: { user: { select: { id: true, nameAr: true } } },
       orderBy: { createdAt: 'desc' },
       take: 100,
+    });
+  }
+
+  // ─── FILE MANAGEMENT ───────────────────────────────────────
+
+  async uploadFiles(custodyId: string, files: Express.Multer.File[], userId: string, expenseId?: string, settlementId?: string) {
+    const custody = await this.prisma.custody.findUnique({ where: { id: custodyId } });
+    if (!custody) throw new NotFoundException('العهدة غير موجودة');
+
+    const attachments = await Promise.all(
+      files.map((f) =>
+        this.prisma.custodyAttachment.create({
+          data: {
+            custodyId,
+            expenseId: expenseId || null,
+            settlementId: settlementId || null,
+            fileName: f.originalname,
+            fileSize: f.size,
+            mimeType: f.mimetype,
+            filePath: f.path,
+            uploadedById: userId,
+          },
+        }),
+      ),
+    );
+
+    await this.auditLog(custodyId, 'UPLOAD', 'ATTACHMENT', custodyId, null, { count: files.length }, userId);
+    return attachments;
+  }
+
+  async deleteAttachment(id: string) {
+    const att = await this.prisma.custodyAttachment.findUnique({ where: { id } });
+    if (!att) throw new NotFoundException('المرفق غير موجود');
+
+    try { fs.unlinkSync(att.filePath); } catch {}
+    await this.prisma.custodyAttachment.delete({ where: { id } });
+    return { message: 'تم حذف المرفق' };
+  }
+
+  async downloadAllAsZip(custodyId: string, expenseId?: string): Promise<Buffer> {
+    const where: any = { custodyId };
+    if (expenseId) where.expenseId = expenseId;
+
+    const attachments = await this.prisma.custodyAttachment.findMany({ where });
+    if (attachments.length === 0) throw new NotFoundException('لا توجد مرفقات');
+
+    return new Promise((resolve, reject) => {
+      const archive = archiver('zip', { zlib: { level: 5 } });
+      const chunks: Buffer[] = [];
+
+      archive.on('data', (chunk: Buffer) => chunks.push(chunk));
+      archive.on('end', () => resolve(Buffer.concat(chunks)));
+      archive.on('error', reject);
+
+      for (const att of attachments) {
+        if (fs.existsSync(att.filePath)) {
+          archive.file(att.filePath, { name: att.fileName });
+        }
+      }
+
+      archive.finalize();
     });
   }
 }
