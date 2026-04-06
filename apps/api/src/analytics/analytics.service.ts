@@ -247,50 +247,73 @@ export class AnalyticsService {
       description_ar: string;
     }> = [];
 
-    // Top 3 tracks — raw overall score (simple average, no weights)
-    const [trackTaskCounts, allReportsByTrack, allUpdatesByTrack] = await this.prisma.withRetry(
+    // Top 3 tracks — weighted 4-factor performance score
+    // Weights: completion 40% + tasks 25% + reports 20% + engagement 15%
+    const W = { completion: 0.40, tasks: 0.25, reports: 0.20, engagement: 0.15 };
+
+    const [trackTaskCounts, reportsLast30ByTrack, engagementByTrack] = await this.prisma.withRetry(
       () => Promise.all([
         this.prisma.task.groupBy({
           by: ['trackId'],
           where: { ...taskWhere, trackId: { not: null } },
           _count: true,
         }),
+        // Reports submitted per track in last 30 days
         this.prisma.report.groupBy({
           by: ['trackId'],
+          where: { createdAt: { gte: thirtyDaysAgo } },
           _count: true,
         }),
+        // Daily engagement: updates + comments + audit actions in last 7 days per track
         this.prisma.dailyUpdate.groupBy({
           by: ['trackId'],
-          where: { trackId: { not: null } },
+          where: { trackId: { not: null }, createdAt: { gte: sevenDaysAgo } },
           _count: true,
         }),
       ]),
-      'analytics.rawRanking',
+      'analytics.weightedRanking',
     );
     const trackTotalMap = Object.fromEntries(trackTaskCounts.map((t) => [t.trackId, t._count]));
-    const reportCountMap = Object.fromEntries(allReportsByTrack.map((r) => [r.trackId, r._count]));
-    const updateCountMap = Object.fromEntries(allUpdatesByTrack.map((u) => [u.trackId, u._count]));
+    const reportsMap = Object.fromEntries(reportsLast30ByTrack.map((r) => [r.trackId, r._count]));
+    const engagementMap = Object.fromEntries(engagementByTrack.map((u) => [u.trackId, u._count]));
 
-    const maxReports = Math.max(1, ...Object.values(reportCountMap) as number[]);
-    const maxUpdates = Math.max(1, ...Object.values(updateCountMap) as number[]);
+    // Normalize reports and engagement across tracks (0-100 scale)
+    const maxReports = Math.max(1, ...Object.values(reportsMap) as number[]);
+    const maxEngagement = Math.max(1, ...Object.values(engagementMap) as number[]);
 
     const rankedTracks = allTracks
       .map((t) => {
         const totalTasks = trackTotalMap[t.id] || 0;
-        const completedTasks = completedByTrackMap[t.id] || 0;
+        const doneCount = completedByTrackMap[t.id] || 0;
 
-        // Raw metrics (each 0-100)
-        const taskRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-        const reportRate = (reportCountMap[t.id] || 0) / maxReports * 100;
-        const engagementRate = (updateCountMap[t.id] || 0) / maxUpdates * 100;
+        // Factor 1: Track completion rate (0-100)
+        const completionRate = totalTasks > 0 ? (doneCount / totalTasks) * 100 : 0;
 
-        // Raw average — no weights, no bias
-        const metrics = [taskRate, reportRate, engagementRate].filter((m) => m > 0 || totalTasks > 0);
-        const rawScore = metrics.length > 0
-          ? Math.round(metrics.reduce((a, b) => a + b, 0) / metrics.length * 10) / 10
-          : 0;
+        // Factor 2: Completed tasks rate (same metric, validates both task volume & quality)
+        const tasksRate = completionRate;
 
-        return { name: t.nameAr, score: rawScore, hasActivity: totalTasks > 0 || (reportCountMap[t.id] || 0) > 0 };
+        // Factor 3: Reports submission (normalized across tracks, 0-100)
+        const reportsRate = ((reportsMap[t.id] || 0) / maxReports) * 100;
+
+        // Factor 4: Daily engagement (updates in last 7 days, normalized, 0-100)
+        const engagementRate = ((engagementMap[t.id] || 0) / maxEngagement) * 100;
+
+        // Weighted final score
+        const finalScore = Math.round(
+          (completionRate * W.completion +
+           tasksRate * W.tasks +
+           reportsRate * W.reports +
+           engagementRate * W.engagement) * 10,
+        ) / 10;
+
+        return {
+          name: t.nameAr, score: finalScore,
+          completion: Math.round(completionRate * 10) / 10,
+          tasks: Math.round(tasksRate * 10) / 10,
+          reports: Math.round(reportsRate * 10) / 10,
+          engagement: Math.round(engagementRate * 10) / 10,
+          hasActivity: totalTasks > 0 || (reportsMap[t.id] || 0) > 0 || (engagementMap[t.id] || 0) > 0,
+        };
       })
       .filter((t) => t.hasActivity)
       .sort((a, b) => b.score - a.score)
@@ -303,8 +326,8 @@ export class AnalyticsService {
       insights.push({
         type: 'success',
         icon: 'trophy',
-        title_ar: 'أفضل ٣ مسارات (من 100)',
-        description_ar: `${topList}\nمرتبة حسب التقييم العام الفعلي`,
+        title_ar: 'أفضل ٣ مسارات أداءً (شامل)',
+        description_ar: `${topList}\nيعتمد على: الإنجاز + المهام + التقارير + التفاعل اليومي`,
       });
     }
 
