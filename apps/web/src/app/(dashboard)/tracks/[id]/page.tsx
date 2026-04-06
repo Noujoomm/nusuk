@@ -288,19 +288,6 @@ export default function TrackDetailPage() {
     }
     setSubmittingUpdate(true);
     try {
-      // Upload files first
-      const uploadedFiles: any[] = [];
-      for (const file of updateFiles) {
-        const { data } = await filesApi.upload(file, { trackId: id, category: 'daily_update' });
-        uploadedFiles.push({
-          id: data.id,
-          fileName: data.fileName,
-          fileSize: data.fileSize,
-          mimeType: data.mimeType,
-          filePath: data.filePath,
-        });
-      }
-
       await dailyUpdatesApi.create({
         title: updateForm.titleAr,
         titleAr: updateForm.titleAr,
@@ -310,8 +297,7 @@ export default function TrackDetailPage() {
         trackId: id,
         status: updateForm.status,
         progress: updateForm.progress,
-        attachments: uploadedFiles,
-      });
+      }, updateFiles.length > 0 ? updateFiles : undefined);
 
       toast.success('تم إضافة التحديث');
       setShowUpdateForm(false);
