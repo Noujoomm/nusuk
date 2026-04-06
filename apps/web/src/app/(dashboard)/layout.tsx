@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/stores/auth';
 import Sidebar from '@/components/sidebar';
 import GlobalSearch from '@/components/global-search';
+import BottomDock from '@/components/ui/bottom-dock';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -51,10 +52,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen flex bg-gray-950">
       <Sidebar />
-      <main className="flex-1 mr-64 p-6 overflow-auto">
+      <main className="flex-1 mr-64 p-6 pb-20 overflow-auto">
         {children}
       </main>
       <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+      <BottomDock />
     </div>
   );
 }

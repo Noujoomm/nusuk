@@ -39,9 +39,9 @@ function ProgressRing({ value, color, size = 100, label }: {
 }
 
 // ─── Section Divider ───────────────────────────────
-function SectionTitle({ title, icon: Icon }: { title: string; icon: React.ElementType }) {
+function SectionTitle({ title, icon: Icon, id }: { title: string; icon: React.ElementType; id?: string }) {
   return (
-    <div className="flex items-center gap-3 mt-10 mb-4">
+    <div id={id} className="flex items-center gap-3 mt-10 mb-4 scroll-mt-20">
       <div className="p-2 rounded-xl bg-white/5">
         <Icon className="w-4 h-4 text-gray-400" />
       </div>
@@ -165,19 +165,19 @@ export default function ExecutiveDashboardPage() {
       </div>
 
       {/* ─── Smart Insights ──────────────────────── */}
-      <SectionTitle title="التنبيهات والتحليلات الذكية" icon={Lightbulb} />
+      <SectionTitle title="التنبيهات والتحليلات الذكية" icon={Lightbulb} id="insights" />
       <InsightsPanel insights={analytics.insights} />
 
       {/* ─── Charts ──────────────────────────────── */}
-      <SectionTitle title="الرسوم البيانية والتحليلات" icon={Activity} />
+      <SectionTitle title="الرسوم البيانية والتحليلات" icon={Activity} id="charts" />
       <ChartsSection data={analytics} />
 
       {/* ─── Tracks Table ────────────────────────── */}
-      <SectionTitle title="جدول أداء المسارات" icon={Target} />
+      <SectionTitle title="جدول أداء المسارات" icon={Target} id="tracks-table" />
       <TracksTable tracks={analytics.track_performance} />
 
       {/* ─── Activity Feed + Top Contributors ────── */}
-      <SectionTitle title="آخر النشاطات" icon={Zap} />
+      <SectionTitle title="آخر النشاطات" icon={Zap} id="activity" />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
           <ActivityFeed items={analytics.activity_feed} />
