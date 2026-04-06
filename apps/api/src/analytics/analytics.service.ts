@@ -197,13 +197,21 @@ export class AnalyticsService {
 
     const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-    // Average completion time
-    const doneTasks = await this.prisma.task.findMany({
-      where: { ...taskWhere, status: 'completed', startDate: { not: null } },
-      select: { startDate: true, updatedAt: true },
-      take: 200,
-      orderBy: { updatedAt: 'desc' },
-    });
+    // Average completion time + engagement (single retry block)
+    const [doneTasks, updatesLast7] = await this.prisma.withRetry(
+      () => Promise.all([
+        this.prisma.task.findMany({
+          where: { ...taskWhere, status: 'completed', startDate: { not: null } },
+          select: { startDate: true, updatedAt: true },
+          take: 200,
+          orderBy: { updatedAt: 'desc' },
+        }),
+        this.prisma.dailyUpdate.count({
+          where: { createdAt: { gte: sevenDaysAgo } },
+        }),
+      ]),
+      'analytics.completion+engagement',
+    );
     let avgCompletionDays = 0;
     if (doneTasks.length > 0) {
       const totalDays = doneTasks.reduce((sum, t) => {
@@ -214,11 +222,6 @@ export class AnalyticsService {
       }, 0);
       avgCompletionDays = Math.round(totalDays / doneTasks.length);
     }
-
-    // Engagement rate (daily updates in last 7 days / expected)
-    const updatesLast7 = await this.prisma.dailyUpdate.count({
-      where: { createdAt: { gte: sevenDaysAgo } },
-    });
     const trackCount = allTracks.length;
     const expectedUpdates = trackCount * 7;
     const engagementRate = expectedUpdates > 0 ? Math.round((updatesLast7 / expectedUpdates) * 100) : 0;
@@ -246,22 +249,25 @@ export class AnalyticsService {
 
     // Top 3 tracks by COMPOSITE performance score
     // Score = 50% task completion + 25% reports activity + 25% platform engagement (updates)
-    const [trackTaskCounts, allReportsByTrack, allUpdatesByTrack] = await Promise.all([
-      this.prisma.task.groupBy({
-        by: ['trackId'],
-        where: { ...taskWhere, trackId: { not: null } },
-        _count: true,
-      }),
-      this.prisma.report.groupBy({
-        by: ['trackId'],
-        _count: true,
-      }),
-      this.prisma.dailyUpdate.groupBy({
-        by: ['trackId'],
-        where: { trackId: { not: null } },
-        _count: true,
-      }),
-    ]);
+    const [trackTaskCounts, allReportsByTrack, allUpdatesByTrack] = await this.prisma.withRetry(
+      () => Promise.all([
+        this.prisma.task.groupBy({
+          by: ['trackId'],
+          where: { ...taskWhere, trackId: { not: null } },
+          _count: true,
+        }),
+        this.prisma.report.groupBy({
+          by: ['trackId'],
+          _count: true,
+        }),
+        this.prisma.dailyUpdate.groupBy({
+          by: ['trackId'],
+          where: { trackId: { not: null } },
+          _count: true,
+        }),
+      ]),
+      'analytics.compositeRanking',
+    );
     const trackTotalMap = Object.fromEntries(trackTaskCounts.map((t) => [t.trackId, t._count]));
     const reportCountMap = Object.fromEntries(allReportsByTrack.map((r) => [r.trackId, r._count]));
     const updateCountMap = Object.fromEntries(allUpdatesByTrack.map((u) => [u.trackId, u._count]));
@@ -313,18 +319,21 @@ export class AnalyticsService {
     }
 
     // Overdue warning per track
-    const overdueByTrack = await this.prisma.task.groupBy({
-      by: ['trackId'],
-      where: {
-        ...taskWhere,
-        dueDate: { lt: now },
-        status: { notIn: ['completed', 'cancelled'] },
-        trackId: { not: null },
-      },
-      _count: true,
-      orderBy: { _count: { trackId: 'desc' } },
-      take: 1,
-    });
+    const overdueByTrack = await this.prisma.withRetry(
+      () => this.prisma.task.groupBy({
+        by: ['trackId'],
+        where: {
+          ...taskWhere,
+          dueDate: { lt: now },
+          status: { notIn: ['completed', 'cancelled'] },
+          trackId: { not: null },
+        },
+        _count: true,
+        orderBy: { _count: { trackId: 'desc' } },
+        take: 1,
+      }),
+      'analytics.overdueWarning',
+    );
     if (overdueByTrack.length > 0 && overdueByTrack[0]._count > 0) {
       const tId = overdueByTrack[0].trackId!;
       const trackInfo = allTracks.find((t) => t.id === tId);
@@ -357,10 +366,13 @@ export class AnalyticsService {
     }
 
     // Tracks without recent updates
-    const tracksWithUpdates = await this.prisma.dailyUpdate.groupBy({
-      by: ['trackId'],
-      where: { createdAt: { gte: sevenDaysAgo }, trackId: { not: null } },
-    });
+    const tracksWithUpdates = await this.prisma.withRetry(
+      () => this.prisma.dailyUpdate.groupBy({
+        by: ['trackId'],
+        where: { createdAt: { gte: sevenDaysAgo }, trackId: { not: null } },
+      }),
+      'analytics.tracksUpdates',
+    );
     const tracksWithUpdatesSet = new Set(tracksWithUpdates.map((t) => t.trackId));
     const tracksWithoutUpdates = allTracks
       .filter((t) => !tracksWithUpdatesSet.has(t.id))
@@ -377,36 +389,26 @@ export class AnalyticsService {
     // ──────────────────────────────────────
     // 5. TRACK PERFORMANCE COMPARISON
     // ──────────────────────────────────────
-    const overdueByTrackFull = await this.prisma.task.groupBy({
-      by: ['trackId'],
-      where: {
-        ...taskWhere,
-        dueDate: { lt: now },
-        status: { notIn: ['completed', 'cancelled'] },
-        trackId: { not: null },
-      },
-      _count: true,
-    });
+    const [overdueByTrackFull, recentUpdatesByTrack, reportsByTrackAll, reportsLast30] = await this.prisma.withRetry(
+      () => Promise.all([
+        this.prisma.task.groupBy({
+          by: ['trackId'],
+          where: { ...taskWhere, dueDate: { lt: now }, status: { notIn: ['completed', 'cancelled'] }, trackId: { not: null } },
+          _count: true,
+        }),
+        this.prisma.dailyUpdate.groupBy({
+          by: ['trackId'],
+          where: { createdAt: { gte: sevenDaysAgo }, trackId: { not: null } },
+          _count: true,
+        }),
+        this.prisma.report.groupBy({ by: ['trackId'], _count: true }),
+        this.prisma.report.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+      ]),
+      'analytics.trackPerformance',
+    );
     const overdueMap = Object.fromEntries(overdueByTrackFull.map((o) => [o.trackId, o._count]));
-
-    const recentUpdatesByTrack = await this.prisma.dailyUpdate.groupBy({
-      by: ['trackId'],
-      where: { createdAt: { gte: sevenDaysAgo }, trackId: { not: null } },
-      _count: true,
-    });
     const recentUpdatesMap = Object.fromEntries(recentUpdatesByTrack.map((u) => [u.trackId, u._count]));
-
-    // Reports per track (all time)
-    const reportsByTrackAll = await this.prisma.report.groupBy({
-      by: ['trackId'],
-      _count: true,
-    });
     const reportsByTrackMap = Object.fromEntries(reportsByTrackAll.map((r) => [r.trackId, r._count]));
-
-    // Daily reports rate: reports submitted in last 30 days / (tracks × 30 expected)
-    const reportsLast30 = await this.prisma.report.count({
-      where: { createdAt: { gte: thirtyDaysAgo } },
-    });
     const expectedReports30 = trackCount * 30; // 1 report per track per day
     const dailyReportsRate = expectedReports30 > 0 ? Math.round((reportsLast30 / expectedReports30) * 100) : 0;
 

@@ -88,13 +88,11 @@ export class OverdueSchedulerService {
 
       this.logger.log(`Notified for ${overdueTasks.length} overdue tasks`);
     } catch (error) {
-      if (PrismaService.isTransientError(error)) {
-        this.logger.warn('[detectOverdueTasks] Skipped — database temporarily unavailable');
+      const msg = (error as any)?.message || '';
+      if (PrismaService.isTransientError(error) || msg.includes('circuit open')) {
+        // Silently skip — circuit breaker or transient failure
       } else {
-        this.logger.error(
-          `[detectOverdueTasks] Unexpected error: ${(error as any)?.message}`,
-          (error as any)?.stack,
-        );
+        this.logger.error(`[detectOverdueTasks] ${msg}`);
       }
     }
   }
@@ -162,13 +160,11 @@ export class OverdueSchedulerService {
         data: { lastOverdueNotifiedAt: now },
       });
     } catch (error) {
-      if (PrismaService.isTransientError(error)) {
-        this.logger.warn('[sendDailyOverdueReminders] Skipped — database temporarily unavailable');
+      const msg = (error as any)?.message || '';
+      if (PrismaService.isTransientError(error) || msg.includes('circuit open')) {
+        // Silently skip
       } else {
-        this.logger.error(
-          `[sendDailyOverdueReminders] Unexpected error: ${(error as any)?.message}`,
-          (error as any)?.stack,
-        );
+        this.logger.error(`[sendDailyOverdueReminders] ${msg}`);
       }
     }
   }

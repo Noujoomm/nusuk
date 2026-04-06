@@ -16,7 +16,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   /** Throttle map: message-key → last-logged timestamp */
   private logThrottle = new Map<string, number>();
-  private static readonly THROTTLE_WINDOW_MS = 30_000; // 30 seconds per unique message
+  private static readonly THROTTLE_WINDOW_MS = 30_000;
+
+  /** Circuit breaker: skip retries if DB is known-down */
+  private circuitOpen = false;
+  private circuitOpenedAt = 0;
+  private static readonly CIRCUIT_COOLDOWN_MS = 60_000; // 1 minute cooldown
 
   constructor() {
     const rawUrl = process.env.DATABASE_URL || '';
@@ -112,22 +117,40 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   /**
    * Execute a DB operation with up to 3 retries on transient failures.
-   * Retry logs are throttled to prevent flood.
+   * Uses circuit breaker to avoid hammering a dead DB.
    */
   async withRetry<T>(
     operation: () => Promise<T>,
     context = 'DB',
     maxRetries = 3,
   ): Promise<T> {
+    // Circuit breaker: if DB was recently unreachable, fail fast
+    if (this.circuitOpen) {
+      if (Date.now() - this.circuitOpenedAt < PrismaService.CIRCUIT_COOLDOWN_MS) {
+        throw new Error(`Database temporarily unavailable (circuit open) [${context}]`);
+      }
+      // Cooldown expired — try again
+      this.circuitOpen = false;
+    }
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        return await operation();
+        const result = await operation();
+        // Success — reset circuit if it was tripped
+        if (this.circuitOpen) this.circuitOpen = false;
+        return result;
       } catch (error) {
         if (PrismaService.isTransientError(error) && attempt < maxRetries) {
           const delay = 1000 * Math.pow(2, attempt - 1);
           this.logThrottled('warn', `[${context}] Transient DB error, retry ${attempt}/${maxRetries} in ${delay}ms`);
           await new Promise((r) => setTimeout(r, delay));
           continue;
+        }
+        // All retries exhausted — open circuit
+        if (PrismaService.isTransientError(error)) {
+          this.circuitOpen = true;
+          this.circuitOpenedAt = Date.now();
+          this.logThrottled('error', `[${context}] DB circuit opened — skipping calls for 60s`);
         }
         throw error;
       }
