@@ -94,24 +94,36 @@ export class ReportsService {
     return report;
   }
 
-  async create(data: {
-    trackId: string;
-    authorId: string;
-    type: any;
-    title: string;
-    achievements?: string;
-    kpiUpdates?: string;
-    challenges?: string;
-    supportNeeded?: string;
-    upcomingTasks?: string;
-    notes?: string;
-    reportDate?: string;
-  }) {
+  /** Only allow known Report scalar fields — prevents Prisma "Unknown arg" errors */
+  private sanitizeReportData(data: Record<string, any>): Record<string, any> {
+    const ALLOWED = new Set([
+      'trackId', 'authorId', 'type', 'title', 'achievements',
+      'kpiUpdates', 'challenges', 'supportNeeded', 'upcomingTasks',
+      'notes', 'reportDate', 'aiSummary',
+    ]);
+    const safe: Record<string, any> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (ALLOWED.has(k) && v !== undefined) safe[k] = v;
+    }
+    return safe;
+  }
+
+  async create(data: Record<string, any>) {
+    const safe = this.sanitizeReportData(data);
     const aiSummary = this.generateAISummary(data);
 
     return this.prisma.report.create({
       data: {
-        ...data,
+        trackId: safe.trackId,
+        authorId: safe.authorId,
+        type: safe.type || 'daily',
+        title: safe.title || '',
+        achievements: safe.achievements,
+        kpiUpdates: safe.kpiUpdates,
+        challenges: safe.challenges,
+        supportNeeded: safe.supportNeeded,
+        upcomingTasks: safe.upcomingTasks,
+        notes: safe.notes,
         reportDate: data.reportDate ? new Date(data.reportDate) : new Date(),
         aiSummary,
       },
@@ -123,15 +135,16 @@ export class ReportsService {
     });
   }
 
-  async update(id: string, data: any) {
+  async update(id: string, data: Record<string, any>) {
     await this.findById(id);
+    const safe = this.sanitizeReportData(data);
     const aiSummary = this.generateAISummary(data);
-    if (data.reportDate && typeof data.reportDate === 'string') {
-      data.reportDate = new Date(data.reportDate);
+    if (safe.reportDate && typeof safe.reportDate === 'string') {
+      safe.reportDate = new Date(safe.reportDate);
     }
     return this.prisma.report.update({
       where: { id },
-      data: { ...data, aiSummary },
+      data: { ...safe, aiSummary },
       include: {
         attachments: { select: this.attachmentSelect },
       },
