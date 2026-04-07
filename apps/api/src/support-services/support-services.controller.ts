@@ -5,7 +5,7 @@ import { mkdirSync } from 'fs';
 import { extname, join } from 'path';
 import { Response } from 'express';
 import { SupportServicesService } from './support-services.service';
-import { CreateCustodyDto, UpdateCustodyDto, CreateExpenseDto, CreateSettlementDto } from './support-services.dto';
+import { CreateCustodyDto, UpdateCustodyDto, CreateExpenseDto, CreateSettlementDto, AddMemberDto } from './support-services.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -126,6 +126,26 @@ export class SupportServicesController {
       'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent('مرفقات')}-${Date.now()}.zip`,
     });
     res.send(buffer);
+  }
+
+  // ─── Close Custody ─────────────────────────────────────
+  @Post('custodies/:id/close')
+  closeCustody(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.service.closeCustody(id, user.id);
+  }
+
+  // ─── Members ───────────────────────────────────────────
+  @Get('custodies/:id/members')
+  getMembers(@Param('id') id: string) { return this.service.getMembers(id); }
+
+  @Post('members')
+  addMember(@Body() dto: AddMemberDto, @CurrentUser() user: any) {
+    return this.service.addMember(dto, user.id);
+  }
+
+  @Delete('members/:id')
+  removeMember(@Param('id') id: string, @Query('custodyId') custodyId: string, @CurrentUser() user: any) {
+    return this.service.removeMember(custodyId, id, user.id);
   }
 
   // ─── Audit ─────────────────────────────────────────────

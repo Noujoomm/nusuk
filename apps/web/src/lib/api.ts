@@ -509,6 +509,10 @@ export const supportServicesApi = {
   deleteAttachment: (id: string) => api.delete(`/support-services/attachments/${id}`),
   downloadAllZip: (custodyId: string, expenseId?: string) =>
     api.get('/support-services/attachments/download-all', { params: { custodyId, expenseId }, responseType: 'blob' }),
+  closeCustody: (id: string) => api.post(`/support-services/custodies/${id}/close`),
+  getMembers: (custodyId: string) => api.get(`/support-services/custodies/${custodyId}/members`),
+  addMember: (data: { custodyId: string; userId: string; role?: string }) => api.post('/support-services/members', data),
+  removeMember: (memberId: string, custodyId: string) => api.delete(`/support-services/members/${memberId}`, { params: { custodyId } }),
   getAuditLogs: (custodyId: string) => api.get(`/support-services/custodies/${custodyId}/audit`),
 };
 

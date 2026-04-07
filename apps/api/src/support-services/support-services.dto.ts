@@ -1,12 +1,13 @@
-import { IsString, IsNumber, IsOptional, IsEnum, Min, MaxLength, IsDateString } from 'class-validator';
+import { IsString, IsNumber, IsOptional, Min, MaxLength, IsDateString } from 'class-validator';
 
 export class CreateCustodyDto {
   @IsString() @MaxLength(200) name: string;
   @IsOptional() @IsString() @MaxLength(2000) description?: string;
   @IsNumber() @Min(0) totalAmount: number;
-  @IsString() category: string; // OPERATIONAL_SUPPLIES | EVENTS | TRACK_NEEDS
+  @IsString() category: string;
   @IsOptional() @IsString() subCategory?: string;
   @IsOptional() @IsString() trackId?: string;
+  @IsOptional() @IsString() assignedToId?: string;
 }
 
 export class UpdateCustodyDto {
@@ -28,4 +29,14 @@ export class CreateSettlementDto {
   @IsDateString() date: string;
   @IsOptional() @IsString() reference?: string;
   @IsOptional() @IsString() @MaxLength(1000) notes?: string;
+}
+
+export class AddMemberDto {
+  @IsString() custodyId: string;
+  @IsString() userId: string;
+  @IsOptional() @IsString() role?: string; // admin | editor | viewer
+}
+
+export class CloseCustodyDto {
+  @IsString() custodyId: string;
 }

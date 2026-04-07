@@ -72,6 +72,8 @@ model User {
 
   // Support Services (خدمات مساندة)
   custodies           Custody[]             @relation("CustodyCreator")
+  custodiesOwned      Custody[]             @relation("CustodyOwner")
+  custodyMemberships  CustodyMember[]       @relation("CustodyMemberUser")
   custodyExpenses     CustodyExpense[]      @relation("ExpenseCreator")
   custodySettlements  CustodySettlement[]   @relation("SettlementCreator")
   custodyFiles        CustodyAttachment[]   @relation("CustodyFileUploader")
@@ -1323,12 +1325,16 @@ model Custody {
   subCategory      CustodySubCategory @default(OTHER) @map("sub_category")
   trackId          String?          @map("track_id")
   status           CustodyStatus    @default(ACTIVE)
+  assignedToId     String?          @map("assigned_to_id")
+  closedAt         DateTime?        @map("closed_at")
   createdById      String           @map("created_by_id")
   createdAt        DateTime         @default(now()) @map("created_at")
   updatedAt        DateTime         @updatedAt @map("updated_at")
 
   track       Track?              @relation(fields: [trackId], references: [id], onDelete: SetNull)
   createdBy   User                @relation("CustodyCreator", fields: [createdById], references: [id])
+  assignedTo  User?               @relation("CustodyOwner", fields: [assignedToId], references: [id])
+  members     CustodyMember[]
   expenses    CustodyExpense[]
   settlements CustodySettlement[]
   attachments CustodyAttachment[]
@@ -1337,7 +1343,23 @@ model Custody {
   @@index([status])
   @@index([category])
   @@index([trackId])
+  @@index([assignedToId])
   @@map("custodies")
+}
+
+model CustodyMember {
+  id         String   @id @default(cuid())
+  custodyId  String   @map("custody_id")
+  userId     String   @map("user_id")
+  role       String   @default("viewer") // admin | editor | viewer
+  addedAt    DateTime @default(now()) @map("added_at")
+
+  custody Custody @relation(fields: [custodyId], references: [id], onDelete: Cascade)
+  user    User    @relation("CustodyMemberUser", fields: [userId], references: [id])
+
+  @@unique([custodyId, userId])
+  @@index([custodyId])
+  @@map("custody_members")
 }
 
 model CustodyExpense {

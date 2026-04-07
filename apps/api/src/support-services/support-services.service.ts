@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { CreateCustodyDto, UpdateCustodyDto, CreateExpenseDto, CreateSettlementDto } from './support-services.dto';
+import { CreateCustodyDto, UpdateCustodyDto, CreateExpenseDto, CreateSettlementDto, AddMemberDto } from './support-services.dto';
 import * as fs from 'fs';
 import archiver from 'archiver';
 
@@ -362,6 +362,58 @@ export class SupportServicesService {
       }
 
       archive.finalize();
+    });
+  }
+
+  // ─── CLOSE CUSTODY ─────────────────────────────────────────
+
+  async closeCustody(custodyId: string, userId: string) {
+    const custody = await this.prisma.custody.findUnique({ where: { id: custodyId } });
+    if (!custody) throw new NotFoundException('العهدة غير موجودة');
+    if (custody.status === 'CLOSED' || custody.status === 'SETTLED') {
+      throw new BadRequestException('العهدة مغلقة بالفعل');
+    }
+
+    const updated = await this.prisma.custody.update({
+      where: { id: custodyId },
+      data: { status: 'CLOSED', closedAt: new Date() },
+    });
+
+    await this.auditLog(custodyId, 'CLOSE', 'CUSTODY', custodyId, { status: custody.status }, { status: 'CLOSED' }, userId);
+    return updated;
+  }
+
+  // ─── MEMBER MANAGEMENT ─────────────────────────────────────
+
+  async addMember(dto: AddMemberDto, userId: string) {
+    const custody = await this.prisma.custody.findUnique({ where: { id: dto.custodyId } });
+    if (!custody) throw new NotFoundException('العهدة غير موجودة');
+
+    const member = await this.prisma.custodyMember.upsert({
+      where: { custodyId_userId: { custodyId: dto.custodyId, userId: dto.userId } },
+      update: { role: dto.role || 'viewer' },
+      create: { custodyId: dto.custodyId, userId: dto.userId, role: dto.role || 'viewer' },
+      include: { user: { select: { id: true, nameAr: true, name: true, email: true } } },
+    });
+
+    await this.auditLog(dto.custodyId, 'ADD_MEMBER', 'MEMBER', member.id, null, { userId: dto.userId, role: dto.role }, userId);
+    return member;
+  }
+
+  async removeMember(custodyId: string, memberId: string, userId: string) {
+    const member = await this.prisma.custodyMember.findUnique({ where: { id: memberId } });
+    if (!member) throw new NotFoundException('العضو غير موجود');
+
+    await this.prisma.custodyMember.delete({ where: { id: memberId } });
+    await this.auditLog(custodyId, 'REMOVE_MEMBER', 'MEMBER', memberId, member, null, userId);
+    return { message: 'تم إزالة العضو' };
+  }
+
+  async getMembers(custodyId: string) {
+    return this.prisma.custodyMember.findMany({
+      where: { custodyId },
+      include: { user: { select: { id: true, nameAr: true, name: true, email: true } } },
+      orderBy: { addedAt: 'asc' },
     });
   }
 }
