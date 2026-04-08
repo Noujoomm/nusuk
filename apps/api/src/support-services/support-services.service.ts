@@ -283,31 +283,47 @@ export class SupportServicesService {
   // ═══════════════════════════════════════════════════════
 
   async getDashboard() {
-    const [total, active, closed, suspended, totalBudget, totalSpent, totalRemaining, lowBalance, invoiceCount, totalInvoiceAmount] = await Promise.all([
-      this.prisma.custody.count(),
-      this.prisma.custody.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.custody.count({ where: { status: 'CLOSED' } }),
-      this.prisma.custody.count({ where: { status: 'SUSPENDED' } }),
-      this.prisma.custody.aggregate({ _sum: { initialBalance: true } }),
-      this.prisma.custody.aggregate({ _sum: { spentAmount: true } }),
-      this.prisma.custody.aggregate({ _sum: { currentBalance: true } }),
-      this.prisma.custody.count({ where: { status: 'LOW_BALANCE' } }),
-      this.prisma.custodyInvoice.count(),
-      this.prisma.custodyInvoice.aggregate({ _sum: { amount: true } }),
-    ]);
+    try {
+      const [total, active, closed, suspended, totalBudget, totalSpent, totalRemaining, lowBalance, invoiceCount, totalInvoiceAmount] = await Promise.all([
+        this.prisma.custody.count(),
+        this.prisma.custody.count({ where: { status: 'ACTIVE' } }),
+        this.prisma.custody.count({ where: { status: 'CLOSED' } }),
+        this.prisma.custody.count({ where: { status: 'SUSPENDED' } }),
+        this.prisma.custody.aggregate({ _sum: { initialBalance: true } }),
+        this.prisma.custody.aggregate({ _sum: { spentAmount: true } }),
+        this.prisma.custody.aggregate({ _sum: { currentBalance: true } }),
+        this.prisma.custody.count({ where: { status: 'LOW_BALANCE' } }),
+        this.prisma.custodyInvoice.count(),
+        this.prisma.custodyInvoice.aggregate({ _sum: { amount: true } }),
+      ]);
 
-    return {
-      totalCustodies: total,
-      activeCustodies: active,
-      closedCustodies: closed,
-      suspendedCustodies: suspended,
-      lowBalanceCustodies: lowBalance,
-      totalBudget: totalBudget._sum.initialBalance || 0,
-      totalSpent: totalSpent._sum.spentAmount || 0,
-      totalRemaining: totalRemaining._sum.currentBalance || 0,
-      totalInvoices: invoiceCount,
-      totalInvoiceAmount: totalInvoiceAmount._sum.amount || 0,
-    };
+      return {
+        totalCustodies: total,
+        activeCustodies: active,
+        closedCustodies: closed,
+        suspendedCustodies: suspended,
+        lowBalanceCustodies: lowBalance,
+        totalBudget: totalBudget._sum.initialBalance || 0,
+        totalSpent: totalSpent._sum.spentAmount || 0,
+        totalRemaining: totalRemaining._sum.currentBalance || 0,
+        totalInvoices: invoiceCount,
+        totalInvoiceAmount: totalInvoiceAmount._sum.amount || 0,
+        isSchemaReady: true,
+      };
+    } catch (error: any) {
+      const msg = error?.message || '';
+      if (msg.includes('does not exist') || msg.includes('relation') || msg.includes('P2021')) {
+        return {
+          totalCustodies: 0, activeCustodies: 0, closedCustodies: 0,
+          suspendedCustodies: 0, lowBalanceCustodies: 0,
+          totalBudget: 0, totalSpent: 0, totalRemaining: 0,
+          totalInvoices: 0, totalInvoiceAmount: 0,
+          isSchemaReady: false,
+          message: 'جداول خدمات المساندة غير جاهزة بعد — يرجى إعادة نشر المنصة',
+        };
+      }
+      throw error;
+    }
   }
 
   // ═══════════════════════════════════════════════════════

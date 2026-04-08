@@ -11,7 +11,6 @@ echo "JWT_SECRET:        ${JWT_SECRET:+SET}${JWT_SECRET:-MISSING}"
 echo "JWT_REFRESH_SECRET:${JWT_REFRESH_SECRET:+SET}${JWT_REFRESH_SECRET:-MISSING}"
 echo "=========================================="
 
-# Determine API port
 API_PORT="${API_PORT:-4000}"
 
 # Check required env vars
@@ -21,10 +20,8 @@ MISSING=""
 [ -z "$JWT_REFRESH_SECRET" ] && MISSING="$MISSING JWT_REFRESH_SECRET"
 
 if [ -n "$MISSING" ]; then
-  echo ""
   echo "!! CRITICAL: MISSING ENV VARS:$MISSING"
-  echo "!! API WILL CRASH WITHOUT THESE!"
-  echo ""
+  exit 1
 fi
 
 # Auto-append sslmode=require for external managed databases
@@ -35,25 +32,32 @@ if echo "$DATABASE_URL" | grep -qE '\.(render\.com|onrender\.com|railway\.app|ne
     else
       export DATABASE_URL="${DATABASE_URL}?sslmode=require"
     fi
-    echo "Auto-appended sslmode=require for external database"
+    echo "Auto-appended sslmode=require"
   fi
 fi
 
-# Navigate to API directory
 cd apps/api || { echo "!! apps/api not found"; exit 1; }
 
-echo "[1/4] Running Prisma generate + db push..."
-npx prisma generate 2>&1 || echo "!! Prisma generate warning"
-npx prisma db push --accept-data-loss 2>&1 || echo "!! Prisma db push failed (continuing...)"
+echo "[1/4] Prisma db push (schema sync)..."
+npx prisma db push --accept-data-loss 2>&1
+DB_PUSH_EXIT=$?
+if [ $DB_PUSH_EXIT -ne 0 ]; then
+  echo "=========================================="
+  echo "!! FATAL: prisma db push failed (exit $DB_PUSH_EXIT)"
+  echo "!! Database schema is out of sync."
+  echo "!! The API cannot start safely."
+  echo "=========================================="
+  exit 1
+fi
+echo "DB push succeeded."
 
 echo "[2/4] Running seed..."
-node dist/prisma/seed.js 2>&1 || echo "!! Seed skipped or failed (continuing...)"
+node dist/prisma/seed.js 2>&1 || echo "Seed skipped (non-fatal)"
 
 echo "[3/4] Starting API on port $API_PORT..."
 API_PORT=$API_PORT node dist/src/main.js > /tmp/api.log 2>&1 &
 API_PID=$!
 
-# Wait for API to be ready (up to 45 seconds — external DB may be slow)
 echo "Waiting for API (PID $API_PID)..."
 API_READY=false
 for i in $(seq 1 45); do
@@ -63,9 +67,9 @@ for i in $(seq 1 45); do
     break
   fi
   if ! kill -0 $API_PID 2>/dev/null; then
-    echo "!! API process CRASHED (PID $API_PID). Logs:"
+    echo "!! API process CRASHED. Logs:"
     cat /tmp/api.log
-    break
+    exit 1
   fi
   sleep 1
 done
@@ -74,29 +78,20 @@ if [ "$API_READY" = true ]; then
   echo "=========================================="
   echo "  API: RUNNING on 127.0.0.1:$API_PORT"
   echo "=========================================="
-  # Stream API logs to stdout in background
   tail -f /tmp/api.log &
 else
-  echo "=========================================="
-  echo "  !! API: NOT RUNNING — crash logs:"
-  echo "=========================================="
+  echo "!! API: NOT READY after 45s. Logs:"
   cat /tmp/api.log
-  echo ""
-  echo "!! Starting frontend anyway (API may recover)..."
+  exit 1
 fi
 
-# Navigate to web directory
 cd ../web || { echo "!! apps/web not found"; exit 1; }
 
-# Set API_INTERNAL_URL so Next.js rewrites target the co-located API
-# In single-container (Railway/Render), both processes share 127.0.0.1
 export API_INTERNAL_URL="http://127.0.0.1:${API_PORT}"
 echo "API_INTERNAL_URL set to: $API_INTERNAL_URL"
 
 echo "[4/4] Starting Next.js on port ${PORT:-3000}..."
 
-# Standalone server (required for output: 'standalone')
-# Try monorepo path first, then flat path
 if [ -f ".next/standalone/apps/web/server.js" ]; then
   echo "Using standalone server (monorepo path)..."
   cp -r .next/static .next/standalone/apps/web/.next/static 2>/dev/null || true
