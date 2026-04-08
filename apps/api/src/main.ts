@@ -45,9 +45,9 @@ async function bootstrap() {
   });
   const config = app.get(ConfigService);
 
-  // Port: API_PORT (single-service) > PORT (standalone) > 4000 (default)
+  // Port priority: PORT (Railway/Render) > API_PORT (co-located) > 4000 (dev)
   const port = parseInt(
-    config.get<string>('API_PORT') || config.get<string>('PORT') || '4000',
+    config.get<string>('PORT') || config.get<string>('API_PORT') || '4000',
     10,
   );
   const origins = config.get<string>('CORS_ORIGINS', 'http://localhost:3000');
