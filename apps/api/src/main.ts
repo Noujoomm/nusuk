@@ -103,7 +103,7 @@ async function bootstrap() {
     }),
   );
 
-  app.setGlobalPrefix('api', { exclude: ['health'] });
+  app.setGlobalPrefix('api', { exclude: ['health', ''] });
 
   // Enable graceful shutdown hooks (Prisma disconnect, etc.)
   app.enableShutdownHooks();

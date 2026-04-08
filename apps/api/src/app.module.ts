@@ -35,6 +35,7 @@ import { AiEngineModule } from './ai-engine/ai-engine.module';
 import { ProductivityModule } from './productivity/productivity.module';
 import { SupportServicesModule } from './support-services/support-services.module';
 import { HealthController } from './health.controller';
+import { RootController } from './root.controller';
 
 @Module({
   imports: [
@@ -73,7 +74,7 @@ import { HealthController } from './health.controller';
     ProductivityModule,
     SupportServicesModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, RootController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
