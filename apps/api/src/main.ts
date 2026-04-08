@@ -45,9 +45,10 @@ async function bootstrap() {
   });
   const config = app.get(ConfigService);
 
-  // Port priority: PORT (Railway/Render) > API_PORT (co-located) > 4000 (dev)
+  // Port: API_PORT (co-located with frontend) > 4000 (default)
+  // PORT is reserved for the public-facing frontend (8080)
   const port = parseInt(
-    config.get<string>('PORT') || config.get<string>('API_PORT') || '4000',
+    config.get<string>('API_PORT') || '4000',
     10,
   );
   const origins = config.get<string>('CORS_ORIGINS', 'http://localhost:3000');
