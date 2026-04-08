@@ -51,10 +51,30 @@ if [ $DB_PUSH_EXIT -ne 0 ]; then
 fi
 echo "DB push succeeded."
 
-echo "[2/4] Running seed..."
+echo "[2/5] Running backfill..."
+node -e "
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+(async () => {
+  const rows = await p.custody.findMany();
+  let n = 0;
+  for (const c of rows) {
+    const u = {};
+    if (!c.code) u.code = 'CUS-' + c.id.slice(-8).toUpperCase();
+    if (c.initialBalance == null) u.initialBalance = c.totalAmount || 0;
+    if (c.currentBalance == null) u.currentBalance = c.remainingAmount || 0;
+    if (!c.balanceAddedAt) u.balanceAddedAt = c.createdAt;
+    if (Object.keys(u).length > 0) { await p.custody.update({ where: { id: c.id }, data: u }); n++; }
+  }
+  console.log('Backfill: ' + n + '/' + rows.length + ' custodies updated');
+  await p.\$disconnect();
+})().catch(e => { console.log('Backfill skip: ' + e.message); });
+" 2>&1 || echo "Backfill skipped (non-fatal)"
+
+echo "[3/5] Running seed..."
 node dist/prisma/seed.js 2>&1 || echo "Seed skipped (non-fatal)"
 
-echo "[3/4] Starting API on port $API_PORT..."
+echo "[4/5] Starting API on port $API_PORT..."
 API_PORT=$API_PORT node dist/src/main.js > /tmp/api.log 2>&1 &
 API_PID=$!
 
@@ -90,7 +110,7 @@ cd ../web || { echo "!! apps/web not found"; exit 1; }
 export API_INTERNAL_URL="http://127.0.0.1:${API_PORT}"
 echo "API_INTERNAL_URL set to: $API_INTERNAL_URL"
 
-echo "[4/4] Starting Next.js on port ${PORT:-3000}..."
+echo "[5/5] Starting Next.js on port ${PORT:-3000}..."
 
 if [ -f ".next/standalone/apps/web/server.js" ]; then
   echo "Using standalone server (monorepo path)..."

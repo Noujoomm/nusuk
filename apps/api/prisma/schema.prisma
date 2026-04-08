@@ -1307,13 +1307,17 @@ enum InvoiceStatus {
 
 model Custody {
   id               String        @id @default(cuid())
-  code             String        @unique @default(cuid()) // رقم العهدة
+  code             String?       @unique // nullable for existing rows, backfill then enforce
   name             String
   description      String?       @db.Text
-  initialBalance   Float         @map("initial_balance")
-  currentBalance   Float         @map("current_balance")
+  // Financial — nullable for safe migration, backfilled from totalAmount/remainingAmount
+  initialBalance   Float?        @map("initial_balance")
+  currentBalance   Float?        @map("current_balance")
+  // Legacy fields kept for backward compat during migration
+  totalAmount      Float         @default(0) @map("total_amount")
+  remainingAmount  Float         @default(0) @map("remaining_amount")
   spentAmount      Float         @default(0) @map("spent_amount")
-  balanceAddedAt   DateTime      @map("balance_added_at")
+  balanceAddedAt   DateTime?     @map("balance_added_at")
   status           CustodyStatus @default(ACTIVE)
   notes            String?       @db.Text
   assignedToId     String?       @map("assigned_to_id")
@@ -1321,6 +1325,10 @@ model Custody {
   closedAt         DateTime?     @map("closed_at")
   closingNotes     String?       @map("closing_notes") @db.Text
   closingBalance   Float?        @map("closing_balance")
+  // Legacy fields
+  category         String?
+  subCategory      String?       @map("sub_category")
+  trackId          String?       @map("track_id")
   createdById      String        @map("created_by_id")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")

@@ -12,15 +12,18 @@ export class SupportServicesService {
 
   async createCustody(dto: CreateCustodyDto, userId: string) {
     const code = `CUS-${Date.now().toString(36).toUpperCase()}`;
+    const balance = dto.initialBalance || 0;
     const custody = await this.prisma.custody.create({
       data: {
         code,
         name: dto.name,
         description: dto.description,
-        initialBalance: dto.initialBalance,
-        currentBalance: dto.initialBalance,
+        initialBalance: balance,
+        currentBalance: balance,
+        totalAmount: balance,
+        remainingAmount: balance,
         spentAmount: 0,
-        balanceAddedAt: new Date(dto.balanceAddedAt),
+        balanceAddedAt: dto.balanceAddedAt ? new Date(dto.balanceAddedAt) : new Date(),
         notes: dto.notes,
         assignedToId: dto.assignedToId || userId,
         createdById: userId,
@@ -134,13 +137,15 @@ export class SupportServicesService {
     const custody = await this.prisma.custody.findUnique({ where: { id: dto.custodyId } });
     if (!custody) throw new NotFoundException('العهدة غير موجودة');
     if (custody.status === 'CLOSED') throw new BadRequestException('لا يمكن إضافة فاتورة على عهدة مقفلة');
-    if (dto.amount > custody.currentBalance) {
-      throw new BadRequestException(`المبلغ يتجاوز الرصيد المتبقي (${custody.currentBalance.toLocaleString('en-US')} ريال)`);
+    const curBalance = custody.currentBalance ?? custody.remainingAmount ?? 0;
+    const initBalance = custody.initialBalance ?? custody.totalAmount ?? 1;
+    if (dto.amount > curBalance) {
+      throw new BadRequestException(`المبلغ يتجاوز الرصيد المتبقي (${curBalance.toLocaleString('en-US')} ريال)`);
     }
 
-    const newBalance = custody.currentBalance - dto.amount;
+    const newBalance = curBalance - dto.amount;
     const newSpent = custody.spentAmount + dto.amount;
-    const newStatus = newBalance <= 0 ? 'CLOSED' : (newBalance / custody.initialBalance) <= 0.20 ? 'LOW_BALANCE' : 'ACTIVE';
+    const newStatus = newBalance <= 0 ? 'CLOSED' : (newBalance / initBalance) <= 0.20 ? 'LOW_BALANCE' : 'ACTIVE';
 
     const [invoice] = await this.prisma.$transaction([
       this.prisma.custodyInvoice.create({
@@ -218,7 +223,7 @@ export class SupportServicesService {
       // Recalculate status
       const custody = await this.prisma.custody.findUnique({ where: { id: invoice.custodyId } });
       if (custody && custody.status !== 'CLOSED') {
-        const newStatus = (custody.currentBalance / custody.initialBalance) <= 0.20 ? 'LOW_BALANCE' : 'ACTIVE';
+        const newStatus = ((custody.currentBalance ?? 0) / (custody.initialBalance || 1)) <= 0.20 ? 'LOW_BALANCE' : 'ACTIVE';
         await this.prisma.custody.update({ where: { id: invoice.custodyId }, data: { status: newStatus as any } });
       }
     }
