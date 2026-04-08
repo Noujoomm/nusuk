@@ -1334,7 +1334,7 @@ model Custody {
 
   @@index([status])
   @@index([assignedToId])
-  @@map("support_custodies")
+  @@map("custodies")
 }
 
 model CustodyMember {
@@ -1351,7 +1351,7 @@ model CustodyMember {
 
   @@unique([custodyId, userId])
   @@index([custodyId])
-  @@map("support_custody_assignments")
+  @@map("custody_members")
 }
 
 model CustodyInvoice {
@@ -1376,7 +1376,7 @@ model CustodyInvoice {
   @@index([custodyId])
   @@index([status])
   @@index([invoiceDate])
-  @@map("support_invoices")
+  @@map("custody_invoices")
 }
 
 model CustodyAuditLog {
@@ -1395,5 +1395,5 @@ model CustodyAuditLog {
 
   @@index([custodyId])
   @@index([entityType])
-  @@map("support_activity_logs")
+  @@map("custody_audit_logs")
 }
