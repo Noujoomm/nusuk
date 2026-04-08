@@ -508,6 +508,17 @@ export const supportServicesApi = {
   getMembers: (custodyId: string) => api.get(`/support-services/custodies/${custodyId}/members`),
   addMember: (data: { custodyId: string; userId: string; roleType?: string }) => api.post('/support-services/members', data),
   removeMember: (custodyId: string, memberId: string) => api.delete(`/support-services/custodies/${custodyId}/members/${memberId}`),
+  // Invoice Attachments
+  uploadInvoiceFiles: (invoiceId: string, files: File[]) => {
+    const fd = new FormData();
+    files.forEach((f) => fd.append('files', f));
+    return api.post(`/support-services/invoices/${invoiceId}/attachments`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  getInvoiceAttachments: (invoiceId: string) => api.get(`/support-services/invoices/${invoiceId}/attachments`),
+  deleteInvoiceAttachment: (invoiceId: string, attachmentId: string) => api.delete(`/support-services/invoices/${invoiceId}/attachments/${attachmentId}`),
+  // Balance Transactions
+  addBalanceTransaction: (data: any) => api.post('/support-services/balance-transactions', data),
+  getBalanceTransactions: (custodyId: string) => api.get(`/support-services/custodies/${custodyId}/balance-transactions`),
   // Audit
   getAuditLogs: (custodyId?: string, limit?: number) => api.get('/support-services/audit-logs', { params: { custodyId, limit } }),
 };

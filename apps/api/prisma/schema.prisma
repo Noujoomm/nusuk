@@ -78,6 +78,8 @@ model User {
   custodyMemberships     CustodyMember[]    @relation("CustodyMemberUser")
   custodyMemberAssigned  CustodyMember[]    @relation("CustodyMemberAssigner")
   custodyInvoices        CustodyInvoice[]   @relation("InvoiceCreator")
+  invoiceAttachments     InvoiceAttachment[] @relation("InvoiceAttachmentUploader")
+  balanceTransactions    CustodyBalanceTransaction[] @relation("BalanceTxCreator")
   custodyAuditLogs       CustodyAuditLog[]  @relation("CustodyAuditActor")
 
   @@map("users")
@@ -1130,6 +1132,7 @@ model DistributionAchievement {
   cardsPerHour          Int      @map("cards_per_hour")
   duration              Int      @default(4)
   specialists           Int      @default(4)
+  cardsReceivedFromFactory Boolean @default(true) @map("cards_received_from_factory")
   notes                 String?  @db.Text
   createdById           String   @map("created_by_id")
   createdAt             DateTime @default(now()) @map("created_at")
@@ -1338,6 +1341,7 @@ model Custody {
   closedBy    User?              @relation("CustodyCloser", fields: [closedById], references: [id])
   members     CustodyMember[]
   invoices    CustodyInvoice[]
+  balanceTxs  CustodyBalanceTransaction[]
   auditLogs   CustodyAuditLog[]
 
   @@index([status])
@@ -1378,13 +1382,49 @@ model CustodyInvoice {
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
-  custody   Custody @relation(fields: [custodyId], references: [id], onDelete: Cascade)
-  createdBy User    @relation("InvoiceCreator", fields: [createdById], references: [id])
+  custody     Custody              @relation(fields: [custodyId], references: [id], onDelete: Cascade)
+  createdBy   User                 @relation("InvoiceCreator", fields: [createdById], references: [id])
+  attachments InvoiceAttachment[]
 
   @@index([custodyId])
   @@index([status])
   @@index([invoiceDate])
   @@map("custody_invoices")
+}
+
+model InvoiceAttachment {
+  id           String   @id @default(cuid())
+  invoiceId    String   @map("invoice_id")
+  fileName     String   @map("file_name")
+  filePath     String   @map("file_path")
+  fileSize     Int      @map("file_size")
+  mimeType     String   @map("mime_type")
+  uploadedById String   @map("uploaded_by_id")
+  uploadedAt   DateTime @default(now()) @map("uploaded_at")
+
+  invoice    CustodyInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  uploadedBy User           @relation("InvoiceAttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_attachments")
+}
+
+model CustodyBalanceTransaction {
+  id              String   @id @default(cuid())
+  custodyId       String   @map("custody_id")
+  amount          Float
+  transactionType String   @map("transaction_type") // add | deduct
+  transactionDate DateTime @map("transaction_date")
+  note            String?  @db.Text
+  runningBalance  Float    @map("running_balance")
+  createdById     String   @map("created_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  custody   Custody @relation(fields: [custodyId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("BalanceTxCreator", fields: [createdById], references: [id])
+
+  @@index([custodyId])
+  @@map("custody_balance_transactions")
 }
 
 model CustodyAuditLog {

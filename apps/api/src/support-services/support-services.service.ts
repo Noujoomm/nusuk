@@ -364,6 +364,98 @@ export class SupportServicesService {
   }
 
   // ═══════════════════════════════════════════════════════
+  //  INVOICE ATTACHMENTS
+  // ═══════════════════════════════════════════════════════
+
+  async uploadInvoiceAttachments(invoiceId: string, files: Express.Multer.File[], userId: string) {
+    const invoice = await this.prisma.custodyInvoice.findUnique({ where: { id: invoiceId } });
+    if (!invoice) throw new NotFoundException('الفاتورة غير موجودة');
+
+    const existing = await this.prisma.invoiceAttachment.count({ where: { invoiceId } });
+    if (existing + files.length > 10) throw new BadRequestException('الحد الأقصى 10 مرفقات لكل فاتورة');
+
+    const attachments = await Promise.all(
+      files.map((f) => this.prisma.invoiceAttachment.create({
+        data: { invoiceId, fileName: f.originalname, filePath: f.path, fileSize: f.size, mimeType: f.mimetype, uploadedById: userId },
+      })),
+    );
+    return attachments;
+  }
+
+  async getInvoiceAttachments(invoiceId: string) {
+    return this.prisma.invoiceAttachment.findMany({
+      where: { invoiceId },
+      include: { uploadedBy: { select: { id: true, nameAr: true } } },
+      orderBy: { uploadedAt: 'desc' },
+    });
+  }
+
+  async deleteInvoiceAttachment(attachmentId: string) {
+    const att = await this.prisma.invoiceAttachment.findUnique({ where: { id: attachmentId } });
+    if (!att) throw new NotFoundException('المرفق غير موجود');
+    try { require('fs').unlinkSync(att.filePath); } catch {}
+    await this.prisma.invoiceAttachment.delete({ where: { id: attachmentId } });
+    return { message: 'تم حذف المرفق' };
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  BALANCE TRANSACTIONS (رصيد العهد)
+  // ═══════════════════════════════════════════════════════
+
+  async addBalanceTransaction(data: { custodyId: string; amount: number; transactionType: string; transactionDate: string; note?: string }, userId: string) {
+    const custody = await this.prisma.custody.findUnique({ where: { id: data.custodyId } });
+    if (!custody) throw new NotFoundException('العهدة غير موجودة');
+    if (custody.status === 'CLOSED') throw new BadRequestException('العهدة مقفلة');
+
+    const curBalance = custody.currentBalance ?? custody.remainingAmount ?? 0;
+    const newBalance = data.transactionType === 'add'
+      ? curBalance + data.amount
+      : curBalance - data.amount;
+
+    if (data.transactionType === 'deduct' && newBalance < 0) {
+      throw new BadRequestException('الرصيد غير كافي');
+    }
+
+    const [tx] = await this.prisma.$transaction([
+      this.prisma.custodyBalanceTransaction.create({
+        data: {
+          custodyId: data.custodyId,
+          amount: data.amount,
+          transactionType: data.transactionType,
+          transactionDate: new Date(data.transactionDate),
+          note: data.note,
+          runningBalance: newBalance,
+          createdById: userId,
+        },
+      }),
+      this.prisma.custody.update({
+        where: { id: data.custodyId },
+        data: {
+          currentBalance: newBalance,
+          remainingAmount: newBalance,
+          ...(data.transactionType === 'add' ? {
+            initialBalance: (custody.initialBalance ?? 0) + data.amount,
+            totalAmount: custody.totalAmount + data.amount,
+          } : {
+            spentAmount: custody.spentAmount + data.amount,
+          }),
+        },
+      }),
+    ]);
+
+    await this.log(data.custodyId, data.transactionType === 'add' ? 'ADD_BALANCE' : 'DEDUCT_BALANCE', 'TRANSACTION', tx.id, null, { amount: data.amount, newBalance }, userId);
+    return tx;
+  }
+
+  async getBalanceTransactions(custodyId: string) {
+    return this.prisma.custodyBalanceTransaction.findMany({
+      where: { custodyId },
+      include: { createdBy: { select: { id: true, nameAr: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════
   //  HELPERS
   // ═══════════════════════════════════════════════════════
 
@@ -372,7 +464,7 @@ export class SupportServicesService {
       createdBy: { select: { id: true, nameAr: true } },
       assignedTo: { select: { id: true, nameAr: true } },
       closedBy: { select: { id: true, nameAr: true } },
-      _count: { select: { invoices: true, members: true } },
+      _count: { select: { invoices: true, members: true, balanceTxs: true } },
     };
   }
 }

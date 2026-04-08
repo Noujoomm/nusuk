@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { mkdirSync } from 'fs';
+import { extname, join } from 'path';
+import { fixMulterFilename } from '../common/fix-filename';
+
+const INVOICE_UPLOADS = join(process.cwd(), 'uploads', 'invoices');
+try { mkdirSync(INVOICE_UPLOADS, { recursive: true }); } catch {}
 import { SupportServicesService } from './support-services.service';
 import { CreateCustodyDto, UpdateCustodyDto, CloseCustodyDto, CreateInvoiceDto, UpdateInvoiceStatusDto, AddMemberDto } from './support-services.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -101,6 +109,45 @@ export class SupportServicesController {
   @Delete('custodies/:custodyId/members/:memberId')
   removeMember(@Param('custodyId') custodyId: string, @Param('memberId') memberId: string, @CurrentUser() user: any) {
     return this.service.removeMember(custodyId, memberId, user.id);
+  }
+
+  // ─── Invoice Attachments ────────────────────────────────
+  @Post('invoices/:id/attachments')
+  @UseInterceptors(FilesInterceptor('files', 10, {
+    storage: diskStorage({
+      destination: (_req, _file, cb) => { try { mkdirSync(INVOICE_UPLOADS, { recursive: true }); } catch {} cb(null, INVOICE_UPLOADS); },
+      filename: (_req, file, cb) => cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + extname(file.originalname)),
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+  }))
+  uploadInvoiceAttachments(
+    @Param('id') invoiceId: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUser() user: any,
+  ) {
+    if (files) files.forEach((f) => fixMulterFilename(f));
+    return this.service.uploadInvoiceAttachments(invoiceId, files || [], user.id);
+  }
+
+  @Get('invoices/:id/attachments')
+  getInvoiceAttachments(@Param('id') invoiceId: string) {
+    return this.service.getInvoiceAttachments(invoiceId);
+  }
+
+  @Delete('invoices/:invoiceId/attachments/:attachmentId')
+  deleteInvoiceAttachment(@Param('attachmentId') attachmentId: string) {
+    return this.service.deleteInvoiceAttachment(attachmentId);
+  }
+
+  // ─── Balance Transactions ──────────────────────────────
+  @Post('balance-transactions')
+  addBalanceTransaction(@Body() body: any, @CurrentUser() user: any) {
+    return this.service.addBalanceTransaction(body, user.id);
+  }
+
+  @Get('custodies/:id/balance-transactions')
+  getBalanceTransactions(@Param('id') custodyId: string) {
+    return this.service.getBalanceTransactions(custodyId);
   }
 
   // ─── Audit Logs ────────────────────────────────────────
