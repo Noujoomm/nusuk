@@ -42,7 +42,8 @@ fi
 # Navigate to API directory
 cd apps/api || { echo "!! apps/api not found"; exit 1; }
 
-echo "[1/4] Running Prisma db push..."
+echo "[1/4] Running Prisma generate + db push..."
+npx prisma generate 2>&1 || echo "!! Prisma generate warning"
 npx prisma db push --accept-data-loss 2>&1 || echo "!! Prisma db push failed (continuing...)"
 
 echo "[2/4] Running seed..."
