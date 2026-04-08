@@ -1,42 +1,40 @@
-import { IsString, IsNumber, IsOptional, Min, MaxLength, IsDateString } from 'class-validator';
+import { IsString, IsNumber, IsOptional, Min, MaxLength, IsDateString, IsEnum } from 'class-validator';
 
 export class CreateCustodyDto {
   @IsString() @MaxLength(200) name: string;
   @IsOptional() @IsString() @MaxLength(2000) description?: string;
-  @IsNumber() @Min(0) totalAmount: number;
-  @IsString() category: string;
-  @IsOptional() @IsString() subCategory?: string;
-  @IsOptional() @IsString() trackId?: string;
+  @IsNumber() @Min(0) initialBalance: number;
+  @IsDateString() balanceAddedAt: string;
   @IsOptional() @IsString() assignedToId?: string;
+  @IsOptional() @IsString() @MaxLength(2000) notes?: string;
 }
 
 export class UpdateCustodyDto {
   @IsOptional() @IsString() @MaxLength(200) name?: string;
   @IsOptional() @IsString() @MaxLength(2000) description?: string;
+  @IsOptional() @IsString() notes?: string;
   @IsOptional() @IsString() status?: string;
 }
 
-export class CreateExpenseDto {
-  @IsString() custodyId: string;
-  @IsNumber() @Min(0.01) amount: number;
-  @IsString() @MaxLength(500) description: string;
-  @IsOptional() @IsString() @MaxLength(2000) notes?: string;
+export class CloseCustodyDto {
+  @IsOptional() @IsString() @MaxLength(2000) closingNotes?: string;
 }
 
-export class CreateSettlementDto {
+export class CreateInvoiceDto {
   @IsString() custodyId: string;
+  @IsString() @MaxLength(300) name: string;
+  @IsOptional() @IsString() @MaxLength(2000) description?: string;
   @IsNumber() @Min(0.01) amount: number;
-  @IsDateString() date: string;
-  @IsOptional() @IsString() reference?: string;
-  @IsOptional() @IsString() @MaxLength(1000) notes?: string;
+  @IsDateString() invoiceDate: string;
+  @IsOptional() @IsString() invoiceNumber?: string;
+}
+
+export class UpdateInvoiceStatusDto {
+  @IsEnum(['APPROVED', 'REJECTED']) status: string;
 }
 
 export class AddMemberDto {
   @IsString() custodyId: string;
   @IsString() userId: string;
-  @IsOptional() @IsString() role?: string; // admin | editor | viewer
-}
-
-export class CloseCustodyDto {
-  @IsString() custodyId: string;
+  @IsOptional() @IsString() roleType?: string; // manager | custodian | executor | viewer
 }

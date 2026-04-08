@@ -71,13 +71,14 @@ model User {
   scopeBlockUpdates     ScopeBlockUpdate[]     @relation("ScopeBlockUpdateAuthor")
 
   // Support Services (خدمات مساندة)
-  custodies           Custody[]             @relation("CustodyCreator")
-  custodiesOwned      Custody[]             @relation("CustodyOwner")
-  custodyMemberships  CustodyMember[]       @relation("CustodyMemberUser")
-  custodyExpenses     CustodyExpense[]      @relation("ExpenseCreator")
-  custodySettlements  CustodySettlement[]   @relation("SettlementCreator")
-  custodyFiles        CustodyAttachment[]   @relation("CustodyFileUploader")
-  custodyAuditLogs    CustodyAuditLog[]     @relation("CustodyAuditActor")
+  // Support Services (خدمات مساندة)
+  custodies              Custody[]          @relation("CustodyCreator")
+  custodiesOwned         Custody[]          @relation("CustodyOwner")
+  custodiesClosed        Custody[]          @relation("CustodyCloser")
+  custodyMemberships     CustodyMember[]    @relation("CustodyMemberUser")
+  custodyMemberAssigned  CustodyMember[]    @relation("CustodyMemberAssigner")
+  custodyInvoices        CustodyInvoice[]   @relation("InvoiceCreator")
+  custodyAuditLogs       CustodyAuditLog[]  @relation("CustodyAuditActor")
 
   @@map("users")
 }
@@ -136,7 +137,6 @@ model Track {
   dailyUpdates DailyUpdate[]
   contractValue Float?       @map("contract_value")
   productivitySnapshots ProductivitySnapshot[]
-  custodies    Custody[]
 
   @@map("tracks")
 }
@@ -1292,147 +1292,108 @@ model ProductivitySnapshot {
 
 // ─── SUPPORT SERVICES (خدمات مساندة) ───
 
-enum CustodyCategory {
-  OPERATIONAL_SUPPLIES
-  EVENTS
-  TRACK_NEEDS
-}
-
-enum CustodySubCategory {
-  CLEANING
-  BUFFET
-  OFFICE_SUPPLIES
-  PHOTOGRAPHY
-  HOSPITALITY
-  OTHER
-}
-
 enum CustodyStatus {
   ACTIVE
   LOW_BALANCE
+  SUSPENDED
   CLOSED
-  SETTLED
+}
+
+enum InvoiceStatus {
+  UPLOADED
+  APPROVED
+  REJECTED
 }
 
 model Custody {
-  id               String           @id @default(cuid())
+  id               String        @id @default(cuid())
+  code             String        @unique @default(cuid()) // رقم العهدة
   name             String
-  description      String?          @db.Text
-  totalAmount      Float            @map("total_amount")
-  remainingAmount  Float            @map("remaining_amount")
-  spentAmount      Float            @default(0) @map("spent_amount")
-  category         CustodyCategory
-  subCategory      CustodySubCategory @default(OTHER) @map("sub_category")
-  trackId          String?          @map("track_id")
-  status           CustodyStatus    @default(ACTIVE)
-  assignedToId     String?          @map("assigned_to_id")
-  closedAt         DateTime?        @map("closed_at")
-  createdById      String           @map("created_by_id")
-  createdAt        DateTime         @default(now()) @map("created_at")
-  updatedAt        DateTime         @updatedAt @map("updated_at")
+  description      String?       @db.Text
+  initialBalance   Float         @map("initial_balance")
+  currentBalance   Float         @map("current_balance")
+  spentAmount      Float         @default(0) @map("spent_amount")
+  balanceAddedAt   DateTime      @map("balance_added_at")
+  status           CustodyStatus @default(ACTIVE)
+  notes            String?       @db.Text
+  assignedToId     String?       @map("assigned_to_id")
+  closedById       String?       @map("closed_by_id")
+  closedAt         DateTime?     @map("closed_at")
+  closingNotes     String?       @map("closing_notes") @db.Text
+  closingBalance   Float?        @map("closing_balance")
+  createdById      String        @map("created_by_id")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
 
-  track       Track?              @relation(fields: [trackId], references: [id], onDelete: SetNull)
-  createdBy   User                @relation("CustodyCreator", fields: [createdById], references: [id])
-  assignedTo  User?               @relation("CustodyOwner", fields: [assignedToId], references: [id])
+  createdBy   User               @relation("CustodyCreator", fields: [createdById], references: [id])
+  assignedTo  User?              @relation("CustodyOwner", fields: [assignedToId], references: [id])
+  closedBy    User?              @relation("CustodyCloser", fields: [closedById], references: [id])
   members     CustodyMember[]
-  expenses    CustodyExpense[]
-  settlements CustodySettlement[]
-  attachments CustodyAttachment[]
+  invoices    CustodyInvoice[]
   auditLogs   CustodyAuditLog[]
 
   @@index([status])
-  @@index([category])
-  @@index([trackId])
   @@index([assignedToId])
-  @@map("custodies")
+  @@map("support_custodies")
 }
 
 model CustodyMember {
   id         String   @id @default(cuid())
   custodyId  String   @map("custody_id")
   userId     String   @map("user_id")
-  role       String   @default("viewer") // admin | editor | viewer
-  addedAt    DateTime @default(now()) @map("added_at")
+  roleType   String   @default("viewer") @map("role_type") // manager | custodian | executor | viewer
+  assignedById String? @map("assigned_by_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
 
-  custody Custody @relation(fields: [custodyId], references: [id], onDelete: Cascade)
-  user    User    @relation("CustodyMemberUser", fields: [userId], references: [id])
+  custody    Custody @relation(fields: [custodyId], references: [id], onDelete: Cascade)
+  user       User    @relation("CustodyMemberUser", fields: [userId], references: [id])
+  assignedBy User?   @relation("CustodyMemberAssigner", fields: [assignedById], references: [id])
 
   @@unique([custodyId, userId])
   @@index([custodyId])
-  @@map("custody_members")
+  @@map("support_custody_assignments")
 }
 
-model CustodyExpense {
-  id          String   @id @default(cuid())
-  custodyId   String   @map("custody_id")
-  amount      Float
-  description String
-  notes       String?  @db.Text
-  createdById String   @map("created_by_id")
-  createdAt   DateTime @default(now()) @map("created_at")
+model CustodyInvoice {
+  id            String        @id @default(cuid())
+  custodyId     String        @map("custody_id")
+  invoiceNumber String?       @map("invoice_number")
+  name          String
+  description   String?       @db.Text
+  amount        Float
+  invoiceDate   DateTime      @map("invoice_date")
+  status        InvoiceStatus @default(UPLOADED)
+  attachmentUrl String?       @map("attachment_url")
+  attachmentName String?      @map("attachment_name")
+  attachmentPath String?      @map("attachment_path")
+  createdById   String        @map("created_by_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
 
-  custody     Custody             @relation(fields: [custodyId], references: [id], onDelete: Cascade)
-  createdBy   User                @relation("ExpenseCreator", fields: [createdById], references: [id])
-  attachments CustodyAttachment[]
-
-  @@index([custodyId])
-  @@map("custody_expenses")
-}
-
-model CustodySettlement {
-  id          String   @id @default(cuid())
-  custodyId   String   @map("custody_id")
-  amount      Float
-  date        DateTime
-  reference   String?
-  notes       String?  @db.Text
-  createdById String   @map("created_by_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  custody     Custody              @relation(fields: [custodyId], references: [id], onDelete: Cascade)
-  createdBy   User                 @relation("SettlementCreator", fields: [createdById], references: [id])
-  attachments CustodyAttachment[]
+  custody   Custody @relation(fields: [custodyId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("InvoiceCreator", fields: [createdById], references: [id])
 
   @@index([custodyId])
-  @@map("custody_settlements")
-}
-
-model CustodyAttachment {
-  id           String   @id @default(cuid())
-  custodyId    String?  @map("custody_id")
-  expenseId    String?  @map("expense_id")
-  settlementId String?  @map("settlement_id")
-  fileName     String   @map("file_name")
-  fileSize     Int      @map("file_size")
-  mimeType     String   @map("mime_type")
-  filePath     String   @map("file_path")
-  uploadedById String   @map("uploaded_by_id")
-  uploadedAt   DateTime @default(now()) @map("uploaded_at")
-
-  custody    Custody?           @relation(fields: [custodyId], references: [id], onDelete: Cascade)
-  expense    CustodyExpense?    @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  settlement CustodySettlement? @relation(fields: [settlementId], references: [id], onDelete: Cascade)
-  uploadedBy User               @relation("CustodyFileUploader", fields: [uploadedById], references: [id])
-
-  @@index([custodyId])
-  @@index([expenseId])
-  @@map("custody_attachments")
+  @@index([status])
+  @@index([invoiceDate])
+  @@map("support_invoices")
 }
 
 model CustodyAuditLog {
   id         String   @id @default(cuid())
-  custodyId  String   @map("custody_id")
-  action     String
-  entityType String   @map("entity_type")
+  custodyId  String?  @map("custody_id")
+  action     String   // CREATE, UPDATE, DELETE, CLOSE, ADD_MEMBER, REMOVE_MEMBER, ADD_INVOICE, APPROVE_INVOICE, REJECT_INVOICE, UPLOAD
+  entityType String   @map("entity_type") // CUSTODY, INVOICE, MEMBER
   entityId   String   @map("entity_id")
   oldValue   Json?    @map("old_value")
   newValue   Json?    @map("new_value")
   userId     String   @map("user_id")
   createdAt  DateTime @default(now()) @map("created_at")
 
-  custody Custody @relation(fields: [custodyId], references: [id], onDelete: Cascade)
-  user    User    @relation("CustodyAuditActor", fields: [userId], references: [id])
+  custody Custody? @relation(fields: [custodyId], references: [id], onDelete: SetNull)
+  user    User     @relation("CustodyAuditActor", fields: [userId], references: [id])
 
   @@index([custodyId])
-  @@map("custody_audit_logs")
+  @@index([entityType])
+  @@map("support_activity_logs")
 }

@@ -492,28 +492,24 @@ export const productivityApi = {
 // ─── Support Services (خدمات مساندة) ───
 export const supportServicesApi = {
   dashboard: () => api.get('/support-services/dashboard'),
+  // Custodies
   listCustodies: (params?: any) => api.get('/support-services/custodies', { params }),
   getCustody: (id: string) => api.get(`/support-services/custodies/${id}`),
   createCustody: (data: any) => api.post('/support-services/custodies', data),
   updateCustody: (id: string, data: any) => api.patch(`/support-services/custodies/${id}`, data),
   deleteCustody: (id: string) => api.delete(`/support-services/custodies/${id}`),
-  addExpense: (data: any) => api.post('/support-services/expenses', data),
-  deleteExpense: (id: string) => api.delete(`/support-services/expenses/${id}`),
-  addSettlement: (data: any) => api.post('/support-services/settlements', data),
-  uploadFiles: (custodyId: string, files: File[], expenseId?: string) => {
-    const fd = new FormData();
-    files.forEach((f) => fd.append('files', f));
-    if (expenseId) fd.append('expenseId', expenseId);
-    return api.post(`/support-services/attachments/${custodyId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-  },
-  deleteAttachment: (id: string) => api.delete(`/support-services/attachments/${id}`),
-  downloadAllZip: (custodyId: string, expenseId?: string) =>
-    api.get('/support-services/attachments/download-all', { params: { custodyId, expenseId }, responseType: 'blob' }),
-  closeCustody: (id: string) => api.post(`/support-services/custodies/${id}/close`),
+  closeCustody: (id: string, data?: { closingNotes?: string }) => api.post(`/support-services/custodies/${id}/close`, data || {}),
+  // Invoices
+  listInvoices: (params?: any) => api.get('/support-services/invoices', { params }),
+  createInvoice: (data: any) => api.post('/support-services/invoices', data),
+  updateInvoiceStatus: (id: string, status: string) => api.patch(`/support-services/invoices/${id}/status`, { status }),
+  deleteInvoice: (id: string) => api.delete(`/support-services/invoices/${id}`),
+  // Members
   getMembers: (custodyId: string) => api.get(`/support-services/custodies/${custodyId}/members`),
-  addMember: (data: { custodyId: string; userId: string; role?: string }) => api.post('/support-services/members', data),
-  removeMember: (memberId: string, custodyId: string) => api.delete(`/support-services/members/${memberId}`, { params: { custodyId } }),
-  getAuditLogs: (custodyId: string) => api.get(`/support-services/custodies/${custodyId}/audit`),
+  addMember: (data: { custodyId: string; userId: string; roleType?: string }) => api.post('/support-services/members', data),
+  removeMember: (custodyId: string, memberId: string) => api.delete(`/support-services/custodies/${custodyId}/members/${memberId}`),
+  // Audit
+  getAuditLogs: (custodyId?: string, limit?: number) => api.get('/support-services/audit-logs', { params: { custodyId, limit } }),
 };
 
 // ─── Admin System Export ───
