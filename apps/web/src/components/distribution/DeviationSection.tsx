@@ -184,8 +184,9 @@ export default function DeviationSection() {
 
           <div>
             <label className="block text-xs text-gray-400 mb-1">ملاحظات (اختياري)</label>
-            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} maxLength={1000}
-              rows={2} className="input-field text-sm w-full resize-none" placeholder="أضف ملاحظات..." />
+            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} maxLength={500}
+              rows={2} className="input-field text-sm w-full resize-none" placeholder="أضف ملاحظة..." dir="rtl" />
+            <p className="text-[10px] text-gray-600 mt-0.5 text-left">{form.notes.length}/500</p>
           </div>
           <div className="flex justify-end"><button onClick={submit} disabled={submitting} className="btn-primary px-6 py-2 text-sm disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ'}</button></div>
         </div>

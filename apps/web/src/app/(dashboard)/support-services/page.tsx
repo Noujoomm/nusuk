@@ -17,7 +17,217 @@ const INVOICE_STATUS_AR: Record<string, string> = { UPLOADED: 'مرفوعة', AP
 const INVOICE_CLS: Record<string, string> = { UPLOADED: 'bg-blue-500/20 text-blue-300', APPROVED: 'bg-emerald-500/20 text-emerald-300', REJECTED: 'bg-red-500/20 text-red-300' };
 const ROLE_AR: Record<string, string> = { manager: 'مدير', custodian: 'مسؤول عهدة', executor: 'منفذ', viewer: 'مراقب' };
 
-type Tab = 'dashboard' | 'custodies' | 'invoices' | 'members' | 'logs';
+type Tab = 'dashboard' | 'custodies' | 'invoices' | 'members' | 'balance' | 'items' | 'logs';
+
+// ─── Balance Tab Component ─────────────────────────────
+function BalanceTab({ custodies }: { custodies: any[] }) {
+  const [selectedCustody, setSelectedCustody] = useState('');
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({ amount: '', transactionType: 'add', transactionDate: '', note: '' });
+
+  const loadTxs = useCallback(async () => {
+    if (!selectedCustody) { setTransactions([]); return; }
+    try { const { data } = await supportServicesApi.getBalanceTransactions(selectedCustody); setTransactions(data || []); } catch {}
+  }, [selectedCustody]);
+
+  useEffect(() => { loadTxs(); }, [loadTxs]);
+
+  const handleSubmit = async () => {
+    if (!selectedCustody || !form.amount || !form.transactionDate) { toast.error('جميع الحقول مطلوبة'); return; }
+    setSubmitting(true);
+    try {
+      await supportServicesApi.addBalanceTransaction({ custodyId: selectedCustody, amount: parseFloat(form.amount), transactionType: form.transactionType, transactionDate: form.transactionDate, note: form.note || undefined });
+      toast.success('تم تسجيل العملية');
+      setForm({ amount: '', transactionType: 'add', transactionDate: '', note: '' });
+      setShowForm(false);
+      loadTxs();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
+  };
+
+  const currentBalance = transactions.length > 0 ? transactions[0].runningBalance : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <select value={selectedCustody} onChange={(e) => setSelectedCustody(e.target.value)} className="input-field w-64">
+          <option value="">— اختر العهدة —</option>
+          {custodies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        {selectedCustody && <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إضافة عملية</button>}
+      </div>
+
+      {selectedCustody && (
+        <div className="analytics-card text-center py-6">
+          <p className="text-3xl font-bold tabular-nums text-white">{formatNumber(Math.round(currentBalance))} <span className="text-sm text-gray-400">ريال</span></p>
+          <p className="text-xs text-gray-400 mt-1">الرصيد الحالي</p>
+        </div>
+      )}
+
+      {showForm && (
+        <div className="glass p-5 space-y-3">
+          <h3 className="text-sm font-bold">إضافة عملية مالية</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs text-gray-400 mb-1">المبلغ (ريال) *</label><input type="number" min={0} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="input-field" dir="ltr" /></div>
+            <div><label className="block text-xs text-gray-400 mb-1">النوع *</label>
+              <select value={form.transactionType} onChange={(e) => setForm({ ...form, transactionType: e.target.value })} className="input-field">
+                <option value="add">إضافة رصيد</option>
+                <option value="deduct">خصم</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs text-gray-400 mb-1">التاريخ *</label><input type="date" value={form.transactionDate} onChange={(e) => setForm({ ...form, transactionDate: e.target.value })} className="input-field" dir="ltr" /></div>
+            <div><label className="block text-xs text-gray-400 mb-1">ملاحظة</label><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} className="input-field" placeholder="ملاحظة مختصرة..." /></div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setShowForm(false)} className="btn-secondary">إلغاء</button>
+            <button onClick={handleSubmit} disabled={submitting} className="btn-primary disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ'}</button>
+          </div>
+        </div>
+      )}
+
+      {transactions.length > 0 ? (
+        <div className="glass p-5 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-white/10">
+              {['التاريخ', 'النوع', 'المبلغ', 'ملاحظة', 'الرصيد بعد العملية', 'بواسطة'].map((h) => <th key={h} className="py-3 px-2 text-gray-400 font-medium text-right">{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {transactions.map((tx: any) => (
+                <tr key={tx.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                  <td className="py-2.5 px-2 tabular-nums text-gray-300">{new Date(tx.transactionDate).toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric' })}</td>
+                  <td className="py-2.5 px-2">
+                    <span className={cn('text-xs px-2 py-0.5 rounded-full', tx.transactionType === 'add' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300')}>
+                      {tx.transactionType === 'add' ? 'إضافة' : 'خصم'}
+                    </span>
+                  </td>
+                  <td className={cn('py-2.5 px-2 tabular-nums font-medium', tx.transactionType === 'add' ? 'text-emerald-400' : 'text-red-400')}>
+                    {tx.transactionType === 'add' ? '+' : '-'}{formatNumber(Math.round(tx.amount))}
+                  </td>
+                  <td className="py-2.5 px-2 text-gray-400">{tx.note || '—'}</td>
+                  <td className="py-2.5 px-2 tabular-nums text-white font-medium">{formatNumber(Math.round(tx.runningBalance))}</td>
+                  <td className="py-2.5 px-2 text-gray-400">{tx.createdBy?.nameAr || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : selectedCustody ? (
+        <div className="glass p-12 text-center"><DollarSign className="w-10 h-10 text-gray-500 mx-auto mb-3" /><p className="text-sm text-gray-400">لا توجد عمليات مالية</p></div>
+      ) : (
+        <div className="glass p-12 text-center"><DollarSign className="w-10 h-10 text-gray-500 mx-auto mb-3" /><p className="text-sm text-gray-400">اختر عهدة لعرض سجل الرصيد</p></div>
+      )}
+    </div>
+  );
+}
+
+// ─── Items Tab Component ──────────────────────────────
+function ItemsTab({ custodies, allUsers }: { custodies: any[]; allUsers: any[] }) {
+  const [selectedCustody, setSelectedCustody] = useState('');
+  const [items, setItems] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({ name: '', responsibleUserId: '', itemDate: '', urgencyType: 'non_urgent', description: '' });
+
+  const loadItems = useCallback(async () => {
+    if (!selectedCustody) { setItems([]); return; }
+    try { const { data } = await supportServicesApi.getCustodyItems(selectedCustody); setItems(data || []); } catch {}
+  }, [selectedCustody]);
+
+  useEffect(() => { loadItems(); }, [loadItems]);
+
+  const handleSubmit = async () => {
+    if (!selectedCustody || !form.name || !form.itemDate) { toast.error('الاسم والتاريخ مطلوبان'); return; }
+    setSubmitting(true);
+    try {
+      await supportServicesApi.createCustodyItem({ custodyId: selectedCustody, ...form, responsibleUserId: form.responsibleUserId || undefined });
+      toast.success('تم الإضافة');
+      setForm({ name: '', responsibleUserId: '', itemDate: '', urgencyType: 'non_urgent', description: '' });
+      setShowForm(false);
+      loadItems();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <select value={selectedCustody} onChange={(e) => setSelectedCustody(e.target.value)} className="input-field w-64">
+          <option value="">— اختر العهدة —</option>
+          {custodies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        {selectedCustody && <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إضافة بند</button>}
+      </div>
+
+      {showForm && (
+        <div className="glass p-5 space-y-3">
+          <h3 className="text-sm font-bold">إضافة بند جديد</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs text-gray-400 mb-1">اسم العهد *</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input-field" /></div>
+            <div><label className="block text-xs text-gray-400 mb-1">المسؤول</label>
+              <select value={form.responsibleUserId} onChange={(e) => setForm({ ...form, responsibleUserId: e.target.value })} className="input-field">
+                <option value="">— اختر —</option>
+                {allUsers.map((u: any) => <option key={u.id} value={u.id}>{u.nameAr || u.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs text-gray-400 mb-1">التاريخ *</label><input type="date" value={form.itemDate} onChange={(e) => setForm({ ...form, itemDate: e.target.value })} className="input-field" dir="ltr" /></div>
+            <div><label className="block text-xs text-gray-400 mb-1">النوع</label>
+              <select value={form.urgencyType} onChange={(e) => setForm({ ...form, urgencyType: e.target.value })} className="input-field">
+                <option value="non_urgent">غير عاجلة</option>
+                <option value="urgent">عاجلة</option>
+              </select>
+            </div>
+          </div>
+          <div><label className="block text-xs text-gray-400 mb-1">الوصف / التفاصيل</label><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input-field resize-none" rows={2} /></div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setShowForm(false)} className="btn-secondary">إلغاء</button>
+            <button onClick={handleSubmit} disabled={submitting} className="btn-primary disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ'}</button>
+          </div>
+        </div>
+      )}
+
+      {items.length > 0 ? (
+        <div className="space-y-2">
+          {items.map((item: any) => (
+            <div key={item.id} className="glass p-4 flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-medium">{item.name}</span>
+                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full', item.urgencyType === 'urgent' ? 'bg-red-500/20 text-red-300' : 'bg-gray-500/20 text-gray-300')}>
+                    {item.urgencyType === 'urgent' ? 'عاجلة' : 'غير عاجلة'}
+                  </span>
+                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full', item.status === 'active' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-gray-500/20 text-gray-300')}>
+                    {item.status === 'active' ? 'نشطة' : 'مغلقة'}
+                  </span>
+                </div>
+                <div className="flex gap-4 text-[10px] text-gray-400">
+                  <span>المسؤول: {item.responsibleUser?.nameAr || '—'}</span>
+                  <span>التاريخ: {new Date(item.itemDate).toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric' })}</span>
+                </div>
+                {item.description && <p className="text-xs text-gray-400 mt-1">{item.description}</p>}
+              </div>
+              <div className="flex gap-1">
+                {item.status === 'active' && (
+                  <button onClick={async () => { await supportServicesApi.updateCustodyItem(item.id, { status: 'closed' }); toast.success('تم الإغلاق'); loadItems(); }}
+                    className="p-1.5 rounded-lg hover:bg-amber-500/20 text-gray-400 hover:text-amber-300" title="إغلاق"><Lock className="w-3.5 h-3.5" /></button>
+                )}
+                <button onClick={async () => { await supportServicesApi.deleteCustodyItem(item.id); toast.success('تم الحذف'); loadItems(); }}
+                  className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300" title="حذف"><Trash2 className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : selectedCustody ? (
+        <div className="glass p-12 text-center"><FileText className="w-10 h-10 text-gray-500 mx-auto mb-3" /><p className="text-sm text-gray-400">لا توجد بنود</p></div>
+      ) : (
+        <div className="glass p-12 text-center"><FileText className="w-10 h-10 text-gray-500 mx-auto mb-3" /><p className="text-sm text-gray-400">اختر عهدة لعرض التفاصيل</p></div>
+      )}
+    </div>
+  );
+}
 
 export default function SupportServicesPage() {
   const { user } = useAuth();
@@ -130,6 +340,8 @@ export default function SupportServicesPage() {
     { key: 'dashboard', label: 'الرئيسية', icon: Wallet },
     { key: 'custodies', label: 'العهد', icon: DollarSign },
     { key: 'invoices', label: 'الفواتير', icon: Receipt },
+    { key: 'balance', label: 'رصيد العهد', icon: TrendingDown },
+    { key: 'items', label: 'تفاصيل العهد', icon: FileText },
     { key: 'members', label: 'الأشخاص', icon: Users },
     { key: 'logs', label: 'السجل', icon: ClipboardList },
   ];
@@ -374,6 +586,16 @@ export default function SupportServicesPage() {
           <h3 className="text-sm font-semibold mb-4 text-gray-300">الأشخاص المعينون على العهد</h3>
           <p className="text-sm text-gray-500 text-center py-8">اختر عهدة من تبويب "العهد" لعرض وإدارة الأشخاص المعينين عليها</p>
         </div>
+      )}
+
+      {/* ═══ BALANCE TAB ═══ */}
+      {tab === 'balance' && (
+        <BalanceTab custodies={custodies} />
+      )}
+
+      {/* ═══ ITEMS TAB ═══ */}
+      {tab === 'items' && (
+        <ItemsTab custodies={custodies} allUsers={allUsers} />
       )}
 
       {/* ═══ LOGS TAB ═══ */}

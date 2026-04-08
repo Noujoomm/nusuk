@@ -29,7 +29,7 @@ function Ring({ value, size = 110 }: { value: number; size?: number }) {
   );
 }
 
-const EMPTY = { gregorianDate: '', hijriDate: '', batch: '', companies: '', parcels: '', totalCards: '', cardsPerHour: '', duration: '4', specialists: '4', notes: '' };
+const EMPTY = { gregorianDate: '', hijriDate: '', batch: '', companies: '', parcels: '', totalCards: '', cardsPerHour: '', duration: '4', specialists: '4', notes: '', cardsReceived: true };
 
 export default function AchievementSection() {
   const { user } = useAuth();
@@ -63,6 +63,7 @@ export default function AchievementSection() {
         companies: parseInt(form.companies) || 0, parcels: parseInt(form.parcels) || 0,
         totalCards: cards, cardsPerHour: cph,
         duration: dur, specialists: spec,
+        cardsReceivedFromFactory: form.cardsReceived,
         ...(form.notes ? { notes: form.notes } : {}),
       });
       toast.success('تم الحفظ — نسبة الإنجاز محسوبة تلقائياً');
@@ -110,6 +111,25 @@ export default function AchievementSection() {
                 {f.k === 'cardsPerHour' && cph > 4000 && <p className="text-[10px] text-amber-400 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> تحذير: تجاوز 4000</p>}
               </div>
             ))}
+          </div>
+          {/* Cards Received Checkbox */}
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+            <input type="checkbox" checked={form.cardsReceived} onChange={(e) => setForm({ ...form, cardsReceived: e.target.checked })}
+              className="w-4 h-4 rounded accent-brand-500" id="cardsReceived" />
+            <label htmlFor="cardsReceived" className="text-sm text-gray-300 cursor-pointer">هل تم استلام البطاقات من المصنع؟</label>
+          </div>
+          {!form.cardsReceived && (
+            <div className="rounded-xl bg-gray-500/10 border border-gray-500/20 p-3 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-gray-400 shrink-0" />
+              <p className="text-xs text-gray-400">لم يتم استلام بطاقات في هذا اليوم — لا يؤثر على التقييم</p>
+            </div>
+          )}
+          {/* Notes */}
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">ملاحظات (اختياري)</label>
+            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} maxLength={500}
+              rows={2} className="input-field text-sm w-full resize-none" placeholder="أضف ملاحظة..." dir="rtl" />
+            <p className="text-[10px] text-gray-600 mt-0.5 text-left">{form.notes.length}/500</p>
           </div>
           {cards > 0 && expected > 0 && (
             <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-3 flex items-center justify-between">
@@ -195,13 +215,18 @@ export default function AchievementSection() {
         {/* Table */}
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 overflow-x-auto">
           <table className="w-full text-sm"><thead><tr className="border-b border-white/10">
-            {['التاريخ', 'الموافق', 'الدفعة', 'شركات', 'طرود', 'بطاقات', 'بطاقات/س', 'المدة', 'أخصائيين', 'المتوقع', 'الإنجاز %', ''].map((h, i) => <th key={i} className="py-2 px-2 text-[10px] text-gray-400 font-medium text-right whitespace-nowrap">{h}</th>)}
+            {['التاريخ', 'الموافق', 'الدفعة', 'استلام', 'شركات', 'طرود', 'بطاقات', 'بطاقات/س', 'المدة', 'أخصائيين', 'المتوقع', 'الإنجاز %', ''].map((h, i) => <th key={i} className="py-2 px-2 text-[10px] text-gray-400 font-medium text-right whitespace-nowrap">{h}</th>)}
           </tr></thead><tbody>
             {entries.map((e: any) => (
               <tr key={e.id} className="border-b border-white/5 hover:bg-white/[0.02]">
                 <td className="py-2 px-2 text-xs text-gray-300 tabular-nums">{new Date(e.gregorianDate).toLocaleDateString('ar-SA-u-nu-latn')}</td>
                 <td className="py-2 px-2 text-xs text-gray-300">{e.hijriDate}</td>
                 <td className="py-2 px-2 text-xs text-gray-300">{e.batch || '—'}</td>
+                <td className="py-2 px-2 text-xs">
+                  {e.cardsReceivedFromFactory !== false
+                    ? <span className="text-emerald-400">✓</span>
+                    : <span className="text-gray-500">—</span>}
+                </td>
                 <td className="py-2 px-2 text-xs text-white tabular-nums">{e.companies}</td>
                 <td className="py-2 px-2 text-xs text-white tabular-nums">{e.parcels}</td>
                 <td className="py-2 px-2 text-xs text-white tabular-nums">{formatNumber(e.totalCards)}</td>
