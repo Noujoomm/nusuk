@@ -80,6 +80,8 @@ model User {
   custodyInvoices        CustodyInvoice[]   @relation("InvoiceCreator")
   invoiceAttachments     InvoiceAttachment[] @relation("InvoiceAttachmentUploader")
   balanceTransactions    CustodyBalanceTransaction[] @relation("BalanceTxCreator")
+  custodyItemsResponsible CustodyItem[]     @relation("CustodyItemResponsible")
+  custodyItemsCreated    CustodyItem[]      @relation("CustodyItemCreator")
   custodyAuditLogs       CustodyAuditLog[]  @relation("CustodyAuditActor")
 
   @@map("users")
@@ -1342,6 +1344,7 @@ model Custody {
   members     CustodyMember[]
   invoices    CustodyInvoice[]
   balanceTxs  CustodyBalanceTransaction[]
+  items       CustodyItem[]
   auditLogs   CustodyAuditLog[]
 
   @@index([status])
@@ -1444,4 +1447,26 @@ model CustodyAuditLog {
   @@index([custodyId])
   @@index([entityType])
   @@map("custody_audit_logs")
+}
+
+model CustodyItem {
+  id                String   @id @default(cuid())
+  custodyId         String   @map("custody_id")
+  name              String
+  responsibleUserId String?  @map("responsible_user_id")
+  itemDate          DateTime @map("item_date")
+  urgencyType       String   @default("non_urgent") @map("urgency_type") // urgent | non_urgent
+  description       String?  @db.Text
+  status            String   @default("active") // active | closed
+  createdById       String   @map("created_by_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  custody       Custody @relation(fields: [custodyId], references: [id], onDelete: Cascade)
+  responsibleUser User? @relation("CustodyItemResponsible", fields: [responsibleUserId], references: [id])
+  createdBy     User   @relation("CustodyItemCreator", fields: [createdById], references: [id])
+
+  @@index([custodyId])
+  @@index([status])
+  @@map("custody_items")
 }

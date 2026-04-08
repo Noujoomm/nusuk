@@ -519,6 +519,11 @@ export const supportServicesApi = {
   // Balance Transactions
   addBalanceTransaction: (data: any) => api.post('/support-services/balance-transactions', data),
   getBalanceTransactions: (custodyId: string) => api.get(`/support-services/custodies/${custodyId}/balance-transactions`),
+  // Custody Items
+  getCustodyItems: (custodyId: string) => api.get(`/support-services/custodies/${custodyId}/items`),
+  createCustodyItem: (data: any) => api.post('/support-services/custody-items', data),
+  updateCustodyItem: (id: string, data: any) => api.patch(`/support-services/custody-items/${id}`, data),
+  deleteCustodyItem: (id: string) => api.delete(`/support-services/custody-items/${id}`),
   // Audit
   getAuditLogs: (custodyId?: string, limit?: number) => api.get('/support-services/audit-logs', { params: { custodyId, limit } }),
 };

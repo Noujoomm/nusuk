@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Plus, Trash2, Loader2, AlertCircle, ArrowLeftRight, X, Shield, Clock, FileCheck, Package, Bug } from 'lucide-react';
+import { Plus, Trash2, Loader2, AlertCircle, CheckCircle, ArrowLeftRight, X, Shield, Clock, FileCheck, Package, Bug } from 'lucide-react';
 import DatePairInput from '@/components/ui/date-pair-input';
 import toast from 'react-hot-toast';
 import { distDeviationApi } from '@/lib/api';
@@ -10,10 +10,11 @@ import { useAuth } from '@/stores/auth';
 import { cn, formatNumber } from '@/lib/utils';
 import { chartTooltipStyle, chartTooltipLabelStyle, chartTooltipItemStyle, axisTickStyle, axisStroke, gridStroke, gridStrokeDash, legendStyle } from '@/lib/chart-theme';
 
-const sevColor = (v: number) => v <= 5 ? 'text-emerald-400' : v <= 15 ? 'text-amber-400' : v < 30 ? 'text-orange-400' : 'text-red-400';
-const sevBg = (v: number) => v <= 5 ? 'bg-emerald-500/20' : v <= 15 ? 'bg-amber-500/20' : v < 30 ? 'bg-orange-500/20' : 'bg-red-500/20';
-const sevLabel = (v: number) => v === 0 ? 'مثالي' : v <= 5 ? 'ممتاز' : v <= 15 ? 'مقبول' : v < 30 ? 'تحذير' : 'حرج';
-const sevBar = (v: number) => v <= 5 ? '#34D399' : v <= 15 ? '#FBBF24' : v < 30 ? '#FB923C' : '#F87171';
+// Deviation detection is POSITIVE — higher detection = better operational visibility
+const sevColor = (v: number) => v === 0 ? 'text-gray-400' : v <= 15 ? 'text-teal-400' : v <= 30 ? 'text-emerald-400' : 'text-emerald-300';
+const sevBg = (v: number) => v === 0 ? 'bg-gray-500/20' : v <= 15 ? 'bg-teal-500/20' : v <= 30 ? 'bg-emerald-500/20' : 'bg-emerald-500/20';
+const sevLabel = (v: number) => v === 0 ? 'لا انحراف' : v <= 15 ? 'اكتشاف انحراف ✓' : v <= 30 ? 'رصد جيد ✓' : 'رصد شامل ✓';
+const sevBar = (v: number) => v === 0 ? '#6B7280' : v <= 15 ? '#2DD4BF' : v <= 30 ? '#34D399' : '#22C55E';
 const PIE_COLORS = ['#38BDF8', '#FBBF24', '#A78BFA'];
 
 function DevCard({ label, value, icon: Icon }: { label: string; value: number; icon: React.ElementType }) {
@@ -110,8 +111,8 @@ export default function DeviationSection() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-red-500/20"><ArrowLeftRight className="w-5 h-5 text-red-400" /></div>
-          <div><h2 className="text-base font-bold text-white">نسبة الانحراف</h2><p className="text-[10px] text-gray-500">كل فئة تُحسب بمعادلة مستقلة — لا يتم دمج الانحرافات</p></div>
+          <div className="p-2 rounded-xl bg-teal-500/20"><ArrowLeftRight className="w-5 h-5 text-teal-400" /></div>
+          <div><h2 className="text-base font-bold text-white">اكتشاف الانحراف</h2><p className="text-[10px] text-gray-500">مؤشر إيجابي — اكتشاف الانحراف يعني رصد تشغيلي فعّال</p></div>
         </div>
         {canEdit && <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إدخال بيانات</button>}
       </div>
@@ -194,7 +195,7 @@ export default function DeviationSection() {
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-12 text-center"><ArrowLeftRight className="w-10 h-10 text-gray-500 mx-auto mb-3" /><p className="text-sm text-gray-400">لا توجد بيانات انحراف</p></div>
       ) : (<>
         {s?.hasCritical && (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 flex items-center gap-3"><AlertCircle className="w-5 h-5 text-red-400 shrink-0" /><p className="text-sm text-red-300">تم رصد انحراف حرج (≥30%) — يحتاج تدخل فوري</p></div>
+          <div className="rounded-2xl border border-teal-500/30 bg-teal-500/10 p-4 flex items-center gap-3"><CheckCircle className="w-5 h-5 text-teal-400 shrink-0" /><p className="text-sm text-teal-300">تم اكتشاف انحراف كبير (≥30%) — مؤشر رصد تشغيلي فعّال ✓</p></div>
         )}
 
         {/* ── SECTION 1: Input Deviations ── */}

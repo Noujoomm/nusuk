@@ -150,6 +150,27 @@ export class SupportServicesController {
     return this.service.getBalanceTransactions(custodyId);
   }
 
+  // ─── Custody Items (تفاصيل العهد) ─────────────────────
+  @Get('custodies/:id/items')
+  getCustodyItems(@Param('id') custodyId: string) {
+    return this.service.getCustodyItems(custodyId);
+  }
+
+  @Post('custody-items')
+  createCustodyItem(@Body() body: any, @CurrentUser() user: any) {
+    return this.service.createCustodyItem(body, user.id);
+  }
+
+  @Patch('custody-items/:id')
+  updateCustodyItem(@Param('id') id: string, @Body() body: any, @CurrentUser() user: any) {
+    return this.service.updateCustodyItem(id, body, user.id);
+  }
+
+  @Delete('custody-items/:id')
+  deleteCustodyItem(@Param('id') id: string) {
+    return this.service.deleteCustodyItem(id);
+  }
+
   // ─── Audit Logs ────────────────────────────────────────
   @Get('audit-logs')
   getAuditLogs(@Query('custodyId') custodyId?: string, @Query('limit') limit?: string) {

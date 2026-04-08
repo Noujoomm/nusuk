@@ -456,6 +456,65 @@ export class SupportServicesService {
   }
 
   // ═══════════════════════════════════════════════════════
+  //  CUSTODY ITEMS (تفاصيل العهد)
+  // ═══════════════════════════════════════════════════════
+
+  async getCustodyItems(custodyId: string) {
+    return this.prisma.custodyItem.findMany({
+      where: { custodyId },
+      include: {
+        responsibleUser: { select: { id: true, nameAr: true, name: true } },
+        createdBy: { select: { id: true, nameAr: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createCustodyItem(data: { custodyId: string; name: string; responsibleUserId?: string; itemDate: string; urgencyType?: string; description?: string }, userId: string) {
+    const custody = await this.prisma.custody.findUnique({ where: { id: data.custodyId } });
+    if (!custody) throw new NotFoundException('العهدة غير موجودة');
+
+    return this.prisma.custodyItem.create({
+      data: {
+        custodyId: data.custodyId,
+        name: data.name,
+        responsibleUserId: data.responsibleUserId || null,
+        itemDate: new Date(data.itemDate),
+        urgencyType: data.urgencyType || 'non_urgent',
+        description: data.description,
+        createdById: userId,
+      },
+      include: {
+        responsibleUser: { select: { id: true, nameAr: true, name: true } },
+        createdBy: { select: { id: true, nameAr: true } },
+      },
+    });
+  }
+
+  async updateCustodyItem(id: string, data: { name?: string; responsibleUserId?: string; urgencyType?: string; description?: string; status?: string }, userId: string) {
+    const item = await this.prisma.custodyItem.findUnique({ where: { id } });
+    if (!item) throw new NotFoundException('البند غير موجود');
+
+    return this.prisma.custodyItem.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.responsibleUserId !== undefined && { responsibleUserId: data.responsibleUserId || null }),
+        ...(data.urgencyType !== undefined && { urgencyType: data.urgencyType }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.status !== undefined && { status: data.status }),
+      },
+    });
+  }
+
+  async deleteCustodyItem(id: string) {
+    const item = await this.prisma.custodyItem.findUnique({ where: { id } });
+    if (!item) throw new NotFoundException('البند غير موجود');
+    await this.prisma.custodyItem.delete({ where: { id } });
+    return { message: 'تم حذف البند' };
+  }
+
+  // ═══════════════════════════════════════════════════════
   //  HELPERS
   // ═══════════════════════════════════════════════════════
 
