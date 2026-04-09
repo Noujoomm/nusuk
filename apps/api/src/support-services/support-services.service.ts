@@ -515,6 +515,56 @@ export class SupportServicesService {
   }
 
   // ═══════════════════════════════════════════════════════
+  //  SUPPORT REQUESTS (الطلبات)
+  // ═══════════════════════════════════════════════════════
+
+  async listRequests(params?: { priority?: string; status?: string }) {
+    const where: any = {};
+    if (params?.priority) where.priority = params.priority;
+    if (params?.status) where.status = params.status;
+    return this.prisma.supportRequest.findMany({
+      where,
+      include: { createdBy: { select: { id: true, nameAr: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createRequest(data: { title: string; description?: string; responsibleName?: string; priority?: string }, userId: string) {
+    return this.prisma.supportRequest.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        responsibleName: data.responsibleName,
+        priority: data.priority || 'non_urgent',
+        createdById: userId,
+      },
+      include: { createdBy: { select: { id: true, nameAr: true } } },
+    });
+  }
+
+  async updateRequest(id: string, data: { title?: string; description?: string; responsibleName?: string; priority?: string; status?: string }) {
+    const req = await this.prisma.supportRequest.findUnique({ where: { id } });
+    if (!req) throw new NotFoundException('الطلب غير موجود');
+    return this.prisma.supportRequest.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.responsibleName !== undefined && { responsibleName: data.responsibleName }),
+        ...(data.priority !== undefined && { priority: data.priority }),
+        ...(data.status !== undefined && { status: data.status }),
+      },
+    });
+  }
+
+  async deleteRequest(id: string) {
+    const req = await this.prisma.supportRequest.findUnique({ where: { id } });
+    if (!req) throw new NotFoundException('الطلب غير موجود');
+    await this.prisma.supportRequest.delete({ where: { id } });
+    return { message: 'تم حذف الطلب' };
+  }
+
+  // ═══════════════════════════════════════════════════════
   //  HELPERS
   // ═══════════════════════════════════════════════════════
 

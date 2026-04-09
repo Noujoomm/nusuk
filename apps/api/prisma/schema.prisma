@@ -83,6 +83,7 @@ model User {
   custodyItemsResponsible CustodyItem[]     @relation("CustodyItemResponsible")
   custodyItemsCreated    CustodyItem[]      @relation("CustodyItemCreator")
   custodyAuditLogs       CustodyAuditLog[]  @relation("CustodyAuditActor")
+  supportRequests        SupportRequest[]   @relation("SupportRequestCreator")
 
   @@map("users")
 }
@@ -1469,4 +1470,22 @@ model CustodyItem {
   @@index([custodyId])
   @@index([status])
   @@map("custody_items")
+}
+
+model SupportRequest {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?  @db.Text
+  responsibleName String? @map("responsible_name")
+  priority      String   @default("non_urgent") // urgent | non_urgent
+  status        String   @default("open") // open | in_progress | completed
+  createdById   String   @map("created_by_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  createdBy User @relation("SupportRequestCreator", fields: [createdById], references: [id])
+
+  @@index([priority])
+  @@index([status])
+  @@map("support_requests")
 }

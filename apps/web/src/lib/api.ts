@@ -524,6 +524,11 @@ export const supportServicesApi = {
   createCustodyItem: (data: any) => api.post('/support-services/custody-items', data),
   updateCustodyItem: (id: string, data: any) => api.patch(`/support-services/custody-items/${id}`, data),
   deleteCustodyItem: (id: string) => api.delete(`/support-services/custody-items/${id}`),
+  // Requests
+  listRequests: (params?: any) => api.get('/support-services/requests', { params }),
+  createRequest: (data: any) => api.post('/support-services/requests', data),
+  updateRequest: (id: string, data: any) => api.patch(`/support-services/requests/${id}`, data),
+  deleteRequest: (id: string) => api.delete(`/support-services/requests/${id}`),
   // Audit
   getAuditLogs: (custodyId?: string, limit?: number) => api.get('/support-services/audit-logs', { params: { custodyId, limit } }),
 };

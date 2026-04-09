@@ -171,6 +171,27 @@ export class SupportServicesController {
     return this.service.deleteCustodyItem(id);
   }
 
+  // ─── Support Requests (الطلبات) ─────────────────────────
+  @Get('requests')
+  listRequests(@Query('priority') priority?: string, @Query('status') status?: string) {
+    return this.service.listRequests({ priority, status });
+  }
+
+  @Post('requests')
+  createRequest(@Body() body: any, @CurrentUser() user: any) {
+    return this.service.createRequest(body, user.id);
+  }
+
+  @Patch('requests/:id')
+  updateRequest(@Param('id') id: string, @Body() body: any) {
+    return this.service.updateRequest(id, body);
+  }
+
+  @Delete('requests/:id')
+  deleteRequest(@Param('id') id: string) {
+    return this.service.deleteRequest(id);
+  }
+
   // ─── Audit Logs ────────────────────────────────────────
   @Get('audit-logs')
   getAuditLogs(@Query('custodyId') custodyId?: string, @Query('limit') limit?: string) {

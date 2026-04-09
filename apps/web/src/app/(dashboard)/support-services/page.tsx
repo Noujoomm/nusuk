@@ -17,7 +17,7 @@ const INVOICE_STATUS_AR: Record<string, string> = { UPLOADED: 'مرفوعة', AP
 const INVOICE_CLS: Record<string, string> = { UPLOADED: 'bg-blue-500/20 text-blue-300', APPROVED: 'bg-emerald-500/20 text-emerald-300', REJECTED: 'bg-red-500/20 text-red-300' };
 const ROLE_AR: Record<string, string> = { manager: 'مدير', custodian: 'مسؤول عهدة', executor: 'منفذ', viewer: 'مراقب' };
 
-type Tab = 'dashboard' | 'custodies' | 'invoices' | 'members' | 'balance' | 'items' | 'logs';
+type Tab = 'dashboard' | 'custodies' | 'invoices' | 'members' | 'balance' | 'items' | 'requests' | 'logs';
 
 // ─── Balance Tab Component ─────────────────────────────
 function BalanceTab({ custodies }: { custodies: any[] }) {
@@ -229,6 +229,108 @@ function ItemsTab({ custodies, allUsers }: { custodies: any[]; allUsers: any[] }
   );
 }
 
+// ─── Requests Tab Component ───────────────────────────
+function RequestsTab() {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [filter, setFilter] = useState('');
+  const [form, setForm] = useState({ title: '', description: '', responsibleName: '', priority: 'non_urgent' });
+
+  const load = useCallback(async () => {
+    try { const { data } = await supportServicesApi.listRequests(filter ? { priority: filter } : {}); setRequests(data || []); } catch {}
+  }, [filter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSubmit = async () => {
+    if (!form.title) { toast.error('عنوان الطلب مطلوب'); return; }
+    setSubmitting(true);
+    try {
+      await supportServicesApi.createRequest(form);
+      toast.success('تم إضافة الطلب');
+      setForm({ title: '', description: '', responsibleName: '', priority: 'non_urgent' });
+      setShowForm(false);
+      load();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex gap-2">
+          {[{ v: '', l: 'الكل' }, { v: 'urgent', l: 'عاجل' }, { v: 'non_urgent', l: 'غير عاجل' }].map((f) => (
+            <button key={f.v} onClick={() => setFilter(f.v)}
+              className={cn('px-3 py-1.5 rounded-xl text-xs font-medium transition-colors', filter === f.v ? 'bg-brand-500/15 text-brand-400' : 'bg-white/5 text-gray-400 hover:bg-white/10')}>
+              {f.l}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> طلب جديد</button>
+      </div>
+
+      {showForm && (
+        <div className="glass p-5 space-y-3">
+          <h3 className="text-sm font-bold">إضافة طلب</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs text-gray-400 mb-1">العنوان *</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="input-field" /></div>
+            <div><label className="block text-xs text-gray-400 mb-1">المسؤول</label><input value={form.responsibleName} onChange={(e) => setForm({ ...form, responsibleName: e.target.value })} className="input-field" placeholder="اسم المسؤول" /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs text-gray-400 mb-1">الأولوية</label>
+              <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} className="input-field">
+                <option value="non_urgent">غير عاجل</option>
+                <option value="urgent">عاجل</option>
+              </select>
+            </div>
+            <div><label className="block text-xs text-gray-400 mb-1">الوصف</label><input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input-field" /></div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setShowForm(false)} className="btn-secondary">إلغاء</button>
+            <button onClick={handleSubmit} disabled={submitting} className="btn-primary disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ'}</button>
+          </div>
+        </div>
+      )}
+
+      {requests.length > 0 ? (
+        <div className="space-y-2">
+          {requests.map((r: any) => (
+            <div key={r.id} className="glass p-4 flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-medium">{r.title}</span>
+                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-medium', r.priority === 'urgent' ? 'bg-red-500/20 text-red-300' : 'bg-gray-500/20 text-gray-300')}>
+                    {r.priority === 'urgent' ? 'عاجل' : 'غير عاجل'}
+                  </span>
+                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full', r.status === 'open' ? 'bg-blue-500/20 text-blue-300' : r.status === 'completed' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300')}>
+                    {r.status === 'open' ? 'مفتوح' : r.status === 'completed' ? 'مكتمل' : 'قيد التنفيذ'}
+                  </span>
+                </div>
+                <div className="flex gap-4 text-[10px] text-gray-400">
+                  {r.responsibleName && <span>المسؤول: {r.responsibleName}</span>}
+                  <span>{r.createdBy?.nameAr}</span>
+                  <span>{new Date(r.createdAt).toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric' })}</span>
+                </div>
+                {r.description && <p className="text-xs text-gray-400 mt-1">{r.description}</p>}
+              </div>
+              <div className="flex gap-1">
+                {r.status !== 'completed' && (
+                  <button onClick={async () => { await supportServicesApi.updateRequest(r.id, { status: 'completed' }); toast.success('تم'); load(); }}
+                    className="p-1.5 rounded-lg hover:bg-emerald-500/20 text-gray-400 hover:text-emerald-300" title="إتمام"><CheckCircle className="w-3.5 h-3.5" /></button>
+                )}
+                <button onClick={async () => { await supportServicesApi.deleteRequest(r.id); toast.success('تم الحذف'); load(); }}
+                  className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300" title="حذف"><Trash2 className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="glass p-12 text-center"><ClipboardList className="w-10 h-10 text-gray-500 mx-auto mb-3" /><p className="text-sm text-gray-400">لا توجد طلبات</p></div>
+      )}
+    </div>
+  );
+}
+
 export default function SupportServicesPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'pm';
@@ -342,6 +444,7 @@ export default function SupportServicesPage() {
     { key: 'invoices', label: 'الفواتير', icon: Receipt },
     { key: 'balance', label: 'رصيد العهد', icon: TrendingDown },
     { key: 'items', label: 'تفاصيل العهد', icon: FileText },
+    { key: 'requests', label: 'الطلبات', icon: ClipboardList },
     { key: 'members', label: 'الأشخاص', icon: Users },
     { key: 'logs', label: 'السجل', icon: ClipboardList },
   ];
@@ -596,6 +699,11 @@ export default function SupportServicesPage() {
       {/* ═══ ITEMS TAB ═══ */}
       {tab === 'items' && (
         <ItemsTab custodies={custodies} allUsers={allUsers} />
+      )}
+
+      {/* ═══ REQUESTS TAB ═══ */}
+      {tab === 'requests' && (
+        <RequestsTab />
       )}
 
       {/* ═══ LOGS TAB ═══ */}
