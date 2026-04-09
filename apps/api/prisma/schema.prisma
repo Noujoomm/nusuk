@@ -84,6 +84,13 @@ model User {
   custodyItemsCreated    CustodyItem[]      @relation("CustodyItemCreator")
   custodyAuditLogs       CustodyAuditLog[]  @relation("CustodyAuditActor")
   supportRequests        SupportRequest[]   @relation("SupportRequestCreator")
+  // Custody Fund v2
+  custodyFundsCreated    CustodyFund[]      @relation("CustodyFundCreator")
+  custodyFundsClosed     CustodyFund[]      @relation("CustodyFundCloser")
+  custodyFundTxs         CustodyFundTransaction[] @relation("CustodyFundTxCreator")
+  custodyFundMemberships CustodyFundMember[] @relation("CustodyFundMemberUser")
+  custodyFundMemberAdds  CustodyFundMember[] @relation("CustodyFundMemberAdder")
+  custodyFundInvoices    CustodyFundInvoice[] @relation("CustodyFundInvCreator")
 
   @@map("users")
 }
@@ -1488,4 +1495,103 @@ model SupportRequest {
   @@index([priority])
   @@index([status])
   @@map("support_requests")
+}
+
+// ─── CUSTODY FUND MANAGEMENT (v2) ───
+
+model CustodyFund {
+  id             String   @id @default(cuid())
+  custodyName    String   @map("custody_name")
+  totalAmount    Float    @map("total_amount")
+  currentBalance Float    @map("current_balance")
+  status         String   @default("active") // active | closed
+  closedAt       DateTime? @map("closed_at")
+  closedById     String?  @map("closed_by_id")
+  closingNote    String?  @map("closing_note") @db.Text
+  createdById    String   @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  createdBy    User                   @relation("CustodyFundCreator", fields: [createdById], references: [id])
+  closedBy     User?                  @relation("CustodyFundCloser", fields: [closedById], references: [id])
+  transactions CustodyFundTransaction[]
+  members      CustodyFundMember[]
+  invoices     CustodyFundInvoice[]
+  alerts       CustodyFundAlert[]
+
+  @@index([status])
+  @@map("custody_funds")
+}
+
+model CustodyFundTransaction {
+  id              String   @id @default(cuid())
+  custodyFundId   String   @map("custody_fund_id")
+  transactionType String   @map("transaction_type") // credit | debit
+  amount          Float
+  transactionDate DateTime @map("transaction_date")
+  note            String?  @db.Text
+  createdById     String   @map("created_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  custodyFund CustodyFund @relation(fields: [custodyFundId], references: [id], onDelete: Cascade)
+  createdBy   User        @relation("CustodyFundTxCreator", fields: [createdById], references: [id])
+
+  @@index([custodyFundId])
+  @@map("custody_fund_transactions")
+}
+
+model CustodyFundMember {
+  id              String   @id @default(cuid())
+  custodyFundId   String   @map("custody_fund_id")
+  userId          String   @map("user_id")
+  allocatedAmount Float    @map("allocated_amount")
+  spentAmount     Float    @default(0) @map("spent_amount")
+  roleNote        String?  @map("role_note")
+  addedById       String?  @map("added_by_id")
+  addedAt         DateTime @default(now()) @map("added_at")
+
+  custodyFund CustodyFund @relation(fields: [custodyFundId], references: [id], onDelete: Cascade)
+  user        User        @relation("CustodyFundMemberUser", fields: [userId], references: [id])
+  addedBy     User?       @relation("CustodyFundMemberAdder", fields: [addedById], references: [id])
+  invoices    CustodyFundInvoice[]
+
+  @@unique([custodyFundId, userId])
+  @@index([custodyFundId])
+  @@map("custody_fund_members")
+}
+
+model CustodyFundInvoice {
+  id                    String   @id @default(cuid())
+  custodyFundId         String   @map("custody_fund_id")
+  custodyMemberId       String?  @map("custody_member_id")
+  invoiceName           String   @map("invoice_name")
+  amount                Float
+  invoiceDate           DateTime @map("invoice_date")
+  attachmentUrl         String?  @map("attachment_url")
+  attachmentOriginalName String? @map("attachment_original_name")
+  status                String   @default("pending") // pending | approved | rejected
+  notes                 String?  @db.Text
+  createdById           String   @map("created_by_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  custodyFund   CustodyFund        @relation(fields: [custodyFundId], references: [id], onDelete: Cascade)
+  custodyMember CustodyFundMember? @relation(fields: [custodyMemberId], references: [id])
+  createdBy     User               @relation("CustodyFundInvCreator", fields: [createdById], references: [id])
+
+  @@index([custodyFundId])
+  @@index([status])
+  @@map("custody_fund_invoices")
+}
+
+model CustodyFundAlert {
+  id            String   @id @default(cuid())
+  custodyFundId String   @map("custody_fund_id")
+  alertType     String   @default("low_balance") @map("alert_type")
+  isRead        Boolean  @default(false) @map("is_read")
+  triggeredAt   DateTime @default(now()) @map("triggered_at")
+
+  custodyFund CustodyFund @relation(fields: [custodyFundId], references: [id], onDelete: Cascade)
+
+  @@index([custodyFundId])
+  @@map("custody_fund_alerts")
 }

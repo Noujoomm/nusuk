@@ -533,6 +533,21 @@ export const supportServicesApi = {
   getAuditLogs: (custodyId?: string, limit?: number) => api.get('/support-services/audit-logs', { params: { custodyId, limit } }),
 };
 
+// ─── Custody Funds v2 ───
+export const custodyFundsApi = {
+  list: () => api.get('/custody-funds'),
+  create: (data: any) => api.post('/custody-funds', data),
+  get: (id: string) => api.get(`/custody-funds/${id}`),
+  getLedger: (id: string, page?: number) => api.get(`/custody-funds/${id}/ledger`, { params: { page } }),
+  addTransaction: (id: string, data: any) => api.post(`/custody-funds/${id}/transactions`, data),
+  addMember: (id: string, data: any) => api.post(`/custody-funds/${id}/members`, data),
+  removeMember: (id: string, mid: string) => api.delete(`/custody-funds/${id}/members/${mid}`),
+  addInvoice: (id: string, data: FormData) => api.post(`/custody-funds/${id}/invoices`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  updateInvoiceStatus: (iid: string, status: string) => api.patch(`/custody-funds/invoices/${iid}/status`, { status }),
+  close: (id: string, closingNote?: string) => api.patch(`/custody-funds/${id}/close`, { closingNote }),
+  dismissAlert: (aid: string) => api.patch(`/custody-funds/alerts/${aid}/dismiss`),
+};
+
 // ─── Admin System Export ───
 export const adminExportApi = {
   systemStats: () => api.get('/admin/system-stats'),

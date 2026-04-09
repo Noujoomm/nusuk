@@ -34,6 +34,7 @@ import { DistributionModule } from './distribution/distribution.module';
 import { AiEngineModule } from './ai-engine/ai-engine.module';
 import { ProductivityModule } from './productivity/productivity.module';
 import { SupportServicesModule } from './support-services/support-services.module';
+import { CustodyFundsModule } from './custody-funds/custody-funds.module';
 import { HealthController } from './health.controller';
 import { RootController } from './root.controller';
 
@@ -73,6 +74,7 @@ import { RootController } from './root.controller';
     AiEngineModule,
     ProductivityModule,
     SupportServicesModule,
+    CustodyFundsModule,
   ],
   controllers: [HealthController, RootController],
   providers: [
