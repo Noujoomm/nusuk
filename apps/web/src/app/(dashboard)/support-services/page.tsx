@@ -3,242 +3,427 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Wallet, Plus, Trash2, Loader2, X, AlertTriangle, CheckCircle,
-  TrendingDown, DollarSign, Receipt, Eye, Users, ClipboardList,
-  RefreshCw, Lock, FileText, UserPlus, Shield,
+  Receipt, ClipboardList,
+  RefreshCw, Lock, UserPlus, Shield, TrendingDown,
 } from 'lucide-react';
 import { supportServicesApi, usersApi } from '@/lib/api';
 import { useAuth } from '@/stores/auth';
 import { cn, formatNumber } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-const STATUS_AR: Record<string, string> = { ACTIVE: 'نشطة', LOW_BALANCE: 'رصيد منخفض', SUSPENDED: 'معلقة', CLOSED: 'مقفلة' };
-const STATUS_CLS: Record<string, string> = { ACTIVE: 'bg-emerald-500/20 text-emerald-300', LOW_BALANCE: 'bg-amber-500/20 text-amber-300', SUSPENDED: 'bg-yellow-500/20 text-yellow-300', CLOSED: 'bg-red-500/20 text-red-300' };
-const INVOICE_STATUS_AR: Record<string, string> = { UPLOADED: 'مرفوعة', APPROVED: 'معتمدة', REJECTED: 'مرفوضة' };
+// ─── Constants ────────────────────────────────────────────
+const STATUS_AR: Record<string, string> = { ACTIVE: 'نشطة', LOW_BALANCE: 'رصيد منخفض', CLOSED: 'مقفلة' };
+const STATUS_CLS: Record<string, string> = { ACTIVE: 'bg-emerald-500/20 text-emerald-300', LOW_BALANCE: 'bg-amber-500/20 text-amber-300', CLOSED: 'bg-red-500/20 text-red-300' };
 const INVOICE_CLS: Record<string, string> = { UPLOADED: 'bg-blue-500/20 text-blue-300', APPROVED: 'bg-emerald-500/20 text-emerald-300', REJECTED: 'bg-red-500/20 text-red-300' };
-const ROLE_AR: Record<string, string> = { manager: 'مدير', custodian: 'مسؤول عهدة', executor: 'منفذ', viewer: 'مراقب' };
+const ROLE_AR: Record<string, string> = { owner: 'مالك', contributor: 'مساهم', viewer: 'مراقب' };
 
-type Tab = 'dashboard' | 'custodies' | 'invoices' | 'members' | 'balance' | 'items' | 'requests' | 'logs';
+type MainTab = 'custodies' | 'requests';
 
-// ─── Balance Tab Component ─────────────────────────────
-function BalanceTab({ custodies }: { custodies: any[] }) {
-  const [selectedCustody, setSelectedCustody] = useState('');
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ amount: '', transactionType: 'add', transactionDate: '', note: '' });
+export default function SupportServicesPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.role === 'pm';
+  const [mainTab, setMainTab] = useState<MainTab>('custodies');
 
-  const loadTxs = useCallback(async () => {
-    if (!selectedCustody) { setTransactions([]); return; }
-    try { const { data } = await supportServicesApi.getBalanceTransactions(selectedCustody); setTransactions(data || []); } catch {}
-  }, [selectedCustody]);
-
-  useEffect(() => { loadTxs(); }, [loadTxs]);
-
-  const handleSubmit = async () => {
-    if (!selectedCustody || !form.amount || !form.transactionDate) { toast.error('جميع الحقول مطلوبة'); return; }
-    setSubmitting(true);
-    try {
-      await supportServicesApi.addBalanceTransaction({ custodyId: selectedCustody, amount: parseFloat(form.amount), transactionType: form.transactionType, transactionDate: form.transactionDate, note: form.note || undefined });
-      toast.success('تم تسجيل العملية');
-      setForm({ amount: '', transactionType: 'add', transactionDate: '', note: '' });
-      setShowForm(false);
-      loadTxs();
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
-  };
-
-  const currentBalance = transactions.length > 0 ? transactions[0].runningBalance : 0;
+  if (!isAdmin) return (
+    <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
+      <Shield className="h-12 w-12" /><p className="text-sm">غير مصرح بالوصول</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 pb-20" dir="rtl">
       <div className="flex items-center justify-between">
-        <select value={selectedCustody} onChange={(e) => setSelectedCustody(e.target.value)} className="input-field w-64">
-          <option value="">— اختر العهدة —</option>
-          {custodies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        {selectedCustody && <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إضافة عملية</button>}
+        <div><h1 className="text-2xl font-bold">خدمات المساندة</h1><p className="text-gray-400 mt-1 text-sm">إدارة العهد والطلبات</p></div>
       </div>
 
-      {selectedCustody && (
-        <div className="analytics-card text-center py-6">
-          <p className="text-3xl font-bold tabular-nums text-white">{formatNumber(Math.round(currentBalance))} <span className="text-sm text-gray-400">ريال</span></p>
-          <p className="text-xs text-gray-400 mt-1">الرصيد الحالي</p>
-        </div>
-      )}
+      {/* Main Tabs */}
+      <div className="flex gap-2 p-1 bg-white/[0.03] rounded-2xl border border-white/[0.06] w-fit">
+        <button onClick={() => setMainTab('custodies')}
+          className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all',
+            mainTab === 'custodies' ? 'bg-brand-500/15 text-brand-400' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5')}>
+          <Wallet className="w-4 h-4" /> إدارة العهد
+        </button>
+        <button onClick={() => setMainTab('requests')}
+          className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all',
+            mainTab === 'requests' ? 'bg-brand-500/15 text-brand-400' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5')}>
+          <ClipboardList className="w-4 h-4" /> الطلبات
+        </button>
+      </div>
 
-      {showForm && (
-        <div className="glass p-5 space-y-3">
-          <h3 className="text-sm font-bold">إضافة عملية مالية</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs text-gray-400 mb-1">المبلغ (ريال) *</label><input type="number" min={0} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="input-field" dir="ltr" /></div>
-            <div><label className="block text-xs text-gray-400 mb-1">النوع *</label>
-              <select value={form.transactionType} onChange={(e) => setForm({ ...form, transactionType: e.target.value })} className="input-field">
-                <option value="add">إضافة رصيد</option>
-                <option value="deduct">خصم</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs text-gray-400 mb-1">التاريخ *</label><input type="date" value={form.transactionDate} onChange={(e) => setForm({ ...form, transactionDate: e.target.value })} className="input-field" dir="ltr" /></div>
-            <div><label className="block text-xs text-gray-400 mb-1">ملاحظة</label><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} className="input-field" placeholder="ملاحظة مختصرة..." /></div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setShowForm(false)} className="btn-secondary">إلغاء</button>
-            <button onClick={handleSubmit} disabled={submitting} className="btn-primary disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ'}</button>
-          </div>
-        </div>
-      )}
-
-      {transactions.length > 0 ? (
-        <div className="glass p-5 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-white/10">
-              {['التاريخ', 'النوع', 'المبلغ', 'ملاحظة', 'الرصيد بعد العملية', 'بواسطة'].map((h) => <th key={h} className="py-3 px-2 text-gray-400 font-medium text-right">{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {transactions.map((tx: any) => (
-                <tr key={tx.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                  <td className="py-2.5 px-2 tabular-nums text-gray-300">{new Date(tx.transactionDate).toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric' })}</td>
-                  <td className="py-2.5 px-2">
-                    <span className={cn('text-xs px-2 py-0.5 rounded-full', tx.transactionType === 'add' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300')}>
-                      {tx.transactionType === 'add' ? 'إضافة' : 'خصم'}
-                    </span>
-                  </td>
-                  <td className={cn('py-2.5 px-2 tabular-nums font-medium', tx.transactionType === 'add' ? 'text-emerald-400' : 'text-red-400')}>
-                    {tx.transactionType === 'add' ? '+' : '-'}{formatNumber(Math.round(tx.amount))}
-                  </td>
-                  <td className="py-2.5 px-2 text-gray-400">{tx.note || '—'}</td>
-                  <td className="py-2.5 px-2 tabular-nums text-white font-medium">{formatNumber(Math.round(tx.runningBalance))}</td>
-                  <td className="py-2.5 px-2 text-gray-400">{tx.createdBy?.nameAr || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : selectedCustody ? (
-        <div className="glass p-12 text-center"><DollarSign className="w-10 h-10 text-gray-500 mx-auto mb-3" /><p className="text-sm text-gray-400">لا توجد عمليات مالية</p></div>
-      ) : (
-        <div className="glass p-12 text-center"><DollarSign className="w-10 h-10 text-gray-500 mx-auto mb-3" /><p className="text-sm text-gray-400">اختر عهدة لعرض سجل الرصيد</p></div>
-      )}
+      {mainTab === 'custodies' && <CustodyModule />}
+      {mainTab === 'requests' && <RequestsModule />}
     </div>
   );
 }
 
-// ─── Items Tab Component ──────────────────────────────
-function ItemsTab({ custodies, allUsers }: { custodies: any[]; allUsers: any[] }) {
-  const [selectedCustody, setSelectedCustody] = useState('');
-  const [items, setItems] = useState<any[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ name: '', responsibleUserId: '', itemDate: '', urgencyType: 'non_urgent', description: '' });
+// ═══════════════════════════════════════════════════════════
+//  CUSTODY MODULE (إدارة العهد)
+// ═══════════════════════════════════════════════════════════
 
-  const loadItems = useCallback(async () => {
-    if (!selectedCustody) { setItems([]); return; }
-    try { const { data } = await supportServicesApi.getCustodyItems(selectedCustody); setItems(data || []); } catch {}
-  }, [selectedCustody]);
+function CustodyModule() {
+  const [custodies, setCustodies] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [selected, setSelected] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
-  useEffect(() => { loadItems(); }, [loadItems]);
-
-  const handleSubmit = async () => {
-    if (!selectedCustody || !form.name || !form.itemDate) { toast.error('الاسم والتاريخ مطلوبان'); return; }
-    setSubmitting(true);
+  const load = useCallback(async () => {
     try {
-      await supportServicesApi.createCustodyItem({ custodyId: selectedCustody, ...form, responsibleUserId: form.responsibleUserId || undefined });
-      toast.success('تم الإضافة');
-      setForm({ name: '', responsibleUserId: '', itemDate: '', urgencyType: 'non_urgent', description: '' });
-      setShowForm(false);
-      loadItems();
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
-  };
+      const [c, u] = await Promise.all([supportServicesApi.listCustodies(), usersApi.list({ pageSize: 200 })]);
+      setCustodies(c.data.data || []);
+      setAllUsers(u.data.data || u.data || []);
+    } catch {} finally { setLoading(false); }
+  }, []);
 
+  useEffect(() => { load(); }, [load]);
+
+  const openDetail = useCallback(async (id: string) => {
+    try { const { data } = await supportServicesApi.getCustody(id); setSelected(data); } catch { toast.error('فشل تحميل العهدة'); }
+  }, []);
+
+  if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>;
+
+  // ── Detail View ──
+  if (selected) return (
+    <CustodyDetail custody={selected} allUsers={allUsers} onBack={() => { setSelected(null); load(); }} onRefresh={() => openDetail(selected.id)} onReload={load} />
+  );
+
+  // ── List View ──
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <select value={selectedCustody} onChange={(e) => setSelectedCustody(e.target.value)} className="input-field w-64">
-          <option value="">— اختر العهدة —</option>
-          {custodies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        {selectedCustody && <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إضافة بند</button>}
+      <div className="flex justify-between items-center">
+        <p className="text-sm text-gray-400">{custodies.length} عهدة</p>
+        <div className="flex gap-2">
+          <button onClick={() => setShowCreateForm(!showCreateForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> عهدة جديدة</button>
+          <button onClick={load} className="btn-secondary p-2"><RefreshCw className="w-4 h-4" /></button>
+        </div>
       </div>
 
-      {showForm && (
-        <div className="glass p-5 space-y-3">
-          <h3 className="text-sm font-bold">إضافة بند جديد</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs text-gray-400 mb-1">اسم العهد *</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input-field" /></div>
-            <div><label className="block text-xs text-gray-400 mb-1">المسؤول</label>
-              <select value={form.responsibleUserId} onChange={(e) => setForm({ ...form, responsibleUserId: e.target.value })} className="input-field">
-                <option value="">— اختر —</option>
-                {allUsers.map((u: any) => <option key={u.id} value={u.id}>{u.nameAr || u.name}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs text-gray-400 mb-1">التاريخ *</label><input type="date" value={form.itemDate} onChange={(e) => setForm({ ...form, itemDate: e.target.value })} className="input-field" dir="ltr" /></div>
-            <div><label className="block text-xs text-gray-400 mb-1">النوع</label>
-              <select value={form.urgencyType} onChange={(e) => setForm({ ...form, urgencyType: e.target.value })} className="input-field">
-                <option value="non_urgent">غير عاجلة</option>
-                <option value="urgent">عاجلة</option>
-              </select>
-            </div>
-          </div>
-          <div><label className="block text-xs text-gray-400 mb-1">الوصف / التفاصيل</label><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input-field resize-none" rows={2} /></div>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setShowForm(false)} className="btn-secondary">إلغاء</button>
-            <button onClick={handleSubmit} disabled={submitting} className="btn-primary disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ'}</button>
-          </div>
-        </div>
-      )}
+      {/* ── Create Form ── */}
+      {showCreateForm && <CreateCustodyForm allUsers={allUsers} onSuccess={() => { setShowCreateForm(false); load(); }} onCancel={() => setShowCreateForm(false)} />}
 
-      {items.length > 0 ? (
-        <div className="space-y-2">
-          {items.map((item: any) => (
-            <div key={item.id} className="glass p-4 flex items-center justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium">{item.name}</span>
-                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full', item.urgencyType === 'urgent' ? 'bg-red-500/20 text-red-300' : 'bg-gray-500/20 text-gray-300')}>
-                    {item.urgencyType === 'urgent' ? 'عاجلة' : 'غير عاجلة'}
-                  </span>
-                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full', item.status === 'active' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-gray-500/20 text-gray-300')}>
-                    {item.status === 'active' ? 'نشطة' : 'مغلقة'}
-                  </span>
+      {/* ── Cards Grid ── */}
+      {custodies.length === 0 ? (
+        <div className="glass p-16 text-center"><Wallet className="w-12 h-12 text-gray-600 mx-auto mb-3" /><p className="text-gray-400">لا توجد عهد — أنشئ عهدة جديدة</p></div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {custodies.map((c: any) => {
+            const pct = c.initialBalance ? Math.round(((c.spentAmount || 0) / (c.initialBalance || 1)) * 100) : 0;
+            const remaining = (c.currentBalance ?? c.remainingAmount ?? 0);
+            const isLow = c.status === 'LOW_BALANCE';
+            return (
+              <div key={c.id} onClick={() => openDetail(c.id)}
+                className={cn('glass p-5 cursor-pointer hover:bg-white/[0.06] transition-all', isLow && 'border-amber-500/30')}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold">{c.name}</h3>
+                  <span className={cn('text-[10px] px-2 py-0.5 rounded-full', STATUS_CLS[c.status] || 'bg-gray-500/20 text-gray-300')}>{STATUS_AR[c.status] || c.status}</span>
                 </div>
-                <div className="flex gap-4 text-[10px] text-gray-400">
-                  <span>المسؤول: {item.responsibleUser?.nameAr || '—'}</span>
-                  <span>التاريخ: {new Date(item.itemDate).toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric' })}</span>
-                </div>
-                {item.description && <p className="text-xs text-gray-400 mt-1">{item.description}</p>}
-              </div>
-              <div className="flex gap-1">
-                {item.status === 'active' && (
-                  <button onClick={async () => { await supportServicesApi.updateCustodyItem(item.id, { status: 'closed' }); toast.success('تم الإغلاق'); loadItems(); }}
-                    className="p-1.5 rounded-lg hover:bg-amber-500/20 text-gray-400 hover:text-amber-300" title="إغلاق"><Lock className="w-3.5 h-3.5" /></button>
+                {/* Low Balance Alert */}
+                {isLow && (
+                  <div className="mb-3 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <p className="text-[10px] text-amber-300">تنبيه: رصيد العهدة اقترب من النفاد (أقل من 20%)</p>
+                  </div>
                 )}
-                <button onClick={async () => { await supportServicesApi.deleteCustodyItem(item.id); toast.success('تم الحذف'); loadItems(); }}
-                  className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300" title="حذف"><Trash2 className="w-3.5 h-3.5" /></button>
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="text-center p-2 rounded-lg bg-white/[0.03]">
+                    <p className="text-sm font-bold tabular-nums">{formatNumber(Math.round(c.initialBalance || c.totalAmount || 0))}</p>
+                    <p className="text-[9px] text-gray-500">الرصيد</p>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-white/[0.03]">
+                    <p className="text-sm font-bold tabular-nums text-amber-400">{formatNumber(Math.round(c.spentAmount || 0))}</p>
+                    <p className="text-[9px] text-gray-500">المصروف</p>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-white/[0.03]">
+                    <p className="text-sm font-bold tabular-nums text-emerald-400">{formatNumber(Math.round(remaining))}</p>
+                    <p className="text-[9px] text-gray-500">المتبقي</p>
+                  </div>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, pct)}%`, background: pct >= 80 ? '#ef4444' : pct >= 50 ? '#f59e0b' : '#22c55e' }} />
+                </div>
+                <div className="flex items-center justify-between mt-2 text-[10px] text-gray-500">
+                  <span>المسؤول: {c.assignedTo?.nameAr || '—'}</span>
+                  <span>{c._count?.invoices || 0} فاتورة · {c._count?.members || 0} عضو</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
-      ) : selectedCustody ? (
-        <div className="glass p-12 text-center"><FileText className="w-10 h-10 text-gray-500 mx-auto mb-3" /><p className="text-sm text-gray-400">لا توجد بنود</p></div>
-      ) : (
-        <div className="glass p-12 text-center"><FileText className="w-10 h-10 text-gray-500 mx-auto mb-3" /><p className="text-sm text-gray-400">اختر عهدة لعرض التفاصيل</p></div>
       )}
     </div>
   );
 }
 
-// ─── Requests Tab Component ───────────────────────────
-function RequestsTab() {
+// ─── Create Custody Form ──────────────────────────────────
+function CreateCustodyForm({ allUsers, onSuccess, onCancel }: { allUsers: any[]; onSuccess: () => void; onCancel: () => void }) {
+  const [form, setForm] = useState({ name: '', initialBalance: '', balanceAddedAt: '', assignedToId: '', notes: '' });
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!form.name || !form.initialBalance || !form.balanceAddedAt) { toast.error('الاسم والرصيد والتاريخ مطلوبة'); return; }
+    setSubmitting(true);
+    try {
+      await supportServicesApi.createCustody({ ...form, initialBalance: parseFloat(form.initialBalance), assignedToId: form.assignedToId || undefined });
+      toast.success('تم إنشاء العهدة');
+      onSuccess();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="glass p-5 space-y-3">
+      <div className="flex items-center justify-between"><h3 className="text-sm font-bold">إنشاء عهدة جديدة</h3><button onClick={onCancel}><X className="w-4 h-4 text-gray-400" /></button></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div><label className="block text-xs text-gray-400 mb-1">اسم العهدة *</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input-field" placeholder="مثال: عهدة المصروفات" /></div>
+        <div><label className="block text-xs text-gray-400 mb-1">الرصيد الأساسي (ريال) *</label><input type="number" min={0} value={form.initialBalance} onChange={(e) => setForm({ ...form, initialBalance: e.target.value })} className="input-field" dir="ltr" /></div>
+        <div><label className="block text-xs text-gray-400 mb-1">تاريخ إضافة الرصيد *</label><input type="date" value={form.balanceAddedAt} onChange={(e) => setForm({ ...form, balanceAddedAt: e.target.value })} className="input-field" dir="ltr" /></div>
+        <div><label className="block text-xs text-gray-400 mb-1">مسؤول العهدة</label>
+          <select value={form.assignedToId} onChange={(e) => setForm({ ...form, assignedToId: e.target.value })} className="input-field">
+            <option value="">— اختر —</option>
+            {allUsers.map((u: any) => <option key={u.id} value={u.id}>{u.nameAr || u.name}</option>)}
+          </select>
+        </div>
+      </div>
+      <div><label className="block text-xs text-gray-400 mb-1">ملاحظات</label><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field resize-none" rows={2} /></div>
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="btn-secondary">إلغاء</button>
+        <button onClick={handleSubmit} disabled={submitting} className="btn-primary disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'إنشاء العهدة'}</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Custody Detail View ──────────────────────────────────
+function CustodyDetail({ custody: c, allUsers, onBack, onRefresh, onReload }: {
+  custody: any; allUsers: any[]; onBack: () => void; onRefresh: () => void; onReload: () => void;
+}) {
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+  const [showMemberForm, setShowMemberForm] = useState(false);
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [invoiceForm, setInvoiceForm] = useState({ name: '', amount: '', invoiceDate: '', invoiceNumber: '', description: '' });
+  const [memberForm, setMemberForm] = useState({ userId: '', roleType: 'contributor' });
+  const [closeNotes, setCloseNotes] = useState('');
+
+  const isClosed = c.status === 'CLOSED';
+  const remaining = c.currentBalance ?? c.remainingAmount ?? 0;
+  const initial = c.initialBalance ?? c.totalAmount ?? 1;
+  const pct = initial > 0 ? Math.round(((c.spentAmount || 0) / initial) * 100) : 0;
+
+  const handleAddInvoice = async () => {
+    if (!invoiceForm.name || !invoiceForm.amount) { toast.error('اسم الفاتورة والمبلغ مطلوبان'); return; }
+    setSubmitting(true);
+    try {
+      await supportServicesApi.createInvoice({ custodyId: c.id, ...invoiceForm, amount: parseFloat(invoiceForm.amount), invoiceDate: invoiceForm.invoiceDate || new Date().toISOString() });
+      toast.success('تم إضافة الفاتورة');
+      setInvoiceForm({ name: '', amount: '', invoiceDate: '', invoiceNumber: '', description: '' });
+      setShowInvoiceForm(false);
+      onRefresh(); onReload();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
+  };
+
+  const handleAddMember = async () => {
+    if (!memberForm.userId) { toast.error('اختر المستخدم'); return; }
+    setSubmitting(true);
+    try {
+      await supportServicesApi.addMember({ custodyId: c.id, ...memberForm });
+      toast.success('تم إضافة العضو');
+      setMemberForm({ userId: '', roleType: 'contributor' });
+      setShowMemberForm(false);
+      onRefresh();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
+  };
+
+  const handleClose = async () => {
+    setSubmitting(true);
+    try {
+      await supportServicesApi.closeCustody(c.id, { closingNotes: closeNotes });
+      toast.success('تم إقفال العهدة');
+      setShowCloseDialog(false);
+      onBack();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="btn-secondary text-sm">← العودة</button>
+
+      {/* Header Card */}
+      <div className="glass p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-lg font-bold">{c.name}</h2>
+            {c.code && <span className="text-[10px] text-gray-500 tabular-nums">{c.code}</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            {c.assignedTo && <span className="text-xs text-gray-400">المسؤول: <span className="text-white">{c.assignedTo.nameAr}</span></span>}
+            <span className={cn('text-xs px-3 py-1 rounded-full', STATUS_CLS[c.status])}>{STATUS_AR[c.status]}</span>
+          </div>
+        </div>
+
+        {/* Low Balance Alert */}
+        {c.status === 'LOW_BALANCE' && (
+          <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <p className="text-xs text-amber-300">تنبيه: رصيد العهدة اقترب من النفاد (أقل من 20%)</p>
+          </div>
+        )}
+
+        {/* Closed Banner */}
+        {isClosed && c.closedBy && (
+          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300">
+            مقفلة بتاريخ {new Date(c.closedAt).toLocaleDateString('ar-SA-u-nu-latn')} بواسطة {c.closedBy.nameAr}
+            {c.closingNotes && <span className="block mt-1 text-gray-400">{c.closingNotes}</span>}
+          </div>
+        )}
+
+        {/* Financial Summary */}
+        <div className="grid grid-cols-3 gap-3 mb-3">
+          <div className="text-center p-3 rounded-xl bg-white/[0.03]"><p className="text-lg font-bold tabular-nums">{formatNumber(Math.round(initial))}</p><p className="text-[10px] text-gray-500">الرصيد الأساسي</p></div>
+          <div className="text-center p-3 rounded-xl bg-white/[0.03]"><p className="text-lg font-bold tabular-nums text-amber-400">{formatNumber(Math.round(c.spentAmount || 0))}</p><p className="text-[10px] text-gray-500">المصروف</p></div>
+          <div className="text-center p-3 rounded-xl bg-white/[0.03]"><p className="text-lg font-bold tabular-nums text-emerald-400">{formatNumber(Math.round(remaining))}</p><p className="text-[10px] text-gray-500">المتبقي</p></div>
+        </div>
+        <div className="mb-4">
+          <div className="flex justify-between text-[10px] text-gray-400 mb-1"><span>المصروف: {pct}%</span><span>المتبقي: {100 - pct}%</span></div>
+          <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, pct)}%`, background: pct >= 80 ? '#ef4444' : pct >= 50 ? '#f59e0b' : '#22c55e' }} />
+          </div>
+        </div>
+
+        {/* Actions */}
+        {!isClosed && (
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => setShowInvoiceForm(true)} className="btn-primary text-sm flex items-center gap-1.5"><Receipt className="w-4 h-4" /> إضافة فاتورة</button>
+            <button onClick={() => setShowMemberForm(true)} className="btn-secondary text-sm flex items-center gap-1.5"><UserPlus className="w-4 h-4" /> إضافة مسؤول</button>
+            <button onClick={() => setShowCloseDialog(true)} className="btn-danger text-sm flex items-center gap-1.5"><Lock className="w-4 h-4" /> إقفال العهدة</button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Add Invoice Form ── */}
+      {showInvoiceForm && (
+        <div className="glass p-5 space-y-3">
+          <div className="flex items-center justify-between"><h3 className="text-sm font-bold">إضافة فاتورة</h3><button onClick={() => setShowInvoiceForm(false)}><X className="w-4 h-4 text-gray-400" /></button></div>
+          <p className="text-xs text-gray-400">المتبقي: <span className="text-emerald-400 font-bold">{formatNumber(Math.round(remaining))} ريال</span></p>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs text-gray-400 mb-1">اسم الفاتورة *</label><input value={invoiceForm.name} onChange={(e) => setInvoiceForm({ ...invoiceForm, name: e.target.value })} className="input-field" /></div>
+            <div><label className="block text-xs text-gray-400 mb-1">المبلغ (ريال) *</label><input type="number" min={0} value={invoiceForm.amount} onChange={(e) => setInvoiceForm({ ...invoiceForm, amount: e.target.value })} className="input-field" dir="ltr" /></div>
+            <div><label className="block text-xs text-gray-400 mb-1">التاريخ</label><input type="date" value={invoiceForm.invoiceDate} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoiceDate: e.target.value })} className="input-field" dir="ltr" /></div>
+            <div><label className="block text-xs text-gray-400 mb-1">رقم الفاتورة</label><input value={invoiceForm.invoiceNumber} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoiceNumber: e.target.value })} className="input-field" dir="ltr" /></div>
+          </div>
+          <div><label className="block text-xs text-gray-400 mb-1">وصف</label><textarea value={invoiceForm.description} onChange={(e) => setInvoiceForm({ ...invoiceForm, description: e.target.value })} className="input-field resize-none" rows={2} /></div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setShowInvoiceForm(false)} className="btn-secondary">إلغاء</button>
+            <button onClick={handleAddInvoice} disabled={submitting} className="btn-primary disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ الفاتورة'}</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Invoices List ── */}
+      <div className="glass p-5">
+        <h3 className="text-sm font-semibold mb-3 text-gray-300">الفواتير ({c.invoices?.length || 0})</h3>
+        {c.invoices?.length > 0 ? (
+          <div className="space-y-2">
+            {c.invoices.map((inv: any) => (
+              <div key={inv.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                <div>
+                  <div className="flex items-center gap-2"><p className="text-sm font-medium">{inv.name}</p>{inv.invoiceNumber && <span className="text-[10px] text-gray-500">#{inv.invoiceNumber}</span>}</div>
+                  <p className="text-[10px] text-gray-500">{inv.createdBy?.nameAr} — {new Date(inv.invoiceDate || inv.createdAt).toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric' })}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full', INVOICE_CLS[inv.status])}>{inv.status === 'UPLOADED' ? 'مرفوعة' : inv.status === 'APPROVED' ? 'معتمدة' : 'مرفوضة'}</span>
+                  <span className="text-sm font-bold tabular-nums text-amber-400">{formatNumber(Math.round(inv.amount))} ريال</span>
+                  {!isClosed && inv.status === 'UPLOADED' && (
+                    <div className="flex gap-1">
+                      <button onClick={async () => { await supportServicesApi.updateInvoiceStatus(inv.id, 'APPROVED'); toast.success('تم الاعتماد'); onRefresh(); onReload(); }} className="p-1 rounded-lg hover:bg-emerald-500/20 text-gray-400 hover:text-emerald-300" title="اعتماد"><CheckCircle className="w-3.5 h-3.5" /></button>
+                      <button onClick={async () => { await supportServicesApi.deleteInvoice(inv.id); toast.success('تم الحذف'); onRefresh(); onReload(); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300" title="حذف"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-sm text-gray-500 text-center py-6">لا توجد فواتير</p>}
+      </div>
+
+      {/* ── Members ── */}
+      <div className="glass p-5">
+        <h3 className="text-sm font-semibold mb-3 text-gray-300">المسؤولون ({c.members?.length || 0})</h3>
+        {showMemberForm && (
+          <div className="mb-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <select value={memberForm.userId} onChange={(e) => setMemberForm({ ...memberForm, userId: e.target.value })} className="input-field text-sm">
+                <option value="">— اختر مستخدم —</option>
+                {allUsers.map((u: any) => <option key={u.id} value={u.id}>{u.nameAr || u.name} ({u.email})</option>)}
+              </select>
+              <select value={memberForm.roleType} onChange={(e) => setMemberForm({ ...memberForm, roleType: e.target.value })} className="input-field text-sm">
+                <option value="owner">مالك</option>
+                <option value="contributor">مساهم</option>
+                <option value="viewer">مراقب</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowMemberForm(false)} className="text-xs text-gray-400">إلغاء</button>
+              <button onClick={handleAddMember} disabled={submitting} className="btn-primary text-xs disabled:opacity-50">{submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : 'إضافة'}</button>
+            </div>
+          </div>
+        )}
+        {c.members?.length > 0 ? (
+          <div className="space-y-2">
+            {c.members.map((m: any) => (
+              <div key={m.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-brand-500/20 flex items-center justify-center text-xs font-bold text-brand-300">{m.user?.nameAr?.charAt(0) || '?'}</div>
+                  <div><p className="text-sm font-medium">{m.user?.nameAr || m.user?.name}</p><p className="text-[10px] text-gray-500">{m.user?.email}</p></div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-gray-300">{ROLE_AR[m.roleType] || m.roleType}</span>
+                  {!isClosed && <button onClick={async () => { await supportServicesApi.removeMember(c.id, m.id); toast.success('تم الإزالة'); onRefresh(); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300"><Trash2 className="w-3 h-3" /></button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-sm text-gray-500 text-center py-4">لم يتم تعيين مسؤولين</p>}
+      </div>
+
+      {/* ── Close Custody Dialog ── */}
+      {showCloseDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="glass p-6 w-full max-w-md space-y-4">
+            <div className="flex items-center gap-2 text-red-400"><AlertTriangle className="w-5 h-5" /><h3 className="text-sm font-bold">تأكيد إقفال العهدة</h3></div>
+            <p className="text-xs text-gray-300">سيتم إقفال العهدة "<span className="text-white font-medium">{c.name}</span>" نهائياً. لن يمكن إضافة فواتير أو تعديل البيانات بعد الإقفال.</p>
+            <div className="p-3 rounded-xl bg-white/[0.03] text-xs space-y-1">
+              <div className="flex justify-between"><span className="text-gray-400">الرصيد النهائي:</span><span className="text-emerald-400 font-bold">{formatNumber(Math.round(remaining))} ريال</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">المصروف:</span><span className="text-amber-400 font-bold">{formatNumber(Math.round(c.spentAmount || 0))} ريال</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">الفواتير:</span><span>{c.invoices?.length || 0}</span></div>
+            </div>
+            <div><label className="block text-xs text-gray-400 mb-1">ملاحظات الإقفال</label><textarea value={closeNotes} onChange={(e) => setCloseNotes(e.target.value)} className="input-field resize-none" rows={2} placeholder="سبب الإقفال..." /></div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowCloseDialog(false)} className="btn-secondary">إلغاء</button>
+              <button onClick={handleClose} disabled={submitting} className="btn-danger disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'تأكيد الإقفال'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+//  REQUESTS MODULE (الطلبات)
+// ═══════════════════════════════════════════════════════════
+
+function RequestsModule() {
   const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [filter, setFilter] = useState('');
   const [form, setForm] = useState({ title: '', description: '', responsibleName: '', priority: 'non_urgent' });
 
   const load = useCallback(async () => {
-    try { const { data } = await supportServicesApi.listRequests(filter ? { priority: filter } : {}); setRequests(data || []); } catch {}
+    try { const { data } = await supportServicesApi.listRequests(filter ? { priority: filter } : {}); setRequests(data || []); }
+    catch {} finally { setLoading(false); }
   }, [filter]);
 
   useEffect(() => { load(); }, [load]);
@@ -255,6 +440,8 @@ function RequestsTab() {
     } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
   };
 
+  if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -269,9 +456,10 @@ function RequestsTab() {
         <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> طلب جديد</button>
       </div>
 
+      {/* Create Form */}
       {showForm && (
         <div className="glass p-5 space-y-3">
-          <h3 className="text-sm font-bold">إضافة طلب</h3>
+          <div className="flex items-center justify-between"><h3 className="text-sm font-bold">إضافة طلب جديد</h3><button onClick={() => setShowForm(false)}><X className="w-4 h-4 text-gray-400" /></button></div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className="block text-xs text-gray-400 mb-1">العنوان *</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="input-field" /></div>
             <div><label className="block text-xs text-gray-400 mb-1">المسؤول</label><input value={form.responsibleName} onChange={(e) => setForm({ ...form, responsibleName: e.target.value })} className="input-field" placeholder="اسم المسؤول" /></div>
@@ -283,7 +471,7 @@ function RequestsTab() {
                 <option value="urgent">عاجل</option>
               </select>
             </div>
-            <div><label className="block text-xs text-gray-400 mb-1">الوصف</label><input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input-field" /></div>
+            <div><label className="block text-xs text-gray-400 mb-1">الوصف</label><input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input-field" placeholder="وصف مختصر..." /></div>
           </div>
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowForm(false)} className="btn-secondary">إلغاء</button>
@@ -292,7 +480,10 @@ function RequestsTab() {
         </div>
       )}
 
-      {requests.length > 0 ? (
+      {/* Requests List */}
+      {requests.length === 0 ? (
+        <div className="glass p-16 text-center"><ClipboardList className="w-12 h-12 text-gray-600 mx-auto mb-3" /><p className="text-gray-400">لا توجد طلبات</p></div>
+      ) : (
         <div className="space-y-2">
           {requests.map((r: any) => (
             <div key={r.id} className="glass p-4 flex items-center justify-between">
@@ -302,7 +493,10 @@ function RequestsTab() {
                   <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-medium', r.priority === 'urgent' ? 'bg-red-500/20 text-red-300' : 'bg-gray-500/20 text-gray-300')}>
                     {r.priority === 'urgent' ? 'عاجل' : 'غير عاجل'}
                   </span>
-                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full', r.status === 'open' ? 'bg-blue-500/20 text-blue-300' : r.status === 'completed' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300')}>
+                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full',
+                    r.status === 'open' ? 'bg-blue-500/20 text-blue-300' :
+                    r.status === 'completed' ? 'bg-emerald-500/20 text-emerald-300' :
+                    'bg-amber-500/20 text-amber-300')}>
                     {r.status === 'open' ? 'مفتوح' : r.status === 'completed' ? 'مكتمل' : 'قيد التنفيذ'}
                   </span>
                 </div>
@@ -314,8 +508,12 @@ function RequestsTab() {
                 {r.description && <p className="text-xs text-gray-400 mt-1">{r.description}</p>}
               </div>
               <div className="flex gap-1">
+                {r.status === 'open' && (
+                  <button onClick={async () => { await supportServicesApi.updateRequest(r.id, { status: 'in_progress' }); toast.success('قيد التنفيذ'); load(); }}
+                    className="p-1.5 rounded-lg hover:bg-amber-500/20 text-gray-400 hover:text-amber-300" title="بدء التنفيذ"><TrendingDown className="w-3.5 h-3.5" /></button>
+                )}
                 {r.status !== 'completed' && (
-                  <button onClick={async () => { await supportServicesApi.updateRequest(r.id, { status: 'completed' }); toast.success('تم'); load(); }}
+                  <button onClick={async () => { await supportServicesApi.updateRequest(r.id, { status: 'completed' }); toast.success('تم الإتمام'); load(); }}
                     className="p-1.5 rounded-lg hover:bg-emerald-500/20 text-gray-400 hover:text-emerald-300" title="إتمام"><CheckCircle className="w-3.5 h-3.5" /></button>
                 )}
                 <button onClick={async () => { await supportServicesApi.deleteRequest(r.id); toast.success('تم الحذف'); load(); }}
@@ -323,486 +521,6 @@ function RequestsTab() {
               </div>
             </div>
           ))}
-        </div>
-      ) : (
-        <div className="glass p-12 text-center"><ClipboardList className="w-10 h-10 text-gray-500 mx-auto mb-3" /><p className="text-sm text-gray-400">لا توجد طلبات</p></div>
-      )}
-    </div>
-  );
-}
-
-export default function SupportServicesPage() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin' || user?.role === 'pm';
-  const [tab, setTab] = useState<Tab>('dashboard');
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Data
-  const [dashboard, setDashboard] = useState<any>(null);
-  const [custodies, setCustodies] = useState<any[]>([]);
-  const [selected, setSelected] = useState<any>(null);
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [logs, setLogs] = useState<any[]>([]);
-  const [allUsers, setAllUsers] = useState<any[]>([]);
-
-  // Forms
-  const [showCustodyForm, setShowCustodyForm] = useState(false);
-  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
-  const [showMemberForm, setShowMemberForm] = useState(false);
-  const [showCloseDialog, setShowCloseDialog] = useState(false);
-  const [custodyForm, setCustodyForm] = useState({ name: '', description: '', initialBalance: '', balanceAddedAt: '', assignedToId: '', notes: '' });
-  const [invoiceForm, setInvoiceForm] = useState({ custodyId: '', name: '', description: '', amount: '', invoiceDate: '', invoiceNumber: '' });
-  const [memberForm, setMemberForm] = useState({ custodyId: '', userId: '', roleType: 'viewer' });
-  const [closeNotes, setCloseNotes] = useState('');
-
-  const load = useCallback(async () => {
-    try {
-      const [d, c] = await Promise.all([supportServicesApi.dashboard(), supportServicesApi.listCustodies()]);
-      setDashboard(d.data);
-      setCustodies(c.data.data || []);
-    } catch {} finally { setLoading(false); }
-  }, []);
-
-  const loadInvoices = useCallback(async () => {
-    try { const { data } = await supportServicesApi.listInvoices({ pageSize: 200 }); setInvoices(data.data || []); } catch {}
-  }, []);
-
-  const loadLogs = useCallback(async () => {
-    try { const { data } = await supportServicesApi.getAuditLogs(undefined, 200); setLogs(data || []); } catch {}
-  }, []);
-
-  const loadUsers = useCallback(async () => {
-    try { const { data } = await usersApi.list({ pageSize: 200 }); setAllUsers(data.data || data || []); } catch {}
-  }, []);
-
-  useEffect(() => { if (isAdmin) { load(); loadUsers(); } }, [isAdmin, load, loadUsers]);
-  useEffect(() => { if (tab === 'invoices') loadInvoices(); }, [tab, loadInvoices]);
-  useEffect(() => { if (tab === 'logs') loadLogs(); }, [tab, loadLogs]);
-
-  const openDetail = useCallback(async (id: string) => {
-    try { const { data } = await supportServicesApi.getCustody(id); setSelected(data); } catch { toast.error('فشل تحميل العهدة'); }
-  }, []);
-
-  // ── Handlers ──
-  const handleCreateCustody = async () => {
-    if (!custodyForm.name || !custodyForm.initialBalance || !custodyForm.balanceAddedAt) { toast.error('الاسم والرصيد والتاريخ مطلوبة'); return; }
-    setSubmitting(true);
-    try {
-      await supportServicesApi.createCustody({ ...custodyForm, initialBalance: parseFloat(custodyForm.initialBalance), assignedToId: custodyForm.assignedToId || undefined });
-      toast.success('تم إنشاء العهدة');
-      setShowCustodyForm(false);
-      setCustodyForm({ name: '', description: '', initialBalance: '', balanceAddedAt: '', assignedToId: '', notes: '' });
-      load();
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
-  };
-
-  const handleCreateInvoice = async () => {
-    if (!invoiceForm.custodyId || !invoiceForm.name || !invoiceForm.amount || !invoiceForm.invoiceDate) { toast.error('جميع الحقول الأساسية مطلوبة'); return; }
-    setSubmitting(true);
-    try {
-      await supportServicesApi.createInvoice({ ...invoiceForm, amount: parseFloat(invoiceForm.amount) });
-      toast.success('تم إضافة الفاتورة');
-      setShowInvoiceForm(false);
-      setInvoiceForm({ custodyId: '', name: '', description: '', amount: '', invoiceDate: '', invoiceNumber: '' });
-      load(); loadInvoices();
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
-  };
-
-  const handleAddMember = async () => {
-    if (!memberForm.custodyId || !memberForm.userId) { toast.error('اختر العهدة والمستخدم'); return; }
-    setSubmitting(true);
-    try {
-      await supportServicesApi.addMember(memberForm);
-      toast.success('تم إضافة العضو');
-      setShowMemberForm(false);
-      setMemberForm({ custodyId: '', userId: '', roleType: 'viewer' });
-      if (selected) openDetail(selected.id);
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
-  };
-
-  const handleClose = async () => {
-    if (!selected) return;
-    setSubmitting(true);
-    try {
-      await supportServicesApi.closeCustody(selected.id, { closingNotes: closeNotes });
-      toast.success('تم إقفال العهدة');
-      setShowCloseDialog(false);
-      setCloseNotes('');
-      setSelected(null);
-      load();
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
-  };
-
-  if (!isAdmin) return <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400"><Shield className="h-12 w-12" /><p className="text-sm">غير مصرح بالوصول</p></div>;
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>;
-
-  const d = dashboard;
-  const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
-    { key: 'dashboard', label: 'الرئيسية', icon: Wallet },
-    { key: 'custodies', label: 'العهد', icon: DollarSign },
-    { key: 'invoices', label: 'الفواتير', icon: Receipt },
-    { key: 'balance', label: 'رصيد العهد', icon: TrendingDown },
-    { key: 'items', label: 'تفاصيل العهد', icon: FileText },
-    { key: 'requests', label: 'الطلبات', icon: ClipboardList },
-    { key: 'members', label: 'الأشخاص', icon: Users },
-    { key: 'logs', label: 'السجل', icon: ClipboardList },
-  ];
-
-  return (
-    <div className="space-y-6 pb-20" dir="rtl">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div><h1 className="text-2xl font-bold">خدمات المساندة</h1><p className="text-gray-400 mt-1 text-sm">نظام إدارة العهد والفواتير</p></div>
-        <button onClick={load} className="btn-secondary p-2"><RefreshCw className="w-4 h-4" /></button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-white/[0.03] rounded-2xl border border-white/[0.06] w-fit">
-        {tabs.map((t) => (
-          <button key={t.key} onClick={() => { setTab(t.key); setSelected(null); }}
-            className={cn('flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all',
-              tab === t.key ? 'bg-brand-500/15 text-brand-400' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5')}>
-            <t.icon className="w-4 h-4" />{t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ═══ DASHBOARD TAB ═══ */}
-      {tab === 'dashboard' && d && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: 'العهد النشطة', value: d.activeCustodies, icon: Wallet, color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
-            { label: 'العهد المقفلة', value: d.closedCustodies, icon: Lock, color: 'text-red-400', bg: 'bg-red-500/20' },
-            { label: 'إجمالي الرصيد', value: `${formatNumber(Math.round(d.totalBudget))}`, icon: DollarSign, color: 'text-sky-400', bg: 'bg-sky-500/20' },
-            { label: 'إجمالي المصروفات', value: `${formatNumber(Math.round(d.totalSpent))}`, icon: TrendingDown, color: 'text-amber-400', bg: 'bg-amber-500/20' },
-            { label: 'الرصيد المتبقي', value: `${formatNumber(Math.round(d.totalRemaining))}`, icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
-            { label: 'رصيد منخفض', value: d.lowBalanceCustodies, icon: AlertTriangle, color: d.lowBalanceCustodies > 0 ? 'text-red-400' : 'text-gray-400', bg: d.lowBalanceCustodies > 0 ? 'bg-red-500/20' : 'bg-white/5' },
-            { label: 'إجمالي الفواتير', value: d.totalInvoices, icon: Receipt, color: 'text-violet-400', bg: 'bg-violet-500/20' },
-            { label: 'مبلغ الفواتير', value: `${formatNumber(Math.round(d.totalInvoiceAmount))}`, icon: FileText, color: 'text-indigo-400', bg: 'bg-indigo-500/20' },
-          ].map((c) => (
-            <div key={c.label} className="analytics-card">
-              <div className="flex items-center gap-3">
-                <div className={cn('p-2.5 rounded-xl', c.bg)}><c.icon className={cn('w-5 h-5', c.color)} /></div>
-                <div><p className="text-lg font-bold tabular-nums">{c.value}</p><p className="text-xs text-gray-400">{c.label}</p></div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ═══ CUSTODIES TAB ═══ */}
-      {tab === 'custodies' && (
-        <div className="space-y-4">
-          <div className="flex justify-end">
-            <button onClick={() => setShowCustodyForm(true)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> عهدة جديدة</button>
-          </div>
-
-          {/* Create Form */}
-          {showCustodyForm && (
-            <div className="glass p-5 space-y-3">
-              <div className="flex items-center justify-between"><h3 className="text-sm font-bold">إنشاء عهدة جديدة</h3><button onClick={() => setShowCustodyForm(false)}><X className="w-4 h-4 text-gray-400" /></button></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs text-gray-400 mb-1">اسم العهدة *</label><input value={custodyForm.name} onChange={(e) => setCustodyForm({ ...custodyForm, name: e.target.value })} className="input-field" /></div>
-                <div><label className="block text-xs text-gray-400 mb-1">الرصيد الأساسي (ريال) *</label><input type="number" min={0} value={custodyForm.initialBalance} onChange={(e) => setCustodyForm({ ...custodyForm, initialBalance: e.target.value })} className="input-field" dir="ltr" /></div>
-                <div><label className="block text-xs text-gray-400 mb-1">تاريخ إضافة الرصيد *</label><input type="date" value={custodyForm.balanceAddedAt} onChange={(e) => setCustodyForm({ ...custodyForm, balanceAddedAt: e.target.value })} className="input-field" dir="ltr" /></div>
-                <div><label className="block text-xs text-gray-400 mb-1">مسؤول العهدة</label>
-                  <select value={custodyForm.assignedToId} onChange={(e) => setCustodyForm({ ...custodyForm, assignedToId: e.target.value })} className="input-field">
-                    <option value="">— اختر —</option>
-                    {allUsers.map((u: any) => <option key={u.id} value={u.id}>{u.nameAr || u.name}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div><label className="block text-xs text-gray-400 mb-1">وصف</label><textarea value={custodyForm.description} onChange={(e) => setCustodyForm({ ...custodyForm, description: e.target.value })} className="input-field resize-none" rows={2} /></div>
-              <div><label className="block text-xs text-gray-400 mb-1">ملاحظات</label><textarea value={custodyForm.notes} onChange={(e) => setCustodyForm({ ...custodyForm, notes: e.target.value })} className="input-field resize-none" rows={2} /></div>
-              <div className="flex justify-end"><button onClick={handleCreateCustody} disabled={submitting} className="btn-primary disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'إنشاء'}</button></div>
-            </div>
-          )}
-
-          {/* Custodies Table */}
-          {!selected ? (
-            <div className="glass p-5 overflow-x-auto">
-              {custodies.length === 0 ? <p className="text-sm text-gray-500 text-center py-12">لا توجد عهد</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-white/10">
-                    {['الرقم', 'العهدة', 'المسؤول', 'الرصيد', 'المصروف', 'المتبقي', '%', 'الحالة', ''].map((h) => <th key={h} className="py-3 px-2 text-gray-400 font-medium text-right">{h}</th>)}
-                  </tr></thead>
-                  <tbody>
-                    {custodies.map((c: any) => {
-                      const pct = c.initialBalance > 0 ? Math.round((c.spentAmount / c.initialBalance) * 100) : 0;
-                      return (
-                        <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                          <td className="py-2.5 px-2 text-gray-500 text-xs tabular-nums">{c.code?.slice(-6)}</td>
-                          <td className="py-2.5 px-2 font-medium">{c.name}</td>
-                          <td className="py-2.5 px-2 text-gray-400">{c.assignedTo?.nameAr || '—'}</td>
-                          <td className="py-2.5 px-2 tabular-nums">{formatNumber(Math.round(c.initialBalance))}</td>
-                          <td className="py-2.5 px-2 tabular-nums text-amber-400">{formatNumber(Math.round(c.spentAmount))}</td>
-                          <td className="py-2.5 px-2 tabular-nums text-emerald-400">{formatNumber(Math.round(c.currentBalance))}</td>
-                          <td className="py-2.5 px-2">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-12 h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct >= 80 ? '#ef4444' : pct >= 50 ? '#f59e0b' : '#22c55e' }} /></div>
-                              <span className="text-[10px] text-gray-400 tabular-nums">{pct}%</span>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-2"><span className={cn('text-[10px] px-2 py-0.5 rounded-full', STATUS_CLS[c.status])}>{STATUS_AR[c.status]}</span></td>
-                          <td className="py-2.5 px-2"><button onClick={() => openDetail(c.id)} className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400"><Eye className="w-4 h-4" /></button></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          ) : (
-            /* ── Custody Detail ── */
-            <div className="space-y-4">
-              <button onClick={() => setSelected(null)} className="btn-secondary text-sm">← العودة للقائمة</button>
-              <div className="glass p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h2 className="text-lg font-bold">{selected.name}</h2>
-                      <span className="text-[10px] text-gray-500 tabular-nums">{selected.code}</span>
-                    </div>
-                    <p className="text-xs text-gray-400">{selected.description || ''}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {selected.assignedTo && <span className="text-xs text-gray-400">المسؤول: <span className="text-white">{selected.assignedTo.nameAr}</span></span>}
-                    <span className={cn('text-xs px-3 py-1 rounded-full', STATUS_CLS[selected.status])}>{STATUS_AR[selected.status]}</span>
-                  </div>
-                </div>
-                {selected.status === 'CLOSED' && selected.closedBy && (
-                  <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300">
-                    مقفلة بتاريخ {new Date(selected.closedAt).toLocaleDateString('ar-SA-u-nu-latn')} بواسطة {selected.closedBy.nameAr}
-                    {selected.closingNotes && <span className="block mt-1 text-gray-400">{selected.closingNotes}</span>}
-                  </div>
-                )}
-                {/* Financial Summary */}
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="text-center p-3 rounded-xl bg-white/[0.03]"><p className="text-lg font-bold tabular-nums">{formatNumber(Math.round(selected.initialBalance))}</p><p className="text-[10px] text-gray-500">الرصيد الأساسي</p></div>
-                  <div className="text-center p-3 rounded-xl bg-white/[0.03]"><p className="text-lg font-bold tabular-nums text-amber-400">{formatNumber(Math.round(selected.spentAmount))}</p><p className="text-[10px] text-gray-500">المصروف</p></div>
-                  <div className="text-center p-3 rounded-xl bg-white/[0.03]"><p className="text-lg font-bold tabular-nums text-emerald-400">{formatNumber(Math.round(selected.currentBalance))}</p><p className="text-[10px] text-gray-500">المتبقي</p></div>
-                </div>
-                {/* Progress */}
-                {(() => { const pct = selected.initialBalance > 0 ? Math.round((selected.spentAmount / selected.initialBalance) * 100) : 0; return (
-                  <div className="mb-4">
-                    <div className="flex justify-between text-[10px] text-gray-400 mb-1"><span>المصروف: {pct}%</span><span>المتبقي: {100 - pct}%</span></div>
-                    <div className="h-2.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct >= 80 ? '#ef4444' : pct >= 50 ? '#f59e0b' : '#22c55e' }} /></div>
-                  </div>
-                ); })()}
-                {/* Actions */}
-                {selected.status !== 'CLOSED' && (
-                  <div className="flex gap-2">
-                    <button onClick={() => { setInvoiceForm({ ...invoiceForm, custodyId: selected.id }); setShowInvoiceForm(true); }} className="btn-primary text-sm flex items-center gap-1.5"><Receipt className="w-4 h-4" /> إضافة فاتورة</button>
-                    <button onClick={() => { setMemberForm({ ...memberForm, custodyId: selected.id }); setShowMemberForm(true); }} className="btn-secondary text-sm flex items-center gap-1.5"><UserPlus className="w-4 h-4" /> إضافة عضو</button>
-                    <button onClick={() => setShowCloseDialog(true)} className="btn-danger text-sm flex items-center gap-1.5"><Lock className="w-4 h-4" /> إقفال العهدة</button>
-                  </div>
-                )}
-              </div>
-
-              {/* Invoices */}
-              <div className="glass p-5">
-                <h3 className="text-sm font-semibold mb-3 text-gray-300">الفواتير ({selected.invoices?.length || 0})</h3>
-                {selected.invoices?.length > 0 ? (
-                  <div className="space-y-2">
-                    {selected.invoices.map((inv: any) => (
-                      <div key={inv.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                        <div>
-                          <p className="text-sm font-medium">{inv.name}</p>
-                          <p className="text-[10px] text-gray-500">{inv.createdBy?.nameAr} — {new Date(inv.invoiceDate).toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric' })}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full', INVOICE_CLS[inv.status])}>{INVOICE_STATUS_AR[inv.status]}</span>
-                          <span className="text-sm font-bold tabular-nums text-amber-400">{formatNumber(Math.round(inv.amount))} ريال</span>
-                          {selected.status !== 'CLOSED' && inv.status === 'UPLOADED' && (
-                            <div className="flex gap-1">
-                              <button onClick={async () => { await supportServicesApi.updateInvoiceStatus(inv.id, 'APPROVED'); toast.success('تم الاعتماد'); openDetail(selected.id); load(); }} className="p-1 rounded-lg hover:bg-emerald-500/20 text-gray-400 hover:text-emerald-300" title="اعتماد"><CheckCircle className="w-3.5 h-3.5" /></button>
-                              <button onClick={async () => { await supportServicesApi.updateInvoiceStatus(inv.id, 'REJECTED'); toast.success('تم الرفض'); openDetail(selected.id); load(); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300" title="رفض"><X className="w-3.5 h-3.5" /></button>
-                              <button onClick={async () => { await supportServicesApi.deleteInvoice(inv.id); toast.success('تم الحذف'); openDetail(selected.id); load(); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300" title="حذف"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : <p className="text-sm text-gray-500 text-center py-6">لا توجد فواتير</p>}
-              </div>
-
-              {/* Members */}
-              <div className="glass p-5">
-                <h3 className="text-sm font-semibold mb-3 text-gray-300">الأشخاص المعينون ({selected.members?.length || 0})</h3>
-                {selected.members?.length > 0 ? (
-                  <div className="space-y-2">
-                    {selected.members.map((m: any) => (
-                      <div key={m.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-brand-500/20 flex items-center justify-center text-xs font-bold text-brand-300">{m.user?.nameAr?.charAt(0) || '?'}</div>
-                          <div><p className="text-sm font-medium">{m.user?.nameAr || m.user?.name}</p><p className="text-[10px] text-gray-500">{m.user?.email}</p></div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-gray-300">{ROLE_AR[m.roleType] || m.roleType}</span>
-                          {selected.status !== 'CLOSED' && (
-                            <button onClick={async () => { await supportServicesApi.removeMember(selected.id, m.id); toast.success('تم الإزالة'); openDetail(selected.id); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300"><Trash2 className="w-3 h-3" /></button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : <p className="text-sm text-gray-500 text-center py-6">لم يتم تعيين أشخاص</p>}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ═══ INVOICES TAB ═══ */}
-      {tab === 'invoices' && (
-        <div className="space-y-4">
-          <div className="flex justify-end"><button onClick={() => setShowInvoiceForm(true)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إضافة فاتورة</button></div>
-          <div className="glass p-5 overflow-x-auto">
-            {invoices.length === 0 ? <p className="text-sm text-gray-500 text-center py-12">لا توجد فواتير</p> : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b border-white/10">
-                  {['الفاتورة', 'العهدة', 'المبلغ', 'التاريخ', 'أضيفت بواسطة', 'الحالة'].map((h) => <th key={h} className="py-3 px-2 text-gray-400 font-medium text-right">{h}</th>)}
-                </tr></thead>
-                <tbody>
-                  {invoices.map((inv: any) => (
-                    <tr key={inv.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                      <td className="py-2.5 px-2 font-medium">{inv.name}{inv.invoiceNumber && <span className="text-gray-500 text-[10px] mr-1">#{inv.invoiceNumber}</span>}</td>
-                      <td className="py-2.5 px-2 text-gray-400">{inv.custody?.name || '—'}</td>
-                      <td className="py-2.5 px-2 tabular-nums text-amber-400">{formatNumber(Math.round(inv.amount))} ريال</td>
-                      <td className="py-2.5 px-2 text-gray-400 tabular-nums">{new Date(inv.invoiceDate).toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric' })}</td>
-                      <td className="py-2.5 px-2 text-gray-400">{inv.createdBy?.nameAr || '—'}</td>
-                      <td className="py-2.5 px-2"><span className={cn('text-[10px] px-2 py-0.5 rounded-full', INVOICE_CLS[inv.status])}>{INVOICE_STATUS_AR[inv.status]}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ═══ MEMBERS TAB ═══ */}
-      {tab === 'members' && (
-        <div className="glass p-5">
-          <h3 className="text-sm font-semibold mb-4 text-gray-300">الأشخاص المعينون على العهد</h3>
-          <p className="text-sm text-gray-500 text-center py-8">اختر عهدة من تبويب "العهد" لعرض وإدارة الأشخاص المعينين عليها</p>
-        </div>
-      )}
-
-      {/* ═══ BALANCE TAB ═══ */}
-      {tab === 'balance' && (
-        <BalanceTab custodies={custodies} />
-      )}
-
-      {/* ═══ ITEMS TAB ═══ */}
-      {tab === 'items' && (
-        <ItemsTab custodies={custodies} allUsers={allUsers} />
-      )}
-
-      {/* ═══ REQUESTS TAB ═══ */}
-      {tab === 'requests' && (
-        <RequestsTab />
-      )}
-
-      {/* ═══ LOGS TAB ═══ */}
-      {tab === 'logs' && (
-        <div className="glass p-5">
-          <h3 className="text-sm font-semibold mb-4 text-gray-300">سجل العمليات ({logs.length})</h3>
-          {logs.length === 0 ? <p className="text-sm text-gray-500 text-center py-8">لا توجد عمليات مسجلة</p> : (
-            <div className="space-y-2 max-h-[600px] overflow-y-auto">
-              {logs.map((log: any) => (
-                <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                  <div className="p-1.5 rounded-lg bg-white/5"><ClipboardList className="w-3.5 h-3.5 text-gray-400" /></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium">{log.action} — {log.entityType}</span>
-                      <span className="text-[10px] text-gray-500">{new Date(log.createdAt).toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-                    <p className="text-[10px] text-gray-500">{log.user?.nameAr} — {log.custody?.name || '—'}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ═══ MODALS ═══ */}
-
-      {/* Invoice Form Modal */}
-      {showInvoiceForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="glass p-6 w-full max-w-md space-y-4">
-            <div className="flex items-center justify-between"><h3 className="text-sm font-bold">إضافة فاتورة</h3><button onClick={() => setShowInvoiceForm(false)}><X className="w-4 h-4 text-gray-400" /></button></div>
-            <div><label className="block text-xs text-gray-400 mb-1">العهدة *</label>
-              <select value={invoiceForm.custodyId} onChange={(e) => setInvoiceForm({ ...invoiceForm, custodyId: e.target.value })} className="input-field">
-                <option value="">— اختر العهدة —</option>
-                {custodies.filter((c: any) => c.status !== 'CLOSED').map((c: any) => <option key={c.id} value={c.id}>{c.name} ({formatNumber(Math.round(c.currentBalance))} ريال)</option>)}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-400 mb-1">اسم الفاتورة *</label><input value={invoiceForm.name} onChange={(e) => setInvoiceForm({ ...invoiceForm, name: e.target.value })} className="input-field" /></div>
-              <div><label className="block text-xs text-gray-400 mb-1">المبلغ (ريال) *</label><input type="number" min={0} value={invoiceForm.amount} onChange={(e) => setInvoiceForm({ ...invoiceForm, amount: e.target.value })} className="input-field" dir="ltr" /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-400 mb-1">تاريخ الفاتورة *</label><input type="date" value={invoiceForm.invoiceDate} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoiceDate: e.target.value })} className="input-field" dir="ltr" /></div>
-              <div><label className="block text-xs text-gray-400 mb-1">رقم الفاتورة</label><input value={invoiceForm.invoiceNumber} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoiceNumber: e.target.value })} className="input-field" dir="ltr" /></div>
-            </div>
-            <div><label className="block text-xs text-gray-400 mb-1">وصف</label><textarea value={invoiceForm.description} onChange={(e) => setInvoiceForm({ ...invoiceForm, description: e.target.value })} className="input-field resize-none" rows={2} /></div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowInvoiceForm(false)} className="btn-secondary">إلغاء</button>
-              <button onClick={handleCreateInvoice} disabled={submitting} className="btn-primary disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ الفاتورة'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Member Form Modal */}
-      {showMemberForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="glass p-6 w-full max-w-md space-y-4">
-            <div className="flex items-center justify-between"><h3 className="text-sm font-bold">إضافة عضو للعهدة</h3><button onClick={() => setShowMemberForm(false)}><X className="w-4 h-4 text-gray-400" /></button></div>
-            <div><label className="block text-xs text-gray-400 mb-1">المستخدم *</label>
-              <select value={memberForm.userId} onChange={(e) => setMemberForm({ ...memberForm, userId: e.target.value })} className="input-field">
-                <option value="">— اختر —</option>
-                {allUsers.map((u: any) => <option key={u.id} value={u.id}>{u.nameAr || u.name} ({u.email})</option>)}
-              </select>
-            </div>
-            <div><label className="block text-xs text-gray-400 mb-1">نوع العلاقة</label>
-              <select value={memberForm.roleType} onChange={(e) => setMemberForm({ ...memberForm, roleType: e.target.value })} className="input-field">
-                <option value="manager">مدير</option>
-                <option value="custodian">مسؤول عهدة</option>
-                <option value="executor">منفذ</option>
-                <option value="viewer">مراقب</option>
-              </select>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowMemberForm(false)} className="btn-secondary">إلغاء</button>
-              <button onClick={handleAddMember} disabled={submitting} className="btn-primary disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'إضافة'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Close Custody Confirmation */}
-      {showCloseDialog && selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="glass p-6 w-full max-w-md space-y-4">
-            <div className="flex items-center gap-2 text-red-400"><AlertTriangle className="w-5 h-5" /><h3 className="text-sm font-bold">تأكيد إقفال العهدة</h3></div>
-            <p className="text-xs text-gray-300">سيتم إقفال العهدة "<span className="text-white font-medium">{selected.name}</span>" نهائياً. لن يمكن إضافة فواتير أو تعديل البيانات بعد الإقفال.</p>
-            <div className="p-3 rounded-xl bg-white/[0.03] text-xs">
-              <div className="flex justify-between"><span className="text-gray-400">الرصيد النهائي:</span><span className="text-emerald-400 font-bold">{formatNumber(Math.round(selected.currentBalance))} ريال</span></div>
-              <div className="flex justify-between mt-1"><span className="text-gray-400">إجمالي المصروف:</span><span className="text-amber-400 font-bold">{formatNumber(Math.round(selected.spentAmount))} ريال</span></div>
-              <div className="flex justify-between mt-1"><span className="text-gray-400">عدد الفواتير:</span><span className="text-white">{selected.invoices?.length || 0}</span></div>
-            </div>
-            <div><label className="block text-xs text-gray-400 mb-1">ملاحظات الإقفال</label><textarea value={closeNotes} onChange={(e) => setCloseNotes(e.target.value)} className="input-field resize-none" rows={2} placeholder="سبب الإقفال أو ملاحظات..." /></div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowCloseDialog(false)} className="btn-secondary">إلغاء</button>
-              <button onClick={handleClose} disabled={submitting} className="btn-danger disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'تأكيد الإقفال'}</button>
-            </div>
-          </div>
         </div>
       )}
     </div>
