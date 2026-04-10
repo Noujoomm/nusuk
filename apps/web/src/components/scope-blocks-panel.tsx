@@ -96,7 +96,8 @@ export default function ScopeBlocksPanel({ trackId, trackColor }: ScopeBlocksPan
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeFileBlockId, setActiveFileBlockId] = useState<string | null>(null);
 
-  const canEdit = user?.role === 'admin' || user?.role === 'pm' || user?.role === 'track_lead';
+  // نطاق العمل: مدير النظام فقط يمكنه التعديل
+  const canEdit = user?.role === 'admin';
 
   const fetchData = async () => {
     try {
@@ -424,7 +425,7 @@ export default function ScopeBlocksPanel({ trackId, trackColor }: ScopeBlocksPan
                             {upd.createdBy?.nameAr || upd.createdBy?.name} · {timeAgo(upd.createdAt)}
                           </p>
                         </div>
-                        {(user?.role === 'admin' || user?.role === 'pm') && (
+                        {user?.role === 'admin' && (
                           <button
                             onClick={(e) => { e.stopPropagation(); handleDeleteUpdate(upd.id); }}
                             className="p-1 rounded hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
