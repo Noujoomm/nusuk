@@ -103,13 +103,14 @@ export class CustodyFundsController {
   }
 
   @Get('invoices/:iid/download')
+  @Roles('admin')
   async downloadInvoice(@Param('iid') iid: string, @Res() res: Response) {
     const invoice = await this.service.getInvoice(iid);
     if (!invoice?.attachmentUrl) throw new NotFoundException('لا يوجد مرفق لهذه الفاتورة');
     if (!existsSync(invoice.attachmentUrl)) throw new NotFoundException('الملف غير موجود على الخادم');
     const filename = invoice.attachmentOriginalName || 'attachment';
     res.set({
-      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
     });
     createReadStream(invoice.attachmentUrl).pipe(res);
   }
