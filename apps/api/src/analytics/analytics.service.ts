@@ -278,14 +278,14 @@ export class AnalyticsService {
       })
       .filter((t) => t.hasActivity)
       .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
-      .slice(0, 5);
+      .slice(0, 3);
 
     if (rankedTracks.length > 0) {
       const topList = rankedTracks.map((t, i) => `${i + 1}. ${t.name} (${t.score}%)`).join(' — ');
       insights.push({
         type: 'success',
         icon: 'trophy',
-        title_ar: 'أفضل 5 مسارات أداءً',
+        title_ar: 'أفضل ٣ مسارات أداءً',
         description_ar: `${topList}\n٧٠٪ التقارير + ٣٠٪ التفاعل اليومي`,
       });
     }
