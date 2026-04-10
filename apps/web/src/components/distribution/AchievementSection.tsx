@@ -7,6 +7,7 @@ import DatePairInput from '@/components/ui/date-pair-input';
 import toast from 'react-hot-toast';
 import { distAchievementApi } from '@/lib/api';
 import { useAuth } from '@/stores/auth';
+import { scrollToEdit } from '@/lib/scroll-to-edit';
 import { cn, formatNumber } from '@/lib/utils';
 import { chartTooltipStyle, chartTooltipLabelStyle, chartTooltipItemStyle, axisTickStyle, axisStroke, gridStroke, gridStrokeDash, legendStyle } from '@/lib/chart-theme';
 
@@ -68,7 +69,10 @@ export default function AchievementSection() {
       });
       toast.success('تم الحفظ — نسبة الإنجاز محسوبة تلقائياً');
       setShowForm(false); setForm(EMPTY); load();
-    } catch { toast.error('فشل الحفظ'); } finally { setSubmitting(false); }
+    } catch (err: any) {
+      const msg = err?.response?.data?.message;
+      toast.error(Array.isArray(msg) ? msg[0] : msg || 'فشل الحفظ');
+    } finally { setSubmitting(false); }
   };
 
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>;
@@ -82,11 +86,11 @@ export default function AchievementSection() {
           <div className="p-2 rounded-xl bg-emerald-500/20"><TrendingUp className="w-5 h-5 text-emerald-400" /></div>
           <div><h2 className="text-base font-bold text-white">نسبة الإنجاز</h2><p className="text-[10px] text-gray-500">البيانات الخام فقط — النسب تُحسب تلقائياً</p></div>
         </div>
-        {canEdit && <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إدخال بيانات</button>}
+        {canEdit && <button onClick={() => { setShowForm(!showForm); if (!showForm) scrollToEdit('#achievement-form'); }} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إدخال بيانات</button>}
       </div>
 
       {showForm && (
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 space-y-4">
+        <div id="achievement-form" className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 space-y-4 scroll-mt-20">
           <div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-white">إدخال البيانات الخام</h3><button onClick={() => setShowForm(false)} className="p-1 rounded-lg hover:bg-white/10"><X className="w-4 h-4 text-gray-400" /></button></div>
           <DatePairInput
             gregorianDate={form.gregorianDate} hijriDate={form.hijriDate}
