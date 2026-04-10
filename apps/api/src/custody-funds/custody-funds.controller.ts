@@ -83,7 +83,7 @@ export class CustodyFundsController {
     }),
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_r, file, cb) => {
-      const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
+      const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.xlsx', '.xls', '.docx'];
       cb(null, allowed.includes(extname(file.originalname).toLowerCase()));
     },
   }))
@@ -109,7 +109,17 @@ export class CustodyFundsController {
     if (!invoice?.attachmentUrl) throw new NotFoundException('لا يوجد مرفق لهذه الفاتورة');
     if (!existsSync(invoice.attachmentUrl)) throw new NotFoundException('الملف غير موجود على الخادم');
     const filename = invoice.attachmentOriginalName || 'attachment';
+    const ext = extname(filename).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      '.pdf': 'application/pdf',
+      '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+      '.png': 'image/png', '.webp': 'image/webp',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.xls': 'application/vnd.ms-excel',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
     res.set({
+      'Content-Type': mimeTypes[ext] || 'application/octet-stream',
       'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
     });
     createReadStream(invoice.attachmentUrl).pipe(res);

@@ -267,7 +267,7 @@ function FundDetail({ fund: f, allUsers, onBack, onRefresh }: { fund: any; allUs
             </div>
           </div>
           <div><label className="block text-xs text-gray-400 mb-1">ارفاق ملف (PDF, صورة)</label>
-            <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setInvFile(e.target.files?.[0] || null)} className="input-field text-sm" />
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.docx" onChange={(e) => setInvFile(e.target.files?.[0] || null)} className="input-field text-sm" />
           </div>
           <div><label className="block text-xs text-gray-400 mb-1">ملاحظات</label><textarea value={invForm.notes} onChange={(e) => setInvForm({ ...invForm, notes: e.target.value })} className="input-field resize-none" rows={2} /></div>
           <div className="flex justify-end gap-2"><button onClick={() => setShowInvForm(false)} className="btn-secondary">إلغاء</button><button onClick={handleInv} disabled={submitting} className="btn-primary disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ الفاتورة'}</button></div>
