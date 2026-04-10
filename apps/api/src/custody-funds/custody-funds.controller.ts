@@ -102,6 +102,7 @@ export class CustodyFundsController {
     }, user.id);
   }
 
+  // Download: uses standard JWT guard (accepts ?token= via JwtStrategy)
   @Get('invoices/:iid/download')
   @Roles('admin')
   async downloadInvoice(@Param('iid') iid: string, @Res() res: Response) {

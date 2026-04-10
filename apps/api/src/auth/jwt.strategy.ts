@@ -8,7 +8,11 @@ import { JwtPayload } from './auth.service';
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(config: ConfigService) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      // Accept JWT from Authorization header OR ?token= query param (for file downloads)
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        (req: any) => req?.query?.token || null,
+      ]),
       secretOrKey: config.get<string>('JWT_SECRET'),
     });
   }
