@@ -364,6 +364,7 @@ export default function ReportsPage() {
     });
     setPendingFiles([]);
     setShowForm(true);
+    setTimeout(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, 0);
   };
 
   const handleDelete = async () => {
