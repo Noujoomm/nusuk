@@ -26,6 +26,14 @@ const nextConfig = {
         destination: `${API_INTERNAL}/api/:path*`,
       },
       {
+        source: '/uploads/:path*',
+        destination: `${API_INTERNAL}/uploads/:path*`,
+      },
+      {
+        source: '/health',
+        destination: `${API_INTERNAL}/health`,
+      },
+      {
         source: '/socket.io/:path*',
         destination: `${API_INTERNAL}/socket.io/:path*`,
       },
