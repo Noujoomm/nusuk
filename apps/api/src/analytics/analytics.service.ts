@@ -247,12 +247,12 @@ export class AnalyticsService {
       description_ar: string;
     }> = [];
 
-    // Top 5 tracks — 70% reports + 30% daily interaction
-    const [reportsLast30ByTrack, engagementByTrack] = await this.prisma.withRetry(
+    // Top 3 tracks — weekly (last 7 days only): 70% reports + 30% daily interaction
+    const [reportsWeekByTrack, engagementWeekByTrack] = await this.prisma.withRetry(
       () => Promise.all([
         this.prisma.report.groupBy({
           by: ['trackId'],
-          where: { createdAt: { gte: thirtyDaysAgo } },
+          where: { createdAt: { gte: sevenDaysAgo } },
           _count: true,
         }),
         this.prisma.dailyUpdate.groupBy({
@@ -261,10 +261,10 @@ export class AnalyticsService {
           _count: true,
         }),
       ]),
-      'analytics.top5Ranking',
+      'analytics.weeklyRanking',
     );
-    const reportsMap = Object.fromEntries(reportsLast30ByTrack.map((r) => [r.trackId, r._count]));
-    const engagementMap = Object.fromEntries(engagementByTrack.map((u) => [u.trackId, u._count]));
+    const reportsMap = Object.fromEntries(reportsWeekByTrack.map((r) => [r.trackId, r._count]));
+    const engagementMap = Object.fromEntries(engagementWeekByTrack.map((u) => [u.trackId, u._count]));
 
     const maxReports = Math.max(1, ...Object.values(reportsMap) as number[]);
     const maxEngagement = Math.max(1, ...Object.values(engagementMap) as number[]);
@@ -285,8 +285,8 @@ export class AnalyticsService {
       insights.push({
         type: 'success',
         icon: 'trophy',
-        title_ar: 'أفضل ٣ مسارات أداءً',
-        description_ar: `${topList}\n٧٠٪ التقارير + ٣٠٪ التفاعل اليومي`,
+        title_ar: 'أفضل ٣ مسارات أداءً (أسبوعي)',
+        description_ar: `${topList}\n٧٠٪ التقارير + ٣٠٪ التفاعل — آخر ٧ أيام`,
       });
     }
 
