@@ -247,87 +247,46 @@ export class AnalyticsService {
       description_ar: string;
     }> = [];
 
-    // Top 3 tracks — weighted 4-factor performance score
-    // Weights: completion 40% + tasks 25% + reports 20% + engagement 15%
-    const W = { completion: 0.40, tasks: 0.25, reports: 0.20, engagement: 0.15 };
-
-    const [trackTaskCounts, reportsLast30ByTrack, engagementByTrack] = await this.prisma.withRetry(
+    // Top 5 tracks — 70% reports + 30% daily interaction
+    const [reportsLast30ByTrack, engagementByTrack] = await this.prisma.withRetry(
       () => Promise.all([
-        this.prisma.task.groupBy({
-          by: ['trackId'],
-          where: { ...taskWhere, trackId: { not: null } },
-          _count: true,
-        }),
-        // Reports submitted per track in last 30 days
         this.prisma.report.groupBy({
           by: ['trackId'],
           where: { createdAt: { gte: thirtyDaysAgo } },
           _count: true,
         }),
-        // Daily engagement: updates + comments + audit actions in last 7 days per track
         this.prisma.dailyUpdate.groupBy({
           by: ['trackId'],
           where: { trackId: { not: null }, createdAt: { gte: sevenDaysAgo } },
           _count: true,
         }),
       ]),
-      'analytics.weightedRanking',
+      'analytics.top5Ranking',
     );
-    const trackTotalMap = Object.fromEntries(trackTaskCounts.map((t) => [t.trackId, t._count]));
     const reportsMap = Object.fromEntries(reportsLast30ByTrack.map((r) => [r.trackId, r._count]));
     const engagementMap = Object.fromEntries(engagementByTrack.map((u) => [u.trackId, u._count]));
 
-    // Normalize reports and engagement across tracks (0-100 scale)
     const maxReports = Math.max(1, ...Object.values(reportsMap) as number[]);
     const maxEngagement = Math.max(1, ...Object.values(engagementMap) as number[]);
 
     const rankedTracks = allTracks
       .map((t) => {
-        const totalTasks = trackTotalMap[t.id] || 0;
-        const doneCount = completedByTrackMap[t.id] || 0;
-
-        // Factor 1: Track completion rate (0-100)
-        const completionRate = totalTasks > 0 ? (doneCount / totalTasks) * 100 : 0;
-
-        // Factor 2: Completed tasks rate (same metric, validates both task volume & quality)
-        const tasksRate = completionRate;
-
-        // Factor 3: Reports submission (normalized across tracks, 0-100)
-        const reportsRate = ((reportsMap[t.id] || 0) / maxReports) * 100;
-
-        // Factor 4: Daily engagement (updates in last 7 days, normalized, 0-100)
-        const engagementRate = ((engagementMap[t.id] || 0) / maxEngagement) * 100;
-
-        // Weighted final score
-        const finalScore = Math.round(
-          (completionRate * W.completion +
-           tasksRate * W.tasks +
-           reportsRate * W.reports +
-           engagementRate * W.engagement) * 10,
-        ) / 10;
-
-        return {
-          name: t.nameAr, score: finalScore,
-          completion: Math.round(completionRate * 10) / 10,
-          tasks: Math.round(tasksRate * 10) / 10,
-          reports: Math.round(reportsRate * 10) / 10,
-          engagement: Math.round(engagementRate * 10) / 10,
-          hasActivity: totalTasks > 0 || (reportsMap[t.id] || 0) > 0 || (engagementMap[t.id] || 0) > 0,
-        };
+        const reportsScore = ((reportsMap[t.id] || 0) / maxReports) * 100;
+        const interactionScore = ((engagementMap[t.id] || 0) / maxEngagement) * 100;
+        const finalScore = Math.round((reportsScore * 0.70 + interactionScore * 0.30) * 10) / 10;
+        return { name: t.nameAr, score: finalScore, hasActivity: (reportsMap[t.id] || 0) > 0 || (engagementMap[t.id] || 0) > 0 };
       })
       .filter((t) => t.hasActivity)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3);
+      .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+      .slice(0, 5);
 
     if (rankedTracks.length > 0) {
-      const topList = rankedTracks
-        .map((t, i) => `${i + 1}. ${t.name} (${t.score}%)`)
-        .join(' — ');
+      const topList = rankedTracks.map((t, i) => `${i + 1}. ${t.name} (${t.score}%)`).join(' — ');
       insights.push({
         type: 'success',
         icon: 'trophy',
-        title_ar: 'أفضل ٣ مسارات أداءً (شامل)',
-        description_ar: `${topList}\nيعتمد على: الإنجاز + المهام + التقارير + التفاعل اليومي`,
+        title_ar: 'أفضل 5 مسارات أداءً',
+        description_ar: `${topList}\n٧٠٪ التقارير + ٣٠٪ التفاعل اليومي`,
       });
     }
 
@@ -424,6 +383,13 @@ export class AnalyticsService {
     const reportsByTrackMap = Object.fromEntries(reportsByTrackAll.map((r) => [r.trackId, r._count]));
     const expectedReports30 = trackCount * 30; // 1 report per track per day
     const dailyReportsRate = expectedReports30 > 0 ? Math.round((reportsLast30 / expectedReports30) * 100) : 0;
+
+    // Task counts per track (for performance table)
+    const trackTaskCounts = await this.prisma.withRetry(
+      () => this.prisma.task.groupBy({ by: ['trackId'], where: { ...taskWhere, trackId: { not: null } }, _count: true }),
+      'analytics.trackTaskCounts',
+    );
+    const trackTotalMap = Object.fromEntries(trackTaskCounts.map((t) => [t.trackId, t._count]));
 
     const trackPerformance = allTracks.map((t) => {
       const tTotal = trackTotalMap[t.id] || 0;
