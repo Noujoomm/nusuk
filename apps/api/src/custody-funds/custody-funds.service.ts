@@ -217,6 +217,92 @@ export class CustodyFundsService {
     });
   }
 
+  // ═══ REOPEN FUND (admin only) ═════════════════════════════
+
+  async reopenFund(fundId: string, reason: string, userId: string) {
+    const fund = await this.prisma.custodyFund.findUnique({ where: { id: fundId } });
+    if (!fund) throw new NotFoundException('العهدة غير موجودة');
+    if (fund.status !== 'closed') throw new BadRequestException('العهدة ليست مغلقة');
+    if (!reason?.trim()) throw new BadRequestException('سبب إعادة الفتح مطلوب');
+
+    return this.prisma.custodyFund.update({
+      where: { id: fundId },
+      data: {
+        status: 'active',
+        closedAt: null,
+        closedById: null,
+        closingNote: `أُعيد فتحها: ${reason.trim()} (كانت مغلقة بملاحظة: ${fund.closingNote || '—'})`,
+      },
+    });
+  }
+
+  // ═══ FUND EDIT + DELETE ══════════════════════════════════
+
+  async updateFund(fundId: string, data: { custodyName?: string; totalAmount?: number }, userId: string) {
+    const fund = await this.prisma.custodyFund.findUnique({ where: { id: fundId } });
+    if (!fund) throw new NotFoundException('العهدة غير موجودة');
+
+    const updateData: any = {};
+    if (data.custodyName !== undefined) updateData.custodyName = data.custodyName;
+    if (data.totalAmount !== undefined) {
+      const diff = data.totalAmount - fund.totalAmount;
+      updateData.totalAmount = data.totalAmount;
+      updateData.currentBalance = fund.currentBalance + diff;
+    }
+
+    return this.prisma.custodyFund.update({ where: { id: fundId }, data: updateData });
+  }
+
+  async deleteFund(fundId: string, userId: string) {
+    const fund = await this.prisma.custodyFund.findUnique({ where: { id: fundId } });
+    if (!fund) throw new NotFoundException('العهدة غير موجودة');
+    // Soft delete by closing with a deletion note
+    return this.prisma.custodyFund.update({
+      where: { id: fundId },
+      data: { status: 'closed', closedAt: new Date(), closedById: userId, closingNote: 'تم الحذف بواسطة المدير' },
+    });
+  }
+
+  // ═══ INVOICE EDIT + DELETE ═══════════════════════════════
+
+  async editInvoice(invoiceId: string, data: { invoiceName?: string; amount?: number; notes?: string }, userId: string) {
+    const invoice = await this.prisma.custodyFundInvoice.findUnique({ where: { id: invoiceId } });
+    if (!invoice) throw new NotFoundException('الفاتورة غير موجودة');
+
+    const updateData: any = {};
+    if (data.invoiceName !== undefined) updateData.invoiceName = data.invoiceName;
+    if (data.notes !== undefined) updateData.notes = data.notes;
+    if (data.amount !== undefined && data.amount !== invoice.amount) {
+      // Adjust fund balance if invoice was already approved
+      if (invoice.status === 'approved') {
+        const diff = data.amount - invoice.amount;
+        await this.prisma.custodyFund.update({
+          where: { id: invoice.custodyFundId },
+          data: { currentBalance: { decrement: diff } },
+        });
+      }
+      updateData.amount = data.amount;
+    }
+
+    return this.prisma.custodyFundInvoice.update({ where: { id: invoiceId }, data: updateData });
+  }
+
+  async deleteInvoice(invoiceId: string) {
+    const invoice = await this.prisma.custodyFundInvoice.findUnique({ where: { id: invoiceId } });
+    if (!invoice) throw new NotFoundException('الفاتورة غير موجودة');
+
+    // Refund if approved
+    if (invoice.status === 'approved') {
+      await this.prisma.custodyFund.update({
+        where: { id: invoice.custodyFundId },
+        data: { currentBalance: { increment: invoice.amount } },
+      });
+    }
+
+    await this.prisma.custodyFundInvoice.delete({ where: { id: invoiceId } });
+    return { message: 'تم حذف الفاتورة' };
+  }
+
   // ═══ LOW BALANCE ALERT ═══════════════════════════════════
 
   private async checkLowBalance(fundId: string) {

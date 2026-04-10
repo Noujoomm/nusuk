@@ -196,8 +196,20 @@ function FundDetail({ fund: f, allUsers, onBack, onRefresh }: { fund: any; allUs
         )}
         {isClosed && f.closedBy && (
           <div className="mb-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300">
-            مغلقة بتاريخ {new Date(f.closedAt).toLocaleDateString('ar-SA-u-nu-latn')} بواسطة {f.closedBy.nameAr}
-            {f.closingNote && <span className="block mt-1 text-gray-400">{f.closingNote}</span>}
+            <div className="flex items-center justify-between">
+              <div>
+                مغلقة بتاريخ {new Date(f.closedAt).toLocaleDateString('ar-SA-u-nu-latn')} بواسطة {f.closedBy.nameAr}
+                {f.closingNote && <span className="block mt-1 text-gray-400">{f.closingNote}</span>}
+              </div>
+              <button onClick={async () => {
+                const reason = prompt('سبب إعادة فتح العهدة:');
+                if (!reason || reason.trim().length < 3) { toast.error('يجب إدخال سبب (٣ أحرف على الأقل)'); return; }
+                try { await custodyFundsApi.reopen(f.id, reason); toast.success('تم إعادة فتح العهدة'); onBack(); }
+                catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); }
+              }} className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 text-[10px] font-medium hover:bg-emerald-500/30 shrink-0">
+                إعادة فتح
+              </button>
+            </div>
           </div>
         )}
         {/* Balance Card */}
@@ -365,7 +377,8 @@ function FundDetail({ fund: f, allUsers, onBack, onRefresh }: { fund: any; allUs
                     {!isClosed && inv.status === 'pending' && (
                       <div className="flex gap-1">
                         <button onClick={async () => { await custodyFundsApi.updateInvoiceStatus(inv.id, 'approved'); toast.success('تم الاعتماد'); onRefresh(); }} className="p-1 rounded-lg hover:bg-emerald-500/20 text-gray-400 hover:text-emerald-300"><CheckCircle className="w-3.5 h-3.5" /></button>
-                        <button onClick={async () => { await custodyFundsApi.updateInvoiceStatus(inv.id, 'rejected'); toast.success('تم الرفض'); onRefresh(); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300"><X className="w-3.5 h-3.5" /></button>
+                        <button onClick={async () => { await custodyFundsApi.updateInvoiceStatus(inv.id, 'rejected'); toast.success('تم الرفض'); onRefresh(); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300" title="رفض"><X className="w-3.5 h-3.5" /></button>
+                        <button onClick={async () => { if (!confirm('حذف هذه الفاتورة؟')) return; await custodyFundsApi.deleteInvoice(inv.id); toast.success('تم الحذف'); onRefresh(); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-300" title="حذف"><Trash2 className="w-3 h-3" /></button>
                       </div>
                     )}
                   </div>

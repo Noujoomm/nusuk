@@ -19,7 +19,7 @@ try { mkdirSync(UPLOADS_DIR, { recursive: true }); } catch {}
 export class CustodyFundsController {
   constructor(private service: CustodyFundsService) {}
 
-  // ─── Funds ──────────────────────────
+  // ─── Funds CRUD ─────────────────────
   @Get()
   list() { return this.service.listFunds(); }
 
@@ -30,6 +30,25 @@ export class CustodyFundsController {
 
   @Get(':id')
   get(@Param('id') id: string) { return this.service.getFund(id); }
+
+  @Patch(':id')
+  @Roles('admin')
+  updateFund(@Param('id') id: string, @Body() body: any, @CurrentUser() user: any) {
+    return this.service.updateFund(id, body, user.id);
+  }
+
+  @Delete(':id')
+  @Roles('admin')
+  deleteFund(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.service.deleteFund(id, user.id);
+  }
+
+  // ─── Reopen Closed Fund (admin only) ──
+  @Patch(':id/reopen')
+  @Roles('admin')
+  reopenFund(@Param('id') id: string, @Body('reason') reason: string, @CurrentUser() user: any) {
+    return this.service.reopenFund(id, reason, user.id);
+  }
 
   // ─── Ledger ─────────────────────────
   @Get(':id/ledger')
@@ -61,6 +80,10 @@ export class CustodyFundsController {
       filename: (_r, file, cb) => cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + extname(file.originalname)),
     }),
     limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_r, file, cb) => {
+      const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
+      cb(null, allowed.includes(extname(file.originalname).toLowerCase()));
+    },
   }))
   addInvoice(
     @Param('id') id: string,
@@ -77,9 +100,21 @@ export class CustodyFundsController {
     }, user.id);
   }
 
+  @Patch('invoices/:iid')
+  @Roles('admin')
+  editInvoice(@Param('iid') iid: string, @Body() body: any, @CurrentUser() user: any) {
+    return this.service.editInvoice(iid, body, user.id);
+  }
+
   @Patch('invoices/:iid/status')
   updateInvoiceStatus(@Param('iid') iid: string, @Body('status') status: string) {
     return this.service.updateInvoiceStatus(iid, status);
+  }
+
+  @Delete('invoices/:iid')
+  @Roles('admin')
+  deleteInvoice(@Param('iid') iid: string) {
+    return this.service.deleteInvoice(iid);
   }
 
   // ─── Close ──────────────────────────
