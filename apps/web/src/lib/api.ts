@@ -6,7 +6,6 @@ const api = axios.create({
   baseURL: `${API_URL}/api`,
   withCredentials: true,
   timeout: 15000,
-  headers: { 'Content-Type': 'application/json' },
 });
 
 // Attach access token to requests
@@ -151,7 +150,7 @@ export const scopeBlocksApi = {
   uploadAttachment: (blockId: string, file: File) => {
     const fd = new FormData();
     fd.append('file', file);
-    return api.post(`/scope-blocks/${blockId}/attachments`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.post(`/scope-blocks/${blockId}/attachments`, fd);
   },
   deleteAttachment: (attachmentId: string) => api.delete(`/scope-blocks/attachments/${attachmentId}`),
   // Updates (timeline)
@@ -225,7 +224,6 @@ export const reportsApi = {
     const form = new FormData();
     files.forEach((file) => form.append('files', file));
     return api.post(`/reports/${reportId}/attachments`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 300000,
     });
   },
@@ -244,14 +242,14 @@ export const filesApi = {
     if (data?.trackId) form.append('trackId', data.trackId);
     if (data?.category) form.append('category', data.category);
     if (data?.notes) form.append('notes', data.notes);
-    return api.post('/files/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.post('/files/upload', form);
   },
   register: (data: any) => api.post('/files/register', data),
   analyze: (file: File, analysisType?: string) => {
     const form = new FormData();
     form.append('file', file);
     if (analysisType) form.append('analysisType', analysisType);
-    return api.post('/files/analyze', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.post('/files/analyze', form);
   },
   download: (id: string) => api.get(`/files/${id}/download`, { responseType: 'blob' }),
   updateStatus: (id: string, status: string) => api.patch(`/files/${id}/status`, { status }),
@@ -278,7 +276,7 @@ export const dailyUpdatesApi = {
     if (files) {
       files.forEach((file) => form.append('files', file));
     }
-    return api.post('/daily-updates', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.post('/daily-updates', form);
   },
   update: (id: string, data: any) => api.patch(`/daily-updates/${id}`, data),
   delete: (id: string) => api.delete(`/daily-updates/${id}`),
@@ -289,7 +287,7 @@ export const dailyUpdatesApi = {
   addAttachments: (updateId: string, files: File[]) => {
     const form = new FormData();
     files.forEach((file) => form.append('files', file));
-    return api.post(`/daily-updates/${updateId}/attachments`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.post(`/daily-updates/${updateId}/attachments`, form);
   },
   deleteAttachment: (attachmentId: string) => api.delete(`/daily-updates/attachments/${attachmentId}`),
   downloadAttachment: (attachmentId: string) =>
@@ -357,7 +355,7 @@ export const tasksApi = {
     const formData = new FormData();
     formData.append('file', file);
     if (notes) formData.append('notes', notes);
-    return api.post(`/tasks/${id}/files`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.post(`/tasks/${id}/files`, formData);
   },
   deleteTaskFile: (id: string, fileId: string) => api.delete(`/tasks/${id}/files/${fileId}`),
   downloadTaskFile: (id: string, fileId: string) =>
@@ -385,7 +383,7 @@ export const importsApi = {
   upload: (file: File) => {
     const form = new FormData();
     form.append('file', file);
-    return api.post('/imports/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.post('/imports/upload', form);
   },
   parseSheet: (filePath: string, sheetName: string) => api.post('/imports/parse-sheet', { filePath, sheetName }),
   execute: (data: any) => api.post('/imports/execute', data),
@@ -512,7 +510,7 @@ export const supportServicesApi = {
   uploadInvoiceFiles: (invoiceId: string, files: File[]) => {
     const fd = new FormData();
     files.forEach((f) => fd.append('files', f));
-    return api.post(`/support-services/invoices/${invoiceId}/attachments`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.post(`/support-services/invoices/${invoiceId}/attachments`, fd);
   },
   getInvoiceAttachments: (invoiceId: string) => api.get(`/support-services/invoices/${invoiceId}/attachments`),
   deleteInvoiceAttachment: (invoiceId: string, attachmentId: string) => api.delete(`/support-services/invoices/${invoiceId}/attachments/${attachmentId}`),
@@ -545,7 +543,7 @@ export const custodyFundsApi = {
   addTransaction: (id: string, data: any) => api.post(`/custody-funds/${id}/transactions`, data),
   addMember: (id: string, data: any) => api.post(`/custody-funds/${id}/members`, data),
   removeMember: (id: string, mid: string) => api.delete(`/custody-funds/${id}/members/${mid}`),
-  addInvoice: (id: string, data: FormData) => api.post(`/custody-funds/${id}/invoices`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  addInvoice: (id: string, data: FormData) => api.post(`/custody-funds/${id}/invoices`, data),
   editInvoice: (iid: string, data: any) => api.patch(`/custody-funds/invoices/${iid}`, data),
   updateInvoiceStatus: (iid: string, status: string) => api.patch(`/custody-funds/invoices/${iid}/status`, { status }),
   deleteInvoice: (iid: string) => api.delete(`/custody-funds/invoices/${iid}`),
