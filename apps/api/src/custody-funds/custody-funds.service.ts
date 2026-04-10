@@ -265,6 +265,10 @@ export class CustodyFundsService {
 
   // ═══ INVOICE EDIT + DELETE ═══════════════════════════════
 
+  async getInvoice(invoiceId: string) {
+    return this.prisma.custodyFundInvoice.findUnique({ where: { id: invoiceId } });
+  }
+
   async editInvoice(invoiceId: string, data: { invoiceName?: string; amount?: number; notes?: string }, userId: string) {
     const invoice = await this.prisma.custodyFundInvoice.findUnique({ where: { id: invoiceId } });
     if (!invoice) throw new NotFoundException('الفاتورة غير موجودة');

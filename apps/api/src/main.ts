@@ -66,8 +66,12 @@ async function bootstrap() {
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', 1);
 
-  // Serve uploaded files statically
-  expressApp.use('/uploads', express.static(join(process.cwd(), 'uploads')));
+  // Serve uploaded files statically — try both cwd/uploads and project root/uploads
+  const uploadsDir = join(process.cwd(), 'uploads');
+  expressApp.use('/uploads', express.static(uploadsDir, { fallthrough: true }));
+  // Also try parent directory in case cwd is apps/api but files are at project root
+  expressApp.use('/uploads', express.static(join(process.cwd(), '..', '..', 'uploads'), { fallthrough: true }));
+  Logger.log(`Static uploads dir: ${uploadsDir}`, 'Bootstrap');
 
   // Increase body size limit for large file imports (PPTX, XML, etc.)
   app.use(json({ limit: '500mb' }));

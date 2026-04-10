@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Res, UseGuards, UseInterceptors, UploadedFile, NotFoundException } from '@nestjs/common';
+import { Response } from 'express';
+import { existsSync, createReadStream } from 'fs';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { mkdirSync } from 'fs';
@@ -98,6 +100,18 @@ export class CustodyFundsController {
       attachmentUrl: file?.path,
       attachmentOriginalName: file?.originalname,
     }, user.id);
+  }
+
+  @Get('invoices/:iid/download')
+  async downloadInvoice(@Param('iid') iid: string, @Res() res: Response) {
+    const invoice = await this.service.getInvoice(iid);
+    if (!invoice?.attachmentUrl) throw new NotFoundException('لا يوجد مرفق لهذه الفاتورة');
+    if (!existsSync(invoice.attachmentUrl)) throw new NotFoundException('الملف غير موجود على الخادم');
+    const filename = invoice.attachmentOriginalName || 'attachment';
+    res.set({
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    });
+    createReadStream(invoice.attachmentUrl).pipe(res);
   }
 
   @Patch('invoices/:iid')

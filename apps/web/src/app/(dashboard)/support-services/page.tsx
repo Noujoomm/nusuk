@@ -368,7 +368,7 @@ function FundDetail({ fund: f, allUsers, onBack, onRefresh }: { fund: any; allUs
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {inv.attachmentOriginalName && <a href={`/uploads/custody-invoices/${inv.attachmentUrl?.split('/').pop()}`} target="_blank" className="text-[10px] text-sky-400 hover:underline">📎 {inv.attachmentOriginalName}</a>}
+                    {inv.attachmentOriginalName && <a href={`/api/custody-funds/invoices/${inv.id}/download`} target="_blank" rel="noopener" className="text-[10px] text-sky-400 hover:underline">📎 {inv.attachmentOriginalName}</a>}
                     <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full',
                       inv.status === 'approved' ? 'bg-emerald-500/20 text-emerald-300' : inv.status === 'rejected' ? 'bg-red-500/20 text-red-300' : 'bg-amber-500/20 text-amber-300')}>
                       {inv.status === 'approved' ? 'مقبولة' : inv.status === 'rejected' ? 'مرفوضة' : 'قيد المراجعة'}
