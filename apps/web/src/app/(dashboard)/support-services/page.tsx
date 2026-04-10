@@ -131,6 +131,8 @@ function FundDetail({ fund: f, allUsers, onBack, onRefresh }: { fund: any; allUs
   const [showInvForm, setShowInvForm] = useState(false);
   const [showMemberForm, setShowMemberForm] = useState(false);
   const [showClose, setShowClose] = useState(false);
+  const [showEditFund, setShowEditFund] = useState(false);
+  const [editFundForm, setEditFundForm] = useState({ custodyName: f.custodyName, totalAmount: String(f.totalAmount) });
   const [submitting, setSubmitting] = useState(false);
   const [txForm, setTxForm] = useState({ transactionType: 'credit', amount: '', transactionDate: '', note: '' });
   const [invForm, setInvForm] = useState({ invoiceName: '', amount: '', invoiceDate: '', custodyMemberId: '', notes: '' });
@@ -229,6 +231,12 @@ function FundDetail({ fund: f, allUsers, onBack, onRefresh }: { fund: any; allUs
             <button onClick={() => setShowInvForm(true)} className="btn-secondary text-sm flex items-center gap-1.5"><Receipt className="w-4 h-4" /> تسجيل فاتورة</button>
             <button onClick={() => setShowMemberForm(true)} className="btn-secondary text-sm flex items-center gap-1.5"><UserPlus className="w-4 h-4" /> إضافة شخص</button>
             <button onClick={() => setShowClose(true)} className="btn-danger text-sm flex items-center gap-1.5"><Lock className="w-4 h-4" /> إقفال العهدة</button>
+            {isAdminUser && <button onClick={() => setShowEditFund(true)} className="btn-secondary text-sm flex items-center gap-1.5"><Receipt className="w-4 h-4" /> تعديل العهدة</button>}
+            {isAdminUser && <button onClick={async () => {
+              if (!confirm(`حذف العهدة "${f.custodyName}"؟ ${f._count?.invoices ? `⚠️ تحتوي على ${f._count.invoices} فاتورة` : ''}`)) return;
+              try { await custodyFundsApi.delete(f.id); toast.success('تم حذف العهدة'); onBack(); }
+              catch (e: any) { toast.error(e?.response?.data?.message || 'فشل الحذف'); }
+            }} className="btn-danger text-sm flex items-center gap-1.5"><Trash2 className="w-4 h-4" /> حذف العهدة</button>}
           </div>
         )}
       </div>
@@ -393,6 +401,29 @@ function FundDetail({ fund: f, allUsers, onBack, onRefresh }: { fund: any; allUs
       )}
 
       {/* Close Dialog */}
+      {/* Edit Fund Modal (admin only) */}
+      {showEditFund && isAdminUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="glass p-6 w-full max-w-md space-y-4">
+            <h3 className="text-sm font-bold">تعديل العهدة</h3>
+            <div><label className="block text-xs text-gray-400 mb-1">اسم العهدة</label><input value={editFundForm.custodyName} onChange={(e) => setEditFundForm({ ...editFundForm, custodyName: e.target.value })} className="input-field" /></div>
+            <div><label className="block text-xs text-gray-400 mb-1">المبلغ الإجمالي (ر.س)</label><input type="number" min={0} value={editFundForm.totalAmount} onChange={(e) => setEditFundForm({ ...editFundForm, totalAmount: e.target.value })} className="input-field" dir="ltr" /></div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowEditFund(false)} className="btn-secondary">إلغاء</button>
+              <button disabled={submitting} onClick={async () => {
+                setSubmitting(true);
+                try {
+                  await custodyFundsApi.update(f.id, { custodyName: editFundForm.custodyName, totalAmount: parseFloat(editFundForm.totalAmount) });
+                  toast.success('تم تعديل العهدة');
+                  setShowEditFund(false);
+                  onRefresh();
+                } catch (e: any) { toast.error(e?.response?.data?.message || 'فشل'); } finally { setSubmitting(false); }
+              }} className="btn-primary disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showClose && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="glass p-6 w-full max-w-md space-y-4">
