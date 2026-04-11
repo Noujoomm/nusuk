@@ -4,192 +4,220 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════
+   THEME VARIABLES — Dark (default) + Light
+   ═══════════════════════════════════════════════════════ */
+
+:root,
+[data-theme="dark"] {
+  --color-bg-primary: #030712;
+  --color-bg-secondary: #111827;
+  --color-bg-card: rgba(255,255,255,0.05);
+  --color-bg-card-solid: #1f2937;
+  --color-text-primary: #f9fafb;
+  --color-text-secondary: #d1d5db;
+  --color-text-muted: #9ca3af;
+  --color-border: rgba(255,255,255,0.10);
+  --color-border-hover: rgba(255,255,255,0.15);
+  --color-input-bg: rgba(255,255,255,0.05);
+  --color-input-border: rgba(255,255,255,0.10);
+  --color-input-text: #ffffff;
+  --color-input-placeholder: #6b7280;
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.3);
+  --shadow-card-hover: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+[data-theme="light"] {
+  --color-bg-primary: #F5F3EE;
+  --color-bg-secondary: #EDE8DF;
+  --color-bg-card: #FFFFFF;
+  --color-bg-card-solid: #FFFFFF;
+  --color-text-primary: #1C2B3A;
+  --color-text-secondary: #5C4A2A;
+  --color-text-muted: #8B7355;
+  --color-border: #DDD0B8;
+  --color-border-hover: #C9A05A;
+  --color-input-bg: #FFFFFF;
+  --color-input-border: #DDD0B8;
+  --color-input-text: #1C2B3A;
+  --color-input-placeholder: #8B7355;
+  --shadow-card: 0 2px 8px rgba(139,101,32,0.15);
+  --shadow-card-hover: 0 4px 16px rgba(139,101,32,0.25);
+}
+
 @layer base {
   html {
     direction: rtl;
     font-feature-settings: 'ss01';
   }
   body {
-    @apply bg-gray-950 text-gray-100 antialiased;
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
     font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 }
 
 @layer components {
   .glass {
-    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl;
+    background: var(--color-bg-card);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+  }
+  [data-theme="light"] .glass {
+    background: var(--color-bg-card-solid);
+    backdrop-filter: none;
+    box-shadow: var(--shadow-card);
   }
   .glass-hover {
-    @apply hover:bg-white/10 transition-all duration-200;
+    transition: all 0.2s ease;
+  }
+  .glass-hover:hover {
+    background: var(--color-bg-card);
+    border-color: var(--color-border-hover);
   }
   .btn-primary {
     @apply px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-medium transition-colors;
   }
+  [data-theme="light"] .btn-primary {
+    background-color: #B8862A;
+    color: #FFFFFF;
+  }
+  [data-theme="light"] .btn-primary:hover {
+    background-color: #D4A843;
+  }
   .btn-secondary {
-    @apply px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors;
+    @apply px-4 py-2 rounded-xl font-medium transition-colors;
+    background: var(--color-bg-card);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+  }
+  .btn-secondary:hover {
+    border-color: var(--color-border-hover);
   }
   .btn-danger {
     @apply px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-xl font-medium transition-colors;
   }
+  [data-theme="light"] .btn-danger {
+    background: rgba(239,68,68,0.1);
+    color: #dc2626;
+  }
   .input-field {
-    @apply w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition-all;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-input-border);
+    border-radius: 0.75rem;
+    color: var(--color-input-text);
+    transition: all 0.2s;
+  }
+  .input-field::placeholder {
+    color: var(--color-input-placeholder);
+  }
+  .input-field:focus {
+    outline: none;
+    border-color: #10B981;
+    box-shadow: 0 0 0 2px rgba(16,185,129,0.25);
   }
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
 }
 
-/* ─── Native Select Fix (dark theme) ─── */
-select.input-field {
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: left 12px center;
-  background-size: 16px;
-  padding-left: 36px;
-  cursor: pointer;
-}
-
-select.input-field option {
-  background-color: #111827;
-  color: #f3f4f6;
-  padding: 8px 12px;
-}
-
-select.input-field option:checked {
-  background-color: #065f46;
-  color: #ffffff;
-}
-
-select.input-field:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ─── Portal Dropdown Animation ─── */
-@keyframes select-in {
-  from {
-    opacity: 0;
-    transform: scale(0.96) translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-.animate-in {
-  animation: select-in 150ms ease-out forwards;
-}
-
 /* ─── Analytics Cards ─── */
 .analytics-card {
-  @apply bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-2xl p-5 relative overflow-hidden;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  position: relative;
+  overflow: hidden;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+[data-theme="light"] .analytics-card {
+  background: var(--color-bg-card-solid);
+  box-shadow: var(--shadow-card);
 }
 .analytics-card::before {
   content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: 0; left: 0; right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  background: linear-gradient(90deg, transparent, var(--color-border), transparent);
 }
 .analytics-card:hover {
-  @apply bg-white/[0.08] border-white/[0.12];
+  border-color: var(--color-border-hover);
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  box-shadow: var(--shadow-card-hover);
 }
 
-/* ─── Chart Interaction Styles (Premium Dark Theme) ─── */
+/* ─── Light mode text overrides ─── */
+[data-theme="light"] .text-white { color: var(--color-text-primary) !important; }
+[data-theme="light"] .text-gray-100 { color: var(--color-text-primary) !important; }
+[data-theme="light"] .text-gray-200 { color: var(--color-text-primary) !important; }
+[data-theme="light"] .text-gray-300 { color: var(--color-text-secondary) !important; }
+[data-theme="light"] .text-gray-400 { color: var(--color-text-muted) !important; }
+[data-theme="light"] .text-gray-500 { color: var(--color-text-muted) !important; }
 
-/* Pie / Donut — dim siblings on hover, glow active */
-.recharts-sector {
-  transition: opacity 220ms ease, filter 220ms ease, transform 220ms ease;
-  transform-origin: center;
-}
-.recharts-pie:hover .recharts-sector {
-  opacity: 0.6;
-  filter: brightness(0.85);
-}
-.recharts-pie .recharts-sector:hover {
-  opacity: 1 !important;
-  filter: brightness(1.12) drop-shadow(0 0 8px rgba(255,255,255,0.12));
-  transform: scale(1.03);
-}
-
-/* Bar — dim siblings, brighten active */
-.recharts-bar-rectangle {
-  transition: opacity 200ms ease, filter 200ms ease;
-}
-.recharts-bar:hover .recharts-bar-rectangle {
-  opacity: 0.55;
-}
-.recharts-bar .recharts-bar-rectangle:hover {
-  opacity: 1 !important;
-  filter: brightness(1.15) drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+/* ─── Light mode background overrides ─── */
+[data-theme="light"] .bg-gray-950 { background-color: var(--color-bg-primary) !important; }
+[data-theme="light"] .bg-gray-900 { background-color: var(--color-bg-secondary) !important; }
+[data-theme="light"] .bg-white\/5,
+[data-theme="light"] .bg-white\/\[0\.03\],
+[data-theme="light"] .bg-white\/\[0\.04\] {
+  background-color: var(--color-bg-card-solid) !important;
 }
 
-/* Line / Area dots */
-.recharts-dot {
-  transition: r 200ms ease, filter 200ms ease;
-}
-.recharts-active-dot circle {
-  filter: drop-shadow(0 0 6px currentColor);
-}
-
-/* Line stroke glow on hover */
-.recharts-line .recharts-line-curve {
-  transition: filter 250ms ease;
-}
-.recharts-line:hover .recharts-line-curve {
-  filter: drop-shadow(0 0 4px rgba(148,163,184,0.3));
+/* ─── Light mode borders ─── */
+[data-theme="light"] .border-white\/10,
+[data-theme="light"] .border-white\/\[0\.06\],
+[data-theme="light"] .border-white\/\[0\.08\] {
+  border-color: var(--color-border) !important;
 }
 
-/* Tooltip container — smooth positioning */
-.recharts-tooltip-wrapper {
-  transition: transform 150ms ease, opacity 150ms ease;
-  pointer-events: none;
+/* ─── Light mode select ─── */
+[data-theme="light"] select.input-field option {
+  background-color: #FFFFFF;
+  color: #1C2B3A;
+}
+[data-theme="light"] select.input-field option:checked {
+  background-color: #D4A843;
+  color: #3D2810;
 }
 
-/* Legend — consistent styling */
-.recharts-legend-item {
-  margin-inline-end: 12px !important;
+/* ─── Recharts light mode ─── */
+[data-theme="light"] .recharts-text.recharts-cartesian-axis-tick-value {
+  fill: #5C4A2A !important;
 }
-.recharts-legend-item-text {
-  color: #ffffff !important;
-  font-size: 11px !important;
-  vertical-align: middle;
+[data-theme="light"] .recharts-cartesian-grid-horizontal line,
+[data-theme="light"] .recharts-cartesian-grid-vertical line {
+  stroke: rgba(28,43,58,0.08) !important;
 }
-.recharts-legend-icon {
-  border-radius: 3px !important;
-}
-
-/* Grid — ultra-subtle */
-.recharts-cartesian-grid-horizontal line,
-.recharts-cartesian-grid-vertical line {
-  stroke: rgba(255, 255, 255, 0.08);
+[data-theme="light"] .recharts-legend-item-text {
+  color: #1C2B3A !important;
 }
 
-/* Axis labels */
-.recharts-text.recharts-cartesian-axis-tick-value {
-  fill: #e5e7eb !important;
-  font-size: 10px;
-}
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-border-hover); }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  @apply bg-white/10 rounded-full;
-}
-::-webkit-scrollbar-thumb:hover {
-  @apply bg-white/20;
-}
+/* ─── Recharts interactions (shared) ─── */
+.recharts-sector { transition: opacity 220ms ease, filter 220ms ease, transform 220ms ease; transform-origin: center; }
+.recharts-pie:hover .recharts-sector { opacity: 0.6; filter: brightness(0.85); }
+.recharts-pie .recharts-sector:hover { opacity: 1 !important; filter: brightness(1.12) drop-shadow(0 0 8px rgba(255,255,255,0.12)); transform: scale(1.03); }
+.recharts-bar-rectangle { transition: opacity 200ms ease, filter 200ms ease; }
+.recharts-bar:hover .recharts-bar-rectangle { opacity: 0.55; }
+.recharts-bar .recharts-bar-rectangle:hover { opacity: 1 !important; filter: brightness(1.15); }
+.recharts-dot { transition: r 200ms ease, filter 200ms ease; }
+.recharts-active-dot circle { filter: drop-shadow(0 0 6px currentColor); }
+.recharts-tooltip-wrapper { transition: transform 150ms ease, opacity 150ms ease; pointer-events: none; }
+.recharts-legend-item { margin-inline-end: 12px !important; }
+.recharts-legend-icon { border-radius: 3px !important; }
+
+/* ─── Portal Dropdown Animation ─── */
+@keyframes select-in { from { opacity: 0; transform: scale(0.96) translateY(-4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+.animate-in { animation: select-in 150ms ease-out forwards; }

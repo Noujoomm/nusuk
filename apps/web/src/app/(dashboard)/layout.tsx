@@ -6,6 +6,7 @@ import { useAuth } from '@/stores/auth';
 import Sidebar from '@/components/sidebar';
 import GlobalSearch from '@/components/global-search';
 import BottomDock from '@/components/ui/bottom-dock';
+import ThemeToggle from '@/components/theme-toggle';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -53,6 +54,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen flex bg-gray-950">
       <Sidebar />
       <main className="flex-1 mr-64 p-6 pb-20 overflow-auto">
+        <div className="flex justify-end mb-4">
+          <ThemeToggle />
+        </div>
         {children}
       </main>
       <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
