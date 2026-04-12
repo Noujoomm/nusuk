@@ -16,6 +16,8 @@ export class CreateAchievementDto {
 }
 
 export class UpdateAchievementDto {
+  @IsOptional() @IsDateString() gregorianDate?: string;
+  @IsOptional() @IsString() hijriDate?: string;
   @IsOptional() @IsString() batch?: string;
   @IsOptional() @IsInt() @Min(0) companies?: number;
   @IsOptional() @IsInt() @Min(0) parcels?: number;

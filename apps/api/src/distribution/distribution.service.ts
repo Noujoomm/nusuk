@@ -34,6 +34,8 @@ export class DistributionService {
     return this.prisma.distributionAchievement.update({
       where: { id },
       data: {
+        ...(dto.gregorianDate !== undefined && { gregorianDate: new Date(dto.gregorianDate) }),
+        ...(dto.hijriDate !== undefined && { hijriDate: dto.hijriDate }),
         ...(dto.batch !== undefined && { batch: dto.batch }),
         ...(dto.companies !== undefined && { companies: dto.companies }),
         ...(dto.parcels !== undefined && { parcels: dto.parcels }),
