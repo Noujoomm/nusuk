@@ -30,7 +30,8 @@ function Ring({ value, size = 110 }: { value: number; size?: number }) {
   );
 }
 
-const EMPTY = { gregorianDate: '', hijriDate: '', batch: '', companies: '', parcels: '', totalCards: '', cardsPerHour: '', duration: '4', specialists: '4', notes: '', cardsReceived: true };
+const EMPTY = { gregorianDate: '', hijriDate: '', batch: '', companies: '', parcels: '', totalCards: '', cardsPerHour: '', duration: '4', specialists: '4', notes: '', cardsReceived: true, distributionCenter: '' };
+const CENTER_AR: Record<string, string> = { makkah: 'مركز مكة المكرمة', madinah: 'مركز المدينة المنورة' };
 
 export default function AchievementSection() {
   const { user } = useAuth();
@@ -38,6 +39,7 @@ export default function AchievementSection() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState(EMPTY);
 
@@ -55,20 +57,48 @@ export default function AchievementSection() {
   const expected = cph * dur * spec;
   const previewPct = expected > 0 ? Math.round((cards / expected) * 1000) / 10 : 0;
 
+  const startEdit = (entry: any) => {
+    setEditingId(entry.id);
+    setForm({
+      gregorianDate: entry.gregorianDate?.split('T')[0] || '',
+      hijriDate: entry.hijriDate || '',
+      batch: entry.batch || '',
+      companies: String(entry.companies || 0),
+      parcels: String(entry.parcels || 0),
+      totalCards: String(entry.totalCards || 0),
+      cardsPerHour: String(entry.cardsPerHour || 0),
+      duration: String(entry.duration || 4),
+      specialists: String(entry.specialists || 4),
+      notes: entry.notes || '',
+      cardsReceived: entry.cardsReceivedFromFactory !== false,
+      distributionCenter: entry.distributionCenter || '',
+    });
+    setShowForm(true);
+    scrollToEdit('#achievement-form');
+  };
+
   const submit = async () => {
     if (!form.gregorianDate || !form.hijriDate) { toast.error('التاريخ مطلوب'); return; }
+    if (!form.distributionCenter) { toast.error('يجب اختيار المركز'); return; }
     setSubmitting(true);
     try {
-      await distAchievementApi.create({
+      const payload = {
         gregorianDate: form.gregorianDate, hijriDate: form.hijriDate, batch: form.batch,
         companies: parseInt(form.companies) || 0, parcels: parseInt(form.parcels) || 0,
         totalCards: cards, cardsPerHour: cph,
         duration: dur, specialists: spec,
         cardsReceivedFromFactory: form.cardsReceived,
+        distributionCenter: form.distributionCenter,
         ...(form.notes ? { notes: form.notes } : {}),
-      });
-      toast.success('تم الحفظ — نسبة الإنجاز محسوبة تلقائياً');
-      setShowForm(false); setForm(EMPTY); load();
+      };
+      if (editingId) {
+        await distAchievementApi.update(editingId, payload);
+        toast.success('تم تعديل السجل');
+      } else {
+        await distAchievementApi.create(payload);
+        toast.success('تم الحفظ — نسبة الإنجاز محسوبة تلقائياً');
+      }
+      setShowForm(false); setForm(EMPTY); setEditingId(null); load();
     } catch (err: any) {
       const msg = err?.response?.data?.message;
       toast.error(Array.isArray(msg) ? msg[0] : msg || 'فشل الحفظ');
@@ -91,7 +121,7 @@ export default function AchievementSection() {
 
       {showForm && (
         <div id="achievement-form" className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 space-y-4 scroll-mt-20">
-          <div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-white">إدخال البيانات الخام</h3><button onClick={() => setShowForm(false)} className="p-1 rounded-lg hover:bg-white/10"><X className="w-4 h-4 text-gray-400" /></button></div>
+          <div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-white">{editingId ? 'تعديل السجل' : 'إدخال البيانات الخام'}</h3><button onClick={() => { setShowForm(false); setEditingId(null); setForm(EMPTY); }} className="p-1 rounded-lg hover:bg-white/10"><X className="w-4 h-4 text-gray-400" /></button></div>
           <DatePairInput
             gregorianDate={form.gregorianDate} hijriDate={form.hijriDate}
             onGregorianChange={(v) => setForm({ ...form, gregorianDate: v })}
@@ -115,6 +145,15 @@ export default function AchievementSection() {
                 {f.k === 'cardsPerHour' && cph > 4000 && <p className="text-[10px] text-amber-400 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> تحذير: تجاوز 4000</p>}
               </div>
             ))}
+          </div>
+          {/* Distribution Center */}
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">المركز *</label>
+            <select value={form.distributionCenter} onChange={(e) => setForm({ ...form, distributionCenter: e.target.value })} className="input-field text-sm">
+              <option value="">— اختر المركز —</option>
+              <option value="makkah">مركز مكة المكرمة</option>
+              <option value="madinah">مركز المدينة المنورة</option>
+            </select>
           </div>
           {/* Cards Received Checkbox */}
           <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
@@ -151,7 +190,7 @@ export default function AchievementSection() {
             <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} maxLength={1000}
               rows={2} className="input-field text-sm w-full resize-none" placeholder="أضف ملاحظات..." />
           </div>
-          <div className="flex justify-end"><button onClick={submit} disabled={submitting} className="btn-primary px-6 py-2 text-sm disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ'}</button></div>
+          <div className="flex justify-end"><button onClick={submit} disabled={submitting} className="btn-primary px-6 py-2 text-sm disabled:opacity-50">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : editingId ? 'حفظ التعديلات' : 'حفظ'}</button></div>
         </div>
       )}
 
@@ -219,12 +258,13 @@ export default function AchievementSection() {
         {/* Table */}
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 overflow-x-auto">
           <table className="w-full text-sm"><thead><tr className="border-b border-white/10">
-            {['التاريخ', 'الموافق', 'الدفعة', 'استلام', 'شركات', 'طرود', 'بطاقات', 'بطاقات/س', 'المدة', 'أخصائيين', 'المتوقع', 'الإنجاز %', ''].map((h, i) => <th key={i} className="py-2 px-2 text-[10px] text-gray-400 font-medium text-right whitespace-nowrap">{h}</th>)}
+            {['التاريخ', 'الموافق', 'المركز', 'الدفعة', 'استلام', 'شركات', 'طرود', 'بطاقات', 'بطاقات/س', 'المدة', 'أخصائيين', 'المتوقع', 'الإنجاز %', ''].map((h, i) => <th key={i} className="py-2 px-2 text-[10px] text-gray-400 font-medium text-right whitespace-nowrap">{h}</th>)}
           </tr></thead><tbody>
             {entries.map((e: any) => (
               <tr key={e.id} className="border-b border-white/5 hover:bg-white/[0.02]">
                 <td className="py-2 px-2 text-xs text-gray-300 tabular-nums">{new Date(e.gregorianDate).toLocaleDateString('ar-SA-u-nu-latn')}</td>
                 <td className="py-2 px-2 text-xs text-gray-300">{e.hijriDate}</td>
+                <td className="py-2 px-2 text-xs text-gray-300">{CENTER_AR[e.distributionCenter] || '—'}</td>
                 <td className="py-2 px-2 text-xs text-gray-300">{e.batch || '—'}</td>
                 <td className="py-2 px-2 text-xs">
                   {e.cardsReceivedFromFactory !== false
@@ -239,7 +279,10 @@ export default function AchievementSection() {
                 <td className="py-2 px-2 text-xs text-gray-400">{e.specialists}</td>
                 <td className="py-2 px-2 text-xs text-gray-300 tabular-nums">{formatNumber(e.expected)}</td>
                 <td className={cn('py-2 px-2 text-xs font-bold tabular-nums', e.achievementPct >= 100 ? 'text-emerald-400' : e.achievementPct >= 85 ? 'text-amber-400' : 'text-red-400')}>{e.achievementPct}%</td>
-                {canEdit && <td className="py-2 px-2"><button onClick={() => { distAchievementApi.delete(e.id).then(() => { toast.success('تم'); load(); }).catch(() => toast.error('فشل')); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-500 hover:text-red-300"><Trash2 className="w-3.5 h-3.5" /></button></td>}
+                {canEdit && <td className="py-2 px-2 flex gap-1">
+                  <button onClick={() => startEdit(e)} className="p-1 rounded-lg hover:bg-brand-500/20 text-gray-500 hover:text-brand-300" title="تعديل"><Target className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => { distAchievementApi.delete(e.id).then(() => { toast.success('تم'); load(); }).catch(() => toast.error('فشل')); }} className="p-1 rounded-lg hover:bg-red-500/20 text-gray-500 hover:text-red-300" title="حذف"><Trash2 className="w-3.5 h-3.5" /></button>
+                </td>}
               </tr>
             ))}
           </tbody></table>

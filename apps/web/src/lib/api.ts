@@ -456,6 +456,7 @@ export const analyticsApi = {
 export const distAchievementApi = {
   dashboard: () => api.get('/distribution/achievement/dashboard'),
   create: (data: any) => api.post('/distribution/achievement', data),
+  update: (id: string, data: any) => api.patch(`/distribution/achievement/${id}`, data),
   delete: (id: string) => api.delete(`/distribution/achievement/${id}`),
 };
 export const distDeviationApi = {

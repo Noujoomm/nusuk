@@ -1143,6 +1143,7 @@ model DistributionAchievement {
   duration              Int      @default(4)
   specialists           Int      @default(4)
   cardsReceivedFromFactory Boolean @default(true) @map("cards_received_from_factory")
+  distributionCenter    String?  @map("distribution_center") // makkah | madinah
   notes                 String?  @db.Text
   createdById           String   @map("created_by_id")
   createdAt             DateTime @default(now()) @map("created_at")

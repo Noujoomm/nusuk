@@ -11,6 +11,20 @@ export class CreateAchievementDto {
   @IsOptional() @IsInt() @Min(1) duration?: number;
   @IsOptional() @IsInt() @Min(1) specialists?: number;
   @IsOptional() @IsBoolean() cardsReceivedFromFactory?: boolean;
+  @IsOptional() @IsString() distributionCenter?: string; // makkah | madinah
+  @IsOptional() @IsString() @MaxLength(1000) notes?: string;
+}
+
+export class UpdateAchievementDto {
+  @IsOptional() @IsString() batch?: string;
+  @IsOptional() @IsInt() @Min(0) companies?: number;
+  @IsOptional() @IsInt() @Min(0) parcels?: number;
+  @IsOptional() @IsInt() @Min(0) totalCards?: number;
+  @IsOptional() @IsInt() @Min(0) cardsPerHour?: number;
+  @IsOptional() @IsInt() @Min(1) duration?: number;
+  @IsOptional() @IsInt() @Min(1) specialists?: number;
+  @IsOptional() @IsBoolean() cardsReceivedFromFactory?: boolean;
+  @IsOptional() @IsString() distributionCenter?: string;
   @IsOptional() @IsString() @MaxLength(1000) notes?: string;
 }
 

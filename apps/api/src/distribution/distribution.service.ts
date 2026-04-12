@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { CreateAchievementDto, CreateDeviationDto } from './distribution.dto';
+import { CreateAchievementDto, UpdateAchievementDto, CreateDeviationDto } from './distribution.dto';
 
 /** Round to 1 decimal place using standard rounding */
 function r1(v: number): number {
@@ -24,6 +24,26 @@ export class DistributionService {
         duration: dto.duration ?? 4,
         specialists: dto.specialists ?? 4,
         createdById: userId,
+      },
+    });
+  }
+
+  async updateAchievement(id: string, dto: UpdateAchievementDto) {
+    const existing = await this.prisma.distributionAchievement.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('السجل غير موجود');
+    return this.prisma.distributionAchievement.update({
+      where: { id },
+      data: {
+        ...(dto.batch !== undefined && { batch: dto.batch }),
+        ...(dto.companies !== undefined && { companies: dto.companies }),
+        ...(dto.parcels !== undefined && { parcels: dto.parcels }),
+        ...(dto.totalCards !== undefined && { totalCards: dto.totalCards }),
+        ...(dto.cardsPerHour !== undefined && { cardsPerHour: dto.cardsPerHour }),
+        ...(dto.duration !== undefined && { duration: dto.duration }),
+        ...(dto.specialists !== undefined && { specialists: dto.specialists }),
+        ...(dto.cardsReceivedFromFactory !== undefined && { cardsReceivedFromFactory: dto.cardsReceivedFromFactory }),
+        ...(dto.distributionCenter !== undefined && { distributionCenter: dto.distributionCenter }),
+        ...(dto.notes !== undefined && { notes: dto.notes }),
       },
     });
   }

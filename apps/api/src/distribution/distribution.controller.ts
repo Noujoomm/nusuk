@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { DistributionService } from './distribution.service';
-import { CreateAchievementDto, CreateDeviationDto } from './distribution.dto';
+import { CreateAchievementDto, UpdateAchievementDto, CreateDeviationDto } from './distribution.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -11,8 +11,6 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 export class DistributionController {
   constructor(private service: DistributionService) {}
 
-  // ─── READ: admin, pm, track_lead ───────────────────────
-
   @Get('achievement/dashboard')
   @Roles('admin', 'pm', 'track_lead')
   achievementDashboard() { return this.service.achievementDashboard(); }
@@ -21,12 +19,16 @@ export class DistributionController {
   @Roles('admin', 'pm', 'track_lead')
   deviationDashboard() { return this.service.deviationDashboard(); }
 
-  // ─── WRITE: admin, track_lead only ─────────────────────
-
   @Post('achievement')
   @Roles('admin', 'track_lead')
   createAchievement(@Body() dto: CreateAchievementDto, @CurrentUser() user: any) {
     return this.service.createAchievement(dto, user.id);
+  }
+
+  @Patch('achievement/:id')
+  @Roles('admin', 'track_lead')
+  updateAchievement(@Param('id') id: string, @Body() dto: UpdateAchievementDto) {
+    return this.service.updateAchievement(id, dto);
   }
 
   @Delete('achievement/:id')
