@@ -178,6 +178,46 @@
 }
 
 /* ─── Light mode select ─── */
+/* ─── Native Select — RTL-aware global fix ─── */
+select.input-field,
+select.input-field option {
+  direction: rtl;
+  text-align: right;
+  font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+}
+select.input-field {
+  appearance: none;
+  -webkit-appearance: none;
+  /* Arrow icon on the LEFT side (start side in RTL) */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 12px center;
+  background-size: 14px;
+  padding-left: 32px;
+  padding-right: 16px;
+  cursor: pointer;
+  min-height: 40px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+select.input-field option {
+  padding: 8px 16px;
+  line-height: 1.6;
+  min-height: 32px;
+  background-color: var(--color-bg-card-solid);
+  color: var(--color-text-primary);
+}
+select.input-field option:checked {
+  background-color: #10B981;
+  color: #ffffff;
+}
+select.input-field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 [data-theme="light"] select.input-field option {
   background-color: #FFFFFF;
   color: #1C2B3A;

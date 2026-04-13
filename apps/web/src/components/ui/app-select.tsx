@@ -208,10 +208,11 @@ export default function AppSelect({
     ? createPortal(
         <div
           ref={dropdownRef}
+          dir="rtl"
           style={dropdownStyle}
           className="animate-in fade-in-0 zoom-in-95 duration-150"
         >
-          <div className="rounded-xl border border-white/15 bg-gray-900/98 backdrop-blur-xl shadow-2xl shadow-black/40 overflow-hidden">
+          <div className="rounded-xl border shadow-2xl overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-card-solid)', boxShadow: 'var(--shadow-card-hover)' }}>
             <div
               ref={listRef}
               role="listbox"
@@ -254,15 +255,15 @@ export default function AppSelect({
                           isSelected
                             ? 'bg-brand-500/20 text-brand-300'
                             : isFocused
-                              ? 'bg-white/10 text-white'
-                              : 'text-gray-300 hover:bg-white/5'
+                              ? 'bg-brand-500/10'
+                              : 'hover:bg-brand-500/5'
                         }
                       `}
                     >
                       {opt.icon && (
                         <span className="shrink-0">{opt.icon}</span>
                       )}
-                      <span className="flex-1 truncate">{opt.label}</span>
+                      <span className="flex-1 truncate" style={{ color: isSelected ? undefined : 'var(--color-text-primary)' }}>{opt.label}</span>
                       {isSelected && (
                         <Check className="w-4 h-4 text-brand-400 shrink-0" />
                       )}
@@ -301,15 +302,16 @@ export default function AppSelect({
         aria-required={required}
         onClick={handleToggle}
         onKeyDown={handleKeyDown}
+        style={{ background: 'var(--color-input-bg)', borderColor: open ? undefined : 'var(--color-input-border)', color: 'var(--color-input-text)' }}
         disabled={disabled}
         className={`
           w-full flex items-center gap-2 text-right
-          bg-white/5 border rounded-xl
+          border rounded-xl
           transition-all duration-200 outline-none
           ${
             open
               ? 'border-brand-500/60 ring-2 ring-brand-500/30'
-              : 'border-white/10 hover:border-white/20'
+              : ''
           }
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
           ${sizeClasses[size]}
@@ -321,9 +323,8 @@ export default function AppSelect({
         ) : null}
 
         <span
-          className={`flex-1 truncate ${
-            selectedOption ? 'text-white' : 'text-gray-500'
-          }`}
+          className="flex-1 truncate"
+          style={{ color: selectedOption ? 'var(--color-text-primary)' : 'var(--color-input-placeholder)' }}
         >
           {selectedOption?.label || placeholder}
         </span>
