@@ -71,6 +71,28 @@ const p = new PrismaClient();
 })().catch(e => { console.log('Backfill skip: ' + e.message); });
 " 2>&1 || echo "Backfill skipped (non-fatal)"
 
+# Fix old reports with midnight UTC (shows as 3AM Saudi)
+node -e "
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+(async () => {
+  const reports = await p.report.findMany({ where: { submittedAt: null } });
+  let n = 0;
+  for (const r of reports) {
+    const sub = r.createdAt || r.reportDate;
+    const type = r.type || 'daily';
+    const next = new Date(sub);
+    if (type === 'daily') next.setHours(next.getHours() + 24);
+    else if (type === 'weekly') next.setDate(next.getDate() + 7);
+    else next.setDate(next.getDate() + 30);
+    await p.report.update({ where: { id: r.id }, data: { submittedAt: sub, nextUpdateAt: next, reportDate: sub } });
+    n++;
+  }
+  if (n > 0) console.log('Reports backfill: ' + n + ' reports updated with actual timestamps');
+  await p.\$disconnect();
+})().catch(e => { console.log('Reports backfill skip: ' + e.message); });
+" 2>&1 || echo "Reports backfill skipped (non-fatal)"
+
 echo "[3/5] Running seed..."
 node dist/prisma/seed.js 2>&1 || echo "Seed skipped (non-fatal)"
 

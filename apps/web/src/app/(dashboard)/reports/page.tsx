@@ -396,11 +396,15 @@ export default function ReportsPage() {
 
     setSubmitting(true);
     try {
+      // Combine the selected date with the current time to avoid midnight UTC → 3AM Saudi
+      const now = new Date();
+      const [y, m, d] = form.reportDate.split('-').map(Number);
+      const reportDateTime = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds());
       const body: Record<string, any> = {
         trackId: form.trackId,
         type: form.type,
         title: form.title.trim(),
-        reportDate: form.reportDate,
+        reportDate: reportDateTime.toISOString(),
       };
       if (form.achievements.trim()) body.achievements = form.achievements.trim();
       if (form.kpiUpdates.trim()) body.kpiUpdates = form.kpiUpdates.trim();

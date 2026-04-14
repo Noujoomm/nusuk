@@ -1757,11 +1757,14 @@ export default function TrackDetailPage() {
                 if (!reportForm.title.trim()) { toast.error('يرجى إدخال عنوان التقرير'); return; }
                 setSubmittingReport(true);
                 try {
+                  const _now = new Date();
+                  const [_y, _m, _d] = reportForm.reportDate.split('-').map(Number);
+                  const _dt = new Date(_y, _m - 1, _d, _now.getHours(), _now.getMinutes(), _now.getSeconds());
                   const body: Record<string, any> = {
                     trackId: id,
                     type: reportForm.type,
                     title: reportForm.title.trim(),
-                    reportDate: reportForm.reportDate,
+                    reportDate: _dt.toISOString(),
                   };
                   if (reportForm.achievements.trim()) body.achievements = reportForm.achievements.trim();
                   if (reportForm.kpiUpdates.trim()) body.kpiUpdates = reportForm.kpiUpdates.trim();
