@@ -112,11 +112,22 @@ export class ReportsService {
     const safe = this.sanitizeReportData(data);
     const aiSummary = this.generateAISummary(data);
 
+    const now = new Date();
+    const reportType = safe.type || 'daily';
+    const nextUpdate = new Date(now);
+    if (reportType === 'daily') {
+      nextUpdate.setHours(nextUpdate.getHours() + 24);
+    } else if (reportType === 'weekly') {
+      nextUpdate.setDate(nextUpdate.getDate() + 7);
+    } else {
+      nextUpdate.setDate(nextUpdate.getDate() + 30); // monthly/annual/operational
+    }
+
     return this.prisma.report.create({
       data: {
         trackId: safe.trackId,
         authorId: safe.authorId,
-        type: safe.type || 'daily',
+        type: reportType,
         title: safe.title || '',
         achievements: safe.achievements,
         kpiUpdates: safe.kpiUpdates,
@@ -124,7 +135,9 @@ export class ReportsService {
         supportNeeded: safe.supportNeeded,
         upcomingTasks: safe.upcomingTasks,
         notes: safe.notes,
-        reportDate: data.reportDate ? new Date(data.reportDate) : new Date(),
+        reportDate: data.reportDate ? new Date(data.reportDate) : now,
+        submittedAt: now,
+        nextUpdateAt: nextUpdate,
         aiSummary,
       },
       include: {
