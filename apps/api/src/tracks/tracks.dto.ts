@@ -86,6 +86,42 @@ export class CreateEmployeeDto {
   @IsOptional()
   @IsString()
   contractType?: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  department?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  hireDate?: string;
+
+  @IsOptional()
+  @IsString()
+  contractStartDate?: string;
+
+  @IsOptional()
+  @IsString()
+  contractEndDate?: string;
+
+  @IsOptional()
+  @IsString()
+  nationalId?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }
 
 export class UpdateEmployeeDto {
@@ -114,6 +150,42 @@ export class UpdateEmployeeDto {
   @IsOptional()
   @IsString()
   contractType?: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  department?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  hireDate?: string;
+
+  @IsOptional()
+  @IsString()
+  contractStartDate?: string;
+
+  @IsOptional()
+  @IsString()
+  contractEndDate?: string;
+
+  @IsOptional()
+  @IsString()
+  nationalId?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }
 
 // ─── DELIVERABLE DTOs ───
