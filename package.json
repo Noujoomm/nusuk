@@ -8,9 +8,10 @@
   "scripts": {
     "dev": "docker compose up -d",
     "dev:down": "docker compose down",
-    "dev:api": "cd apps/api && npm run start:dev",
-    "dev:web": "cd apps/web && npm run dev",
-    "build": "cd apps/api && npm run build && cd ../web && npm run build",
+    "dev:api": "npm run start:dev -w @nusuk/api",
+    "dev:web": "npm run dev -w nusuk-web",
+    "build": "npm run build -w @nusuk/api && npm run build -w nusuk-web",
+    "db:deploy": "npm run db:deploy -w @nusuk/api",
     "start": "bash start.sh",
     "lint": "npm run lint --workspaces --if-present"
   },
