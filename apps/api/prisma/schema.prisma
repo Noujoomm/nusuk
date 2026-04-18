@@ -92,6 +92,10 @@ model User {
   custodyFundMemberAdds  CustodyFundMember[] @relation("CustodyFundMemberAdder")
   custodyFundInvoices    CustodyFundInvoice[] @relation("CustodyFundInvCreator")
 
+  // AI Reports Intelligence Center
+  intelligenceSessions   IntelligenceSession[]   @relation("IntelligenceSessionCreator")
+  intelligenceTemplates  IntelligenceTemplate[]  @relation("IntelligenceTemplateUploader")
+
   @@map("users")
 }
 
@@ -111,6 +115,7 @@ model RefreshToken {
 
 enum Role {
   admin
+  system_manager
   pm
   track_lead
   employee
@@ -1597,4 +1602,62 @@ model CustodyFundAlert {
 
   @@index([custodyFundId])
   @@map("custody_fund_alerts")
+}
+
+// ─── AI REPORTS INTELLIGENCE CENTER (مركز ذكاء التقارير) ───
+
+model IntelligenceSession {
+  id               String   @id @default(cuid())
+  createdById      String   @map("created_by_id")
+  filters          Json
+  outputMode       String   @map("output_mode")
+  customInstructions String? @map("custom_instructions") @db.Text
+  sourceReportIds  String[] @map("source_report_ids")
+  generatedContent Json?    @map("generated_content")
+  editedContent    Json?    @map("edited_content")
+  modelUsed        String?  @map("model_used")
+  sourceReportCount Int     @default(0) @map("source_report_count")
+  status           String   @default("draft")
+  errorMessage     String?  @map("error_message") @db.Text
+  templateId       String?  @map("template_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  createdBy User                  @relation("IntelligenceSessionCreator", fields: [createdById], references: [id])
+  template  IntelligenceTemplate? @relation(fields: [templateId], references: [id])
+
+  @@index([createdById])
+  @@index([createdAt])
+  @@index([status])
+  @@map("intelligence_sessions")
+}
+
+model IntelligenceTemplate {
+  id              String   @id @default(cuid())
+  uploadedById    String   @map("uploaded_by_id")
+  originalName    String   @map("original_name")
+  storedName      String   @map("stored_name")
+  mimeType        String   @map("mime_type")
+  sizeBytes       Int      @map("size_bytes")
+  storageProvider String   @default("DB_CHUNKED") @map("storage_provider")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  uploadedBy User                         @relation("IntelligenceTemplateUploader", fields: [uploadedById], references: [id])
+  chunks     IntelligenceTemplateChunk[]
+  sessions   IntelligenceSession[]
+
+  @@index([uploadedById])
+  @@map("intelligence_templates")
+}
+
+model IntelligenceTemplateChunk {
+  id         String @id @default(cuid())
+  templateId String @map("template_id")
+  chunkIndex Int    @map("chunk_index")
+  data       Bytes
+
+  template IntelligenceTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, chunkIndex])
+  @@map("intelligence_template_chunks")
 }

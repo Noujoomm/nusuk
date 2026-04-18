@@ -262,6 +262,45 @@ export const insightsApi = {
   track: (trackId: string) => api.get(`/insights/track/${trackId}`),
 };
 
+// ─── AI Reports Intelligence Center (مركز ذكاء التقارير) ───
+export const intelligenceApi = {
+  listSessions: (params?: { page?: number; pageSize?: number }) =>
+    api.get('/intelligence/sessions', { params }),
+  getSession: (id: string) => api.get(`/intelligence/sessions/${id}`),
+  createSession: (data: {
+    dateFrom?: string;
+    dateTo?: string;
+    trackIds?: string[];
+    reportTypes?: string[];
+    excludeEmpty?: boolean;
+    outputMode: string;
+    customInstructions?: string;
+    templateId?: string;
+  }) => api.post('/intelligence/sessions', data),
+  updateSession: (id: string, data: { editedContent: any }) =>
+    api.patch(`/intelligence/sessions/${id}`, data),
+  regenerate: (id: string, section?: string) =>
+    api.post(`/intelligence/sessions/${id}/regenerate`, { section }),
+  deleteSession: (id: string) => api.delete(`/intelligence/sessions/${id}`),
+  uploadTemplate: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/intelligence/templates', form, {
+      timeout: 300000,
+    });
+  },
+  downloadTemplateUrl: (id: string) =>
+    `${API_URL}/api/intelligence/templates/${id}/download`,
+  exportUrl: (id: string, format: 'txt' | 'md' | 'docx' | 'xlsx' | 'pptx') =>
+    `${API_URL}/api/intelligence/sessions/${id}/export?format=${format}`,
+  // Auth-bearing download helper — use when you want to fetch as blob.
+  downloadExport: (id: string, format: 'txt' | 'md' | 'docx' | 'xlsx' | 'pptx') =>
+    api.get(`/intelligence/sessions/${id}/export`, {
+      params: { format },
+      responseType: 'blob',
+    }),
+};
+
 // ─── Daily Updates ───
 export const dailyUpdatesApi = {
   list: (params?: any) => api.get('/daily-updates', { params }),

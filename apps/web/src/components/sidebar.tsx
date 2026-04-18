@@ -42,6 +42,7 @@ const NAV_ITEMS = [
   { href: '/productivity', label: 'الإنتاجية', icon: Activity, roles: ['admin', 'pm'] },
   { href: '/reports', label: 'التقارير', icon: FileText, roles: ['admin', 'pm', 'track_lead'] },
   { href: '/ai-reports', label: 'التقارير الذكية', icon: Brain, roles: ['admin', 'pm'] },
+  { href: '/reports-intelligence', label: 'مركز ذكاء التقارير', icon: Sparkles, roles: ['admin', 'system_manager'] },
   { href: '/penalties', label: 'الغرامات', icon: AlertTriangle, roles: ['admin', 'pm'] },
   { href: '/employees', label: 'الموظفون', icon: UserCheck, roles: ['admin', 'pm', 'hr'] },
   { href: '/files', label: 'الملفات', icon: FolderOpen, roles: ['admin', 'pm', 'track_lead'] },

@@ -40,6 +40,7 @@ export const PRIORITY_LABELS: Record<string, string> = {
 
 export const ROLE_LABELS: Record<string, string> = {
   admin: 'مدير النظام',
+  system_manager: 'المدير التنفيذي',
   pm: 'مدير المشروع',
   track_lead: 'قائد المسار',
   employee: 'موظف',
