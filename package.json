@@ -10,7 +10,7 @@
     "dev:down": "docker compose down",
     "dev:api": "cd apps/api && npm run start:dev",
     "dev:web": "cd apps/web && npm run dev",
-    "build": "cd apps/api && npx prisma generate && npm run build && cd ../web && npm run build",
+    "build": "cd apps/api && npm run build && cd ../web && npm run build",
     "start": "bash start.sh",
     "lint": "npm run lint --workspaces --if-present"
   },
