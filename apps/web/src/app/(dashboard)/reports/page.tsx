@@ -400,18 +400,20 @@ export default function ReportsPage() {
       const now = new Date();
       const [y, m, d] = form.reportDate.split('-').map(Number);
       const reportDateTime = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds());
+      // Send every text field so clearing a field actually persists.
+      // Empty values are sent as null and written to the DB as NULL.
       const body: Record<string, any> = {
         trackId: form.trackId,
         type: form.type,
         title: form.title.trim(),
         reportDate: reportDateTime.toISOString(),
+        achievements: form.achievements.trim() || null,
+        kpiUpdates: form.kpiUpdates.trim() || null,
+        challenges: form.challenges.trim() || null,
+        supportNeeded: form.supportNeeded.trim() || null,
+        upcomingTasks: form.upcomingTasks.trim() || null,
+        notes: form.notes.trim() || null,
       };
-      if (form.achievements.trim()) body.achievements = form.achievements.trim();
-      if (form.kpiUpdates.trim()) body.kpiUpdates = form.kpiUpdates.trim();
-      if (form.challenges.trim()) body.challenges = form.challenges.trim();
-      if (form.supportNeeded.trim()) body.supportNeeded = form.supportNeeded.trim();
-      if (form.upcomingTasks.trim()) body.upcomingTasks = form.upcomingTasks.trim();
-      if (form.notes.trim()) body.notes = form.notes.trim();
 
       if (editingReport) {
         await reportsApi.update(editingReport.id, body);

@@ -149,16 +149,21 @@ export class ReportsService {
   }
 
   async update(id: string, data: Record<string, any>) {
-    await this.findById(id);
+    const existing = await this.findById(id);
     const safe = this.sanitizeReportData(data);
-    const aiSummary = this.generateAISummary(data);
     if (safe.reportDate && typeof safe.reportDate === 'string') {
       safe.reportDate = new Date(safe.reportDate);
     }
+    // Regenerate aiSummary from the merged state so partial edits (e.g. just
+    // "notes") don't wipe the summary derived from achievements/challenges/etc.
+    const merged = { ...existing, ...safe };
+    const aiSummary = this.generateAISummary(merged);
     return this.prisma.report.update({
       where: { id },
       data: { ...safe, aiSummary },
       include: {
+        author: { select: { id: true, name: true, nameAr: true } },
+        track: { select: { id: true, nameAr: true, color: true } },
         attachments: { select: this.attachmentSelect },
       },
     });

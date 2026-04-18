@@ -1765,13 +1765,13 @@ export default function TrackDetailPage() {
                     type: reportForm.type,
                     title: reportForm.title.trim(),
                     reportDate: _dt.toISOString(),
+                    achievements: reportForm.achievements.trim() || null,
+                    kpiUpdates: reportForm.kpiUpdates.trim() || null,
+                    challenges: reportForm.challenges.trim() || null,
+                    supportNeeded: reportForm.supportNeeded.trim() || null,
+                    upcomingTasks: reportForm.upcomingTasks.trim() || null,
+                    notes: reportForm.notes.trim() || null,
                   };
-                  if (reportForm.achievements.trim()) body.achievements = reportForm.achievements.trim();
-                  if (reportForm.kpiUpdates.trim()) body.kpiUpdates = reportForm.kpiUpdates.trim();
-                  if (reportForm.challenges.trim()) body.challenges = reportForm.challenges.trim();
-                  if (reportForm.supportNeeded.trim()) body.supportNeeded = reportForm.supportNeeded.trim();
-                  if (reportForm.upcomingTasks.trim()) body.upcomingTasks = reportForm.upcomingTasks.trim();
-                  if (reportForm.notes.trim()) body.notes = reportForm.notes.trim();
                   await reportsApi.create(body);
                   toast.success('تم إنشاء التقرير بنجاح');
                   setShowReportForm(false);
@@ -1997,11 +1997,17 @@ function EntityFormModal({ type, data, onClose, onSave }: {
       }
     }
     setSaving(true);
-    // Build payload — only send non-empty fields
+    // Build payload. Required fields are always sent trimmed; optional
+    // fields are sent as null when cleared so the database column is
+    // actually updated (otherwise clearing a value silently keeps the old one).
     const payload: Record<string, any> = {};
     config.fields.forEach((f) => {
-      if (form[f.key] !== undefined && form[f.key] !== '') {
-        payload[f.key] = form[f.key].trim();
+      const raw = form[f.key] ?? '';
+      const trimmed = raw.trim();
+      if (f.required) {
+        payload[f.key] = trimmed;
+      } else {
+        payload[f.key] = trimmed === '' ? null : trimmed;
       }
     });
     await onSave(type, payload, data?.id);
