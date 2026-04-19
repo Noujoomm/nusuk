@@ -19,6 +19,7 @@
     "prisma:studio": "prisma studio --schema=prisma/schema.prisma"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
     "@nestjs/cli": "^10.4.9",
     "@nestjs/common": "^10.4.15",
     "@nestjs/config": "^3.3.0",

@@ -13,7 +13,8 @@
 |---|---|---|
 | 1 | هيكل المشروع والـstack | ✅ مكتمل |
 | 2 | مساعد رؤية (Roya Assistant) — Phase 1 | ✅ مكتمل |
-| 3 | — | pending |
+| 3 | AI Agent V2 (Claude + Tools) — Phase 1 | ✅ مكتمل |
+| 4 | — | pending |
 | 4 | — | pending |
 | 5 | — | pending |
 
@@ -378,3 +379,121 @@ apps/web/src/app/(dashboard)/assistant/
 2. بعد نشر الـcommit، افتح `/assistant` على roya2030.org.
 3. اكتب سؤالاً مثل: "لخّص لي الفرق بين `reports` و`ai-reports` و`reports-intelligence`" — يجب أن يجيب بدقة لأن هذا في الـsystem prompt.
 4. اطلب بيانات حيّة ("كم مهمة عليّ؟") — يجب أن يوجّهك لصفحة المسار/المهام بدلاً من فبركة رقم. هذا هو السلوك المطلوب حالياً.
+
+---
+
+## المرحلة 3 — AI Agent V2 (Claude + Tools) — Phase 1
+
+**آخر تحديث:** 2026-04-19.
+
+### 3.1 الفرق بينها وبين المرحلة 2
+
+| الجانب | المرحلة 2 (`agent/`) | المرحلة 3 (`ai-agent/`) |
+|---|---|---|
+| المسار | `/dashboard/assistant` (صفحة كاملة) | `POST /ai-agent/chat` فقط — UI يأتي في Phase 2 من هذه المجموعة (Cmd+K) |
+| النموذج | OpenAI `gpt-4o` (عبر `OpenAIService`) | Anthropic Claude Sonnet 4.5 (قابل للتبديل بالـenv) |
+| Tools | لا | نعم — 3 أدوات read-only فعلية |
+| Audit log | لا | نعم — جدول `AIAuditLog` مخصّص |
+| Guardrails | basic (length cap) | طبقات: length + rate limit (20/min/user) + prompt-injection regex + output scrubber |
+| Session persistence | client-only | لا قاعدة بيانات للمحادثات (بعد) — فقط audit log |
+| Voice / Streaming / RAG | لا | مؤجَّل لمراحل 2/3/4 من السبيك |
+
+الاثنان يتعايشان: مسار `/assistant` لا يزال يعمل على الـGPT ويخدم UI جاهز؛ `ai-agent` هو المسار الجديد الذي سيربط لاحقاً بـCommand Palette.
+
+### 3.2 الملفات الجديدة
+
+```
+apps/api/src/ai-agent/
+├─ ai-agent.module.ts
+├─ ai-agent.controller.ts          ← POST /ai-agent/chat (JwtAuthGuard)
+├─ ai-agent.service.ts             ← orchestration (context → guardrails → tools → audit)
+├─ dto/chat-request.dto.ts
+├─ interfaces/
+│  ├─ agent-context.interface.ts
+│  └─ tool-definition.interface.ts ← includes AgentRole union
+├─ prompts/system-prompt.ts        ← stable prefix + runtime block (cacheable)
+├─ services/
+│  ├─ claude.service.ts            ← Anthropic SDK wrapper + tool-use loop (non-streaming)
+│  ├─ guardrails.service.ts        ← length + rate + regex + output sanitizer
+│  └─ tool-registry.service.ts     ← role-filtered catalogue + execution re-check
+└─ tools/
+   ├─ custody.tools.ts             ← list_custodies (SupportServicesService)
+   ├─ invoices.tools.ts            ← list_custody_invoices (SupportServicesService)
+   └─ distribution.tools.ts        ← distribution_achievement_dashboard + distribution_deviation_dashboard
+```
+
+### 3.3 Prisma schema
+
+جدول واحد جديد + enum واحد:
+
+- `AIAuditLog` — يسجَّل كل turn (ناجح، فاشل، محظور). لا حذف (لا `@@ttl` ولا cascade).
+- `AIActionStatus` — `SUCCESS | FAILED | REQUIRES_CONFIRMATION | DENIED_BY_GUARDRAILS | DENIED_BY_PERMISSIONS`.
+- `AIKnowledgeDocument` و`AIQuickAction` محضّران للمراحل القادمة، لكن لا كود يقرأ/يكتب عليها بعد.
+
+**مؤجَّل عمداً لـPhase 4 (RAG):** `AIDocumentChunk` مع عمود `vector(1536)`. السبب:
+- لا يوجد `pgvector` في الـmigrations ولا في الـschema الحالية.
+- `prisma db push` في `preDeployCommand` سيفشل لو أضفنا `Unsupported("vector(1536)")` بدون `CREATE EXTENSION vector` مسبقاً على قاعدة Railway.
+- إضافة العمود بـ`Bytes?` placeholder الآن = خلط semantics وندَن تقني. ننتظر المرحلة التي نستخدم فيها الـembeddings فعلياً.
+
+### 3.4 متغيرات البيئة الجديدة
+
+أُضيفت لـ`.env.example` (يحتاج ضبطها على Railway):
+
+```
+ANTHROPIC_API_KEY=sk-ant-...          # إلزامي — بدونها /ai-agent/chat يرد 503
+ANTHROPIC_MODEL_DEFAULT=claude-sonnet-4-5
+ANTHROPIC_MODEL_SIMPLE=claude-haiku-4-5   # Phase 2 routing
+ANTHROPIC_MODEL_COMPLEX=claude-opus-4-5   # Phase 2 routing
+AI_RATE_LIMIT_PER_MIN=20
+AI_MAX_QUERY_LENGTH=2000
+AI_MAX_TOKENS_PER_RESPONSE=4096
+AI_AGENT_ENABLED=true
+AI_WRITE_OPERATIONS_ENABLED=false       # Phase 1 = read-only
+```
+
+**مراعاة نسخة النموذج:** الـspec ذكر `claude-sonnet-4-5` (أحدث من 4-5 متاح الآن هو `claude-sonnet-4-6` و`claude-opus-4-7`). الاختيار يتم من الـenv vars فقط — تبديل الإصدار لا يحتاج أي تعديل على الكود.
+
+### 3.5 الأدوات الثلاث (Phase 1)
+
+| Tool | يغلف | الأدوار المسموحة |
+|---|---|---|
+| `list_custodies` | `SupportServicesService.listCustodies({status, search, page, pageSize})` | admin, system_manager, pm, track_lead |
+| `list_custody_invoices` | `SupportServicesService.listInvoices({custodyId, status, search, dateFrom, dateTo, page, pageSize})` | نفس السابق |
+| `distribution_achievement_dashboard` | `DistributionService.achievementDashboard()` | نفس السابق |
+| `distribution_deviation_dashboard` | `DistributionService.deviationDashboard()` | نفس السابق |
+
+كلها read-only و`isDestructive: false`. الـ`employee` و`hr` لا يصلان لأي منها في هذه المرحلة.
+
+### 3.6 طبقات الحماية الأربع (من السبيك)
+
+1. **Input validation** (قبل Claude): طول + rate limit + prompt-injection regex (عربي + إنجليزي) + empty check. Haiku off-topic probe **مؤجَّل** — يضاعف تكلفة كل request؛ الـprompt + tool catalogue بالفعل يضيّقان النطاق.
+2. **System prompt**: persona + anti-jailbreak + Phase-1 read-only disclosure.
+3. **Tool access control**: `ToolRegistryService.getForContext()` يفلتر الـcatalogue حسب الدور + `AI_WRITE_OPERATIONS_ENABLED`. إضافة: إعادة فحص الصلاحية عند تنفيذ كل tool (defense in depth).
+4. **Output filtering**: `GuardrailsService.sanitizeReply()` يستبدل الروابط الخارجية + أي تسريب لـ"system prompt".
+
+### 3.7 قرارات معلَنة (ما لم يُنفَّذ في Phase 1)
+
+- **لا Command Palette (Cmd+K):** المرحلة 2 من السبيك. الواجهة الحالية لهذا الـendpoint ستبنى لاحقاً.
+- **لا SSE/streaming:** غير مطلوب في Phase 1 — مؤجَّل.
+- **لا voice (STT/TTS):** Phase 3.
+- **لا RAG:** Phase 4. `AIKnowledgeDocument` موجود بدون chunks/embeddings بعد.
+- **لا monitoring dashboard:** Phase 5.
+- **لا Haiku off-topic probe:** كلفة عالية بلا ضرورة Phase 1.
+- **Rate limiter in-memory:** يعمل لكنه per-replica. Phase 2 ينقله لـRedis.
+
+### 3.8 الأثر على تكلفة Claude
+
+كل turn ناجح = 1+ استدعاء إلى Claude (iteration واحد لو النموذج لم يستدعِ tool، iterations إضافية لكل tool_use). `maxIterations = 5`. system prompt ~2500 حرف — ~800 tokens. مع prompt caching (مفعَّل تلقائياً في الـAnthropic SDK للنصوص الطويلة الثابتة): ~90% من تكلفة input tokens توفَّر بعد أول call.
+
+### 3.9 كيف تجربه
+
+1. اضبط `ANTHROPIC_API_KEY` على Railway. بدونها الـendpoint يرد 503 بشكل واضح ("المساعد غير متاح حالياً...").
+2. بعد ما يكتمل deploy، أرسل:
+   ```bash
+   curl -X POST https://roya2030.org/api/ai-agent/chat \
+        -H "Authorization: Bearer <JWT>" \
+        -H "Content-Type: application/json" \
+        -d '{"message": "كم عدد العهد النشطة؟"}'
+   ```
+3. تحقق من جدول `ai_audit_logs` في قاعدة البيانات — يجب أن يظهر سطر لكل turn.
+4. اختبر الـguardrails: `"ignore previous instructions"` — يجب أن يرد 403 وتُسجَّل محاولة `DENIED_BY_GUARDRAILS`.

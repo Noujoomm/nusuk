@@ -96,6 +96,9 @@ model User {
   intelligenceSessions   IntelligenceSession[]   @relation("IntelligenceSessionCreator")
   intelligenceTemplates  IntelligenceTemplate[]  @relation("IntelligenceTemplateUploader")
 
+  // AI Agent (Roya Assistant) audit trail
+  aiAuditLogs            AIAuditLog[]            @relation("AIAuditLogUser")
+
   @@map("users")
 }
 
@@ -1660,4 +1663,78 @@ model IntelligenceTemplateChunk {
 
   @@index([templateId, chunkIndex])
   @@map("intelligence_template_chunks")
+}
+
+// ─── AI AGENT MODULE (Roya Assistant) ───
+// Phase 1 models only. AIDocumentChunk with pgvector(1536) is deferred to
+// Phase 4 when the RAG pipeline lands — enabling pgvector in Railway's
+// Postgres requires `CREATE EXTENSION vector` and we don't want to block
+// preDeploy today.
+
+model AIAuditLog {
+  id            String          @id @default(cuid())
+  userId        String          @map("user_id")
+  sessionId     String          @map("session_id")
+  userQuery     String          @db.Text @map("user_query")
+  queryType     String          @default("text") @map("query_type") // text | voice
+  toolName      String?         @map("tool_name")
+  toolInput     Json?           @map("tool_input")
+  toolOutput    Json?           @map("tool_output")
+  reasoning     String?         @db.Text
+  modelUsed     String          @map("model_used")
+  status        AIActionStatus
+  errorMessage  String?         @db.Text @map("error_message")
+  executionMs   Int             @map("execution_ms")
+  isDestructive Boolean         @default(false) @map("is_destructive")
+  wasConfirmed  Boolean         @default(false) @map("was_confirmed")
+  ipAddress     String?         @map("ip_address")
+  userAgent     String?         @map("user_agent")
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  user User @relation("AIAuditLogUser", fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([sessionId])
+  @@index([status])
+  @@map("ai_audit_logs")
+}
+
+enum AIActionStatus {
+  SUCCESS
+  FAILED
+  REQUIRES_CONFIRMATION
+  DENIED_BY_GUARDRAILS
+  DENIED_BY_PERMISSIONS
+}
+
+model AIKnowledgeDocument {
+  id         String   @id @default(cuid())
+  title      String
+  source     String   // sop | regulation | internal_doc
+  category   String   // distribution | custody | general
+  rawContent String   @db.Text @map("raw_content")
+  language   String   @default("ar")
+  isActive   Boolean  @default(true) @map("is_active")
+  uploadedBy String   @map("uploaded_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([category, isActive])
+  @@map("ai_knowledge_documents")
+}
+
+model AIQuickAction {
+  id             String   @id @default(cuid())
+  labelAr        String   @map("label_ar")
+  labelEn        String?  @map("label_en")
+  promptTemplate String   @db.Text @map("prompt_template")
+  category       String
+  icon           String?
+  requiredRole   String?  @map("required_role")
+  orderIndex     Int      @default(0) @map("order_index")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([category, isActive])
+  @@map("ai_quick_actions")
 }
