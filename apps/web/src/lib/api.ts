@@ -262,6 +262,14 @@ export const insightsApi = {
   track: (trackId: string) => api.get(`/insights/track/${trackId}`),
 };
 
+// ─── Roya Assistant (مساعد رؤية) ───
+export const agentApi = {
+  chat: (
+    message: string,
+    history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
+  ) => api.post<{ reply: string; modelUsed: string }>('/agent/chat', { message, history }),
+};
+
 // ─── AI Reports Intelligence Center (مركز ذكاء التقارير) ───
 export const intelligenceApi = {
   listSessions: (params?: { page?: number; pageSize?: number }) =>

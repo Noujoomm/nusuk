@@ -41,6 +41,7 @@ const NAV_ITEMS = [
   { href: '/gantt', label: 'مخطط جانت', icon: GanttChart, roles: ['admin', 'pm', 'track_lead'] },
   { href: '/productivity', label: 'الإنتاجية', icon: Activity, roles: ['admin', 'pm'] },
   { href: '/reports', label: 'التقارير', icon: FileText, roles: ['admin', 'pm', 'track_lead'] },
+  { href: '/assistant', label: 'مساعد رؤية', icon: Sparkles, roles: ['admin', 'system_manager', 'pm', 'track_lead', 'employee', 'hr'] },
   { href: '/ai-reports', label: 'التقارير الذكية', icon: Brain, roles: ['admin', 'pm'] },
   { href: '/reports-intelligence', label: 'مركز ذكاء التقارير', icon: Sparkles, roles: ['admin', 'system_manager'] },
   { href: '/penalties', label: 'الغرامات', icon: AlertTriangle, roles: ['admin', 'pm'] },
