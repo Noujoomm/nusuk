@@ -60,8 +60,6 @@ export default function ExecutiveDashboardPage() {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const isAdminOrPm = user?.role === 'admin' || user?.role === 'pm';
-
   const loadData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
@@ -76,28 +74,17 @@ export default function ExecutiveDashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!isAdminOrPm) return;
     loadData();
-  }, [isAdminOrPm, loadData]);
+  }, [loadData]);
 
   useEffect(() => {
-    if (!isAdminOrPm || !autoRefresh) {
+    if (!autoRefresh) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       return;
     }
     intervalRef.current = setInterval(() => loadData(true), AUTO_REFRESH_INTERVAL);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [isAdminOrPm, autoRefresh, loadData]);
-
-  // ─── Access Guard ────────────────────────────────
-  if (!isAdminOrPm) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
-        <BarChart3 className="h-12 w-12" />
-        <p className="text-sm">هذه الصفحة متاحة فقط للإدارة ومديري المشاريع</p>
-      </div>
-    );
-  }
+  }, [autoRefresh, loadData]);
 
   // ─── Loading State ───────────────────────────────
   if (loading) {

@@ -18,7 +18,7 @@ export class AnalyticsController {
 
   @Get('dashboard')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm')
+  @Roles('admin', 'system_manager', 'pm', 'track_lead', 'employee', 'hr')
   async getDashboardAnalytics() {
     try {
       return await this.analytics.getDashboardAnalytics();
