@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../common/prisma.module';
-import { SupportServicesModule } from '../support-services.module';
+import { CustodyFundsModule } from '../../custody-funds/custody-funds.module';
 import {
   AIAnalyzerController,
   AIAnalyzerPreviewController,
@@ -8,14 +8,11 @@ import {
 import { AIAnalyzerService } from './ai-analyzer.service';
 
 /**
- * AI Invoice Analyzer — Claude Vision OCR + classification + risk scoring
- * for custody invoices. Registered under support-services so permissions
- * and navigation are consistent.
- *
- * Peer-reviewed by docs/AI_INVOICE_ANALYZER_README.md.
+ * AI Invoice Analyzer — targets CustodyFund (v2), the custody model actually
+ * used by /support-services in the UI.
  */
 @Module({
-  imports: [PrismaModule, SupportServicesModule],
+  imports: [PrismaModule, CustodyFundsModule],
   controllers: [AIAnalyzerController, AIAnalyzerPreviewController],
   providers: [AIAnalyzerService],
 })

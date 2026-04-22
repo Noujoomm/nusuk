@@ -38,11 +38,11 @@ const tempStorage = diskStorage({
 });
 
 /**
- * AI Invoice Analyzer endpoints. Nested under the support-services URL tree
- * so permissions + navigation stay consistent with the custody UI. Only the
- * roles that can already manage custodies get access.
+ * AI Invoice Analyzer endpoints — operate on CustodyFund (v2), which is the
+ * model surfaced on /support-services in the UI. Scoped to the same roles
+ * that already manage custody funds.
  */
-@Controller('support-services/custodies/:custodyId/ai-invoice')
+@Controller('custody-funds/:fundId/ai-invoice')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin', 'system_manager', 'pm', 'track_lead')
 export class AIAnalyzerController {
@@ -56,36 +56,35 @@ export class AIAnalyzerController {
     }),
   )
   async analyze(
-    @Param('custodyId') custodyId: string,
+    @Param('fundId') fundId: string,
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: { id: string },
   ) {
-    return this.analyzer.analyze(custodyId, user.id, file);
+    return this.analyzer.analyze(fundId, user.id, file);
   }
 
   @Post('confirm')
   async confirm(
-    @Param('custodyId') custodyId: string,
+    @Param('fundId') fundId: string,
     @Body() dto: AIConfirmDto,
     @CurrentUser() user: { id: string },
   ) {
-    return this.analyzer.confirm(custodyId, user.id, dto);
+    return this.analyzer.confirm(fundId, user.id, dto);
   }
 
   @Delete(':extractionId')
   async cancel(
-    @Param('custodyId') custodyId: string,
+    @Param('fundId') fundId: string,
     @Param('extractionId') extractionId: string,
     @CurrentUser() user: { id: string },
   ) {
-    return this.analyzer.cancel(custodyId, user.id, extractionId);
+    return this.analyzer.cancel(fundId, user.id, extractionId);
   }
 }
 
 /**
- * Separate controller for streaming the temp preview file — intentionally
- * rooted at `/support-services/ai-invoice/preview/:extractionId` so the UI
- * can reference it with a stable URL that doesn't need the custodyId.
+ * Separate controller for streaming the temp preview — rooted on a stable URL
+ * that doesn't need the fundId, so the UI can reference it as-is.
  */
 @Controller('support-services/ai-invoice')
 @UseGuards(JwtAuthGuard)

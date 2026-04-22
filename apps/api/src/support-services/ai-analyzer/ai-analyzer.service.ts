@@ -11,7 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../common/prisma.service';
-import { SupportServicesService } from '../support-services.service';
+import { CustodyFundsService } from '../../custody-funds/custody-funds.service';
 import Anthropic from '@anthropic-ai/sdk';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -39,9 +39,12 @@ import { InvoiceExtractionDto } from './dto/invoice-extraction.dto';
 import { AIConfirmDto } from './dto/ai-confirm.dto';
 
 /**
- * Pricing per million tokens (Sonnet family). Kept as class constants so
- * cost tracking survives env var changes.
+ * AI Invoice Analyzer for `CustodyFund` (v2) — this is the custody model
+ * actually surfaced on /support-services in the UI. A parallel `CustodyInvoice`
+ * v1 model exists in the schema but is not currently reachable from the
+ * dashboard, so the analyzer targets v2 only.
  */
+
 const COST_USD_PER_MTOK_INPUT = 3;
 const COST_USD_PER_MTOK_OUTPUT = 15;
 const USD_TO_SAR = 3.75;
@@ -75,7 +78,7 @@ export interface AnalyzeResult {
 
 interface PendingAnalysis {
   extractionId: string;
-  custodyId: string;
+  fundId: string;
   userId: string;
   filePath: string;
   fileName: string;
@@ -90,15 +93,13 @@ export class AIAnalyzerService {
   private readonly logger = new Logger(AIAnalyzerService.name);
   private client: Anthropic | null = null;
 
-  // In-memory rate-limit window and pending analyses. Phase 2 moves these
-  // to Redis + Postgres respectively so multi-replica is correct.
   private readonly rateHits = new Map<string, number[]>();
   private readonly pending = new Map<string, PendingAnalysis>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-    private readonly supportServices: SupportServicesService,
+    private readonly funds: CustodyFundsService,
   ) {
     const apiKey = config.get<string>('ANTHROPIC_API_KEY');
     if (apiKey) this.client = new Anthropic({ apiKey });
@@ -106,15 +107,13 @@ export class AIAnalyzerService {
 
     try {
       fs.mkdirSync(TEMP_DIR, { recursive: true });
-    } catch {
-      /* best-effort — start.sh will catch a real permissions issue */
-    }
+    } catch { /* best-effort */ }
   }
 
   // ── /ai-analyze ─────────────────────────────────────────────────────────
 
   async analyze(
-    custodyId: string,
+    fundId: string,
     userId: string,
     file: Express.Multer.File,
   ): Promise<AnalyzeResult> {
@@ -123,7 +122,6 @@ export class AIAnalyzerService {
         'محلل الفواتير غير متاح حالياً: ANTHROPIC_API_KEY غير مضبوط.',
       );
     }
-
     if (!this.rateOk(userId)) {
       throw new HttpException(
         'تجاوزت الحد المسموح لتحليل الفواتير (20 تحليل/ساعة). حاول لاحقاً.',
@@ -131,19 +129,17 @@ export class AIAnalyzerService {
       );
     }
 
-    const custody = await this.prisma.custody.findUnique({
-      where: { id: custodyId },
+    const fund = await this.prisma.custodyFund.findUnique({
+      where: { id: fundId },
       select: {
         id: true,
         currentBalance: true,
-        remainingAmount: true,
         totalAmount: true,
-        initialBalance: true,
         status: true,
       },
     });
-    if (!custody) throw new NotFoundException('العهدة غير موجودة');
-    if (custody.status === 'CLOSED') {
+    if (!fund) throw new NotFoundException('العهدة غير موجودة');
+    if (fund.status === 'closed') {
       throw new BadRequestException('العهدة مُقفلة — لا يمكن تحليل فواتير جديدة.');
     }
 
@@ -159,17 +155,14 @@ export class AIAnalyzerService {
       );
     }
 
-    // Materialise into our temp dir with a unique name so we control cleanup.
     const extractionId = randomUUID();
     const targetName = `${Date.now()}-${extractionId}${path.extname(file.originalname)}`;
     const targetPath = path.join(TEMP_DIR, targetName);
-    // Nest's multer may have written to a temp path (disk storage) OR kept
-    // the buffer in memory — support both.
+
     if (file.path && fs.existsSync(file.path)) {
       try {
         fs.renameSync(file.path, targetPath);
       } catch {
-        // Rename may fail across filesystems; fall back to copy+unlink.
         fs.copyFileSync(file.path, targetPath);
         try { fs.unlinkSync(file.path); } catch { /* best-effort */ }
       }
@@ -182,7 +175,7 @@ export class AIAnalyzerService {
     const started = Date.now();
     const logRow = await this.prisma.aIExtractionLog.create({
       data: {
-        custodyId,
+        custodyId: fundId, // we're reusing the column as "fund id"
         userId,
         fileName: file.originalname,
         fileSize: file.size,
@@ -199,13 +192,12 @@ export class AIAnalyzerService {
         mediaType,
       );
 
-      // Build the extracted DTO (trust the schema but validate numerics).
       const extractionDto = this.coerceExtractionDto(extracted);
 
-      // Historical context for the classification+risk call and for dup check.
-      const history = await this.prisma.custodyInvoice.findMany({
+      // Historical context from this fund's past 90 days of invoices.
+      const history = await this.prisma.custodyFundInvoice.findMany({
         where: {
-          custodyId,
+          custodyFundId: fundId,
           invoiceDate: {
             gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
           },
@@ -213,7 +205,7 @@ export class AIAnalyzerService {
         select: {
           id: true,
           vendorName: true,
-          invoiceNumber: true,
+          invoiceName: true,
           amount: true,
           invoiceDate: true,
           aiCategory: true,
@@ -231,7 +223,7 @@ export class AIAnalyzerService {
       const isNewVendor =
         !history.some(
           (h) =>
-            (h.vendorName ?? '').toLowerCase().trim() ===
+            (h.vendorName ?? h.invoiceName ?? '').toLowerCase().trim() ===
             (extractionDto.vendorName ?? '').toLowerCase().trim(),
         );
       const daysOld = Math.max(
@@ -240,14 +232,12 @@ export class AIAnalyzerService {
           (Date.now() - new Date(extractionDto.invoiceDate).getTime()) / 86_400_000,
         ),
       );
-      const currentBalance =
-        custody.currentBalance ?? custody.remainingAmount ?? 0;
 
       const { classification, risk, tokensIn: cIn, tokensOut: cOut } =
         await this.classifyAndScore({
           extracted: extractionDto as unknown as Record<string, unknown>,
           historicalCategories,
-          currentBalance,
+          currentBalance: fund.currentBalance,
           averageInvoice: Number(avgInvoice.toFixed(2)),
           daysOld,
           isNewVendor,
@@ -262,23 +252,22 @@ export class AIAnalyzerService {
         },
         history.map<CandidateInvoice>((h) => ({
           id: h.id,
-          vendorName: h.vendorName,
-          invoiceNumber: h.invoiceNumber,
+          vendorName: h.vendorName ?? h.invoiceName,
+          invoiceNumber: null, // v2 doesn't have an invoice number column
           totalAmount: h.amount,
           invoiceDate: h.invoiceDate,
         })),
       );
 
       const budgetImpact = this.computeBudgetImpact(
-        currentBalance,
-        custody.initialBalance ?? custody.totalAmount ?? 0,
+        fund.currentBalance,
+        fund.totalAmount,
         extractionDto.totalAmount,
       );
 
-      // Stash pending — user confirms within 1 hour or it's swept up.
       this.pending.set(extractionId, {
         extractionId,
-        custodyId,
+        fundId,
         userId,
         filePath: targetPath,
         fileName: file.originalname,
@@ -308,7 +297,7 @@ export class AIAnalyzerService {
       });
 
       this.logger.log(
-        `[ai-invoice] analyze ok custody=${custodyId} user=${userId} file=${file.originalname} ` +
+        `[ai-invoice] analyze ok fund=${fundId} user=${userId} file=${file.originalname} ` +
           `size=${sizeBytes}B tokens=${totalTokensIn + totalTokensOut} ms=${Date.now() - started}`,
       );
 
@@ -324,7 +313,7 @@ export class AIAnalyzerService {
       };
     } catch (err: any) {
       this.logger.error(
-        `[ai-invoice] analyze failed custody=${custodyId} file=${file.originalname}: ${err?.message ?? err}`,
+        `[ai-invoice] analyze failed fund=${fundId} file=${file.originalname}: ${err?.message ?? err}`,
       );
       try { fs.unlinkSync(targetPath); } catch { /* best-effort */ }
       await this.prisma.aIExtractionLog.update({
@@ -344,14 +333,14 @@ export class AIAnalyzerService {
 
   // ── /ai-confirm ────────────────────────────────────────────────────────
 
-  async confirm(custodyId: string, userId: string, dto: AIConfirmDto) {
+  async confirm(fundId: string, userId: string, dto: AIConfirmDto) {
     const pending = this.pending.get(dto.extractionId);
     if (!pending) {
       throw new NotFoundException(
         'لم يُعثر على جلسة التحليل. ربما انتهت صلاحيتها — يرجى إعادة رفع الفاتورة.',
       );
     }
-    if (pending.custodyId !== custodyId) {
+    if (pending.fundId !== fundId) {
       throw new BadRequestException('الجلسة تخص عهدة مختلفة.');
     }
     if (pending.userId !== userId) {
@@ -361,70 +350,69 @@ export class AIAnalyzerService {
     const edited = dto.editedData;
     const categoryLabel = dto.category || pending.categorySuggestion;
 
-    // Re-use the existing createInvoice pipeline — gives us balance-update
-    // semantics, status recompute, and AuditLog for free.
-    const created = await this.supportServices.createInvoice(
+    // Go through the existing CustodyFundsService so balance/alert logic and
+    // downstream audit wiring stay identical to manual invoice creation.
+    const created = await this.funds.addInvoice(
+      fundId,
       {
-        custodyId,
-        name: edited.vendorName,
-        description: dto.notes ?? null,
+        invoiceName: edited.vendorName,
         amount: edited.totalAmount,
         invoiceDate: edited.invoiceDate,
-        invoiceNumber: edited.invoiceNumber,
-      } as any,
+        notes: dto.notes ?? undefined,
+      },
       userId,
     );
 
-    // Stamp AI fields + extractionId on the newly-created invoice.
-    await this.prisma.custodyInvoice.update({
-      where: { id: created.invoice.id },
+    // Stamp AI fields + persist the original file in Postgres.
+    let attachmentData: Buffer | null = null;
+    try {
+      attachmentData = fs.readFileSync(pending.filePath);
+    } catch (e: any) {
+      this.logger.warn(
+        `[ai-invoice] could not read temp file on confirm: ${e?.message ?? e}`,
+      );
+    }
+
+    await this.prisma.custodyFundInvoice.update({
+      where: { id: created.id },
       data: {
+        vendorName: edited.vendorName,
+        vendorTaxNumber: edited.vendorTaxNumber ?? null,
+        attachmentOriginalName: pending.fileName,
+        attachmentData: attachmentData ? new Uint8Array(attachmentData) : undefined,
+        attachmentMimeType: pending.mediaType,
+        attachmentSizeBytes: attachmentData?.length,
         aiExtracted: true,
         aiConfidence: edited.confidence ?? null,
         aiCategory: categoryLabel,
         aiExtractionId: dto.extractionId,
         aiProcessedAt: new Date(),
-        vendorTaxNumber: edited.vendorTaxNumber ?? null,
-        vendorName: edited.vendorName,
         aiRawResponse: {
           extracted: edited as any,
           suggestedCategory: pending.categorySuggestion,
           notes: dto.notes ?? null,
+          invoiceNumber: edited.invoiceNumber,
         } as any,
       },
     });
 
-    // Promote the temp attachment into InvoiceAttachment via DB-chunked write.
-    try {
-      const buffer = fs.readFileSync(pending.filePath);
-      await this.prisma.invoiceAttachment.create({
-        data: {
-          invoiceId: created.invoice.id,
-          fileName: pending.fileName,
-          filePath: pending.filePath, // legacy column — kept for compat
-          fileSize: buffer.length,
-          mimeType: pending.mediaType,
-          uploadedById: userId,
-          storageProvider: 'DB',
-          fileData: new Uint8Array(buffer),
-        } as any,
-      });
-      fs.unlinkSync(pending.filePath);
-    } catch (e: any) {
-      // Non-fatal: the invoice is saved even if the attachment storage fails.
-      this.logger.warn(
-        `[ai-invoice] attachment persist failed for ${dto.extractionId}: ${e?.message ?? e}`,
-      );
-    }
-
+    try { fs.unlinkSync(pending.filePath); } catch { /* best-effort */ }
     this.pending.delete(dto.extractionId);
-    return { ...created, extractionId: dto.extractionId };
+
+    // Reload so the response includes the AI fields we just wrote.
+    const finalInvoice = await this.prisma.custodyFundInvoice.findUnique({
+      where: { id: created.id },
+      include: {
+        createdBy: { select: { id: true, nameAr: true } },
+      },
+    });
+    return { invoice: finalInvoice, extractionId: dto.extractionId };
   }
 
-  async cancel(custodyId: string, userId: string, extractionId: string) {
+  async cancel(fundId: string, userId: string, extractionId: string) {
     const pending = this.pending.get(extractionId);
     if (!pending) return { detail: 'expired or unknown' };
-    if (pending.custodyId !== custodyId || pending.userId !== userId) {
+    if (pending.fundId !== fundId || pending.userId !== userId) {
       throw new BadRequestException('ليس لديك صلاحية إلغاء هذه الجلسة.');
     }
     try { fs.unlinkSync(pending.filePath); } catch { /* best-effort */ }
@@ -432,8 +420,10 @@ export class AIAnalyzerService {
     return { detail: 'cancelled' };
   }
 
-  /** Serve the raw temp file for the preview thumbnail in the UI. */
-  preview(extractionId: string, userId: string): { filePath: string; mediaType: string; fileName: string } {
+  preview(
+    extractionId: string,
+    userId: string,
+  ): { filePath: string; mediaType: string; fileName: string } {
     const pending = this.pending.get(extractionId);
     if (!pending) throw new NotFoundException('انتهت صلاحية المعاينة.');
     if (pending.userId !== userId) {
@@ -455,7 +445,6 @@ export class AIAnalyzerService {
     const model =
       this.config.get('ANTHROPIC_MODEL_DEFAULT') || 'claude-sonnet-4-5';
 
-    // The image/PDF block shape matches Anthropic's docs.
     const imageBlock: any =
       mediaType === 'application/pdf'
         ? {
@@ -555,10 +544,6 @@ export class AIAnalyzerService {
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
-  /**
-   * Retry Claude calls up to 3 total attempts with exponential backoff,
-   * guarding against transient JSON / timeout failures.
-   */
   private async withRetries<T>(fn: () => Promise<T>): Promise<T> {
     let lastErr: unknown;
     for (let i = 0; i < MAX_VISION_ITERATIONS; i++) {
@@ -573,7 +558,6 @@ export class AIAnalyzerService {
     throw lastErr ?? new Error('unknown');
   }
 
-  /** Forgiving JSON parser — strips accidental markdown fences. */
   private parseJSON(raw: string): unknown | null {
     if (!raw) return null;
     const cleaned = raw
@@ -596,7 +580,6 @@ export class AIAnalyzerService {
     }
   }
 
-  /** Clamp and coerce the extraction payload into the strict DTO shape. */
   private coerceExtractionDto(raw: Record<string, unknown>): InvoiceExtractionDto {
     const num = (v: unknown, d = 0): number => {
       const n = typeof v === 'number' ? v : parseFloat(String(v));
@@ -645,11 +628,11 @@ export class AIAnalyzerService {
 
   private computeBudgetImpact(
     currentBalance: number,
-    initialBalance: number,
+    totalAmount: number,
     invoiceAmount: number,
   ) {
     const after = Math.max(0, currentBalance - invoiceAmount);
-    const base = initialBalance > 0 ? initialBalance : currentBalance;
+    const base = totalAmount > 0 ? totalAmount : currentBalance;
     const pct = base > 0 ? ((base - after) / base) * 100 : 0;
     const alertLevel: 'ok' | 'warning' | 'critical' =
       pct >= 95 ? 'critical' : pct >= 80 ? 'warning' : 'ok';
@@ -674,24 +657,15 @@ export class AIAnalyzerService {
     return true;
   }
 
-  /**
-   * Every 15 minutes: sweep up temp files + pending sessions older than 1h.
-   * The disk sweep is independent of in-memory `pending` so server restarts
-   * don't leak files.
-   */
   @Cron(CronExpression.EVERY_30_MINUTES)
   async cleanupExpired() {
     const cutoff = Date.now() - TEMP_TTL_MS;
-
-    // In-memory expirations first.
     for (const [id, p] of this.pending.entries()) {
       if (p.createdAt < cutoff) {
         try { fs.unlinkSync(p.filePath); } catch { /* best-effort */ }
         this.pending.delete(id);
       }
     }
-
-    // Disk sweep — nuke any temp file older than cutoff, even if not tracked.
     try {
       const entries = fs.readdirSync(TEMP_DIR);
       for (const name of entries) {
@@ -701,12 +675,8 @@ export class AIAnalyzerService {
           if (stat.isFile() && stat.mtimeMs < cutoff) {
             fs.unlinkSync(full);
           }
-        } catch {
-          /* ignore file races */
-        }
+        } catch { /* ignore */ }
       }
-    } catch {
-      /* ignore — dir may not exist on a fresh container */
-    }
+    } catch { /* ignore */ }
   }
 }

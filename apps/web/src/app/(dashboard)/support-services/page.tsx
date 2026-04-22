@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import {
   Wallet, Plus, Trash2, Loader2, X, AlertTriangle, CheckCircle,
   Receipt, ClipboardList, RefreshCw, Lock, UserPlus, Shield, TrendingDown,
+  Sparkles,
 } from 'lucide-react';
 import { custodyFundsApi, supportServicesApi, usersApi } from '@/lib/api';
 import { useAuth } from '@/stores/auth';
@@ -229,6 +231,13 @@ function FundDetail({ fund: f, allUsers, onBack, onRefresh }: { fund: any; allUs
           <div className="flex gap-2 flex-wrap">
             <button onClick={() => setShowTxForm(true)} className="btn-primary text-sm flex items-center gap-1.5"><Plus className="w-4 h-4" /> إضافة معاملة</button>
             <button onClick={() => setShowInvForm(true)} className="btn-secondary text-sm flex items-center gap-1.5"><Receipt className="w-4 h-4" /> تسجيل فاتورة</button>
+            <Link
+              href={`/support-services/funds/${f.id}/ai-invoice`}
+              className="text-sm flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-colors"
+              title="تحليل فاتورة بالذكاء الاصطناعي"
+            >
+              <Sparkles className="w-4 h-4" /> تسجيل فاتورة بالذكاء الاصطناعي ✨
+            </Link>
             <button onClick={() => setShowMemberForm(true)} className="btn-secondary text-sm flex items-center gap-1.5"><UserPlus className="w-4 h-4" /> إضافة شخص</button>
             <button onClick={() => setShowClose(true)} className="btn-danger text-sm flex items-center gap-1.5"><Lock className="w-4 h-4" /> إقفال العهدة</button>
             {isAdminUser && <button onClick={() => setShowEditFund(true)} className="btn-secondary text-sm flex items-center gap-1.5"><Receipt className="w-4 h-4" /> تعديل العهدة</button>}

@@ -1622,8 +1622,30 @@ model CustodyFundInvoice {
   invoiceDate           DateTime @map("invoice_date")
   attachmentUrl         String?  @map("attachment_url")
   attachmentOriginalName String? @map("attachment_original_name")
+  // Persistent attachment (DB-backed) — populated by AI Invoice Analyzer so
+  // the file survives Railway's ephemeral filesystem. Manual uploads keep
+  // using attachmentUrl and are unaffected.
+  attachmentData        Bytes?   @map("attachment_data")
+  attachmentMimeType    String?  @map("attachment_mime_type")
+  attachmentSizeBytes   Int?     @map("attachment_size_bytes")
   status                String   @default("pending") // pending | approved | rejected
   notes                 String?  @db.Text
+
+  // AI Invoice Analyzer (Claude Vision) — populated when the invoice is
+  // created through the /ai-invoice flow. All fields optional so manual
+  // invoices are unaffected.
+  aiExtracted     Boolean   @default(false) @map("ai_extracted")
+  aiConfidence    Float?    @map("ai_confidence")
+  aiCategory      String?   @map("ai_category")
+  aiRiskLevel     String?   @map("ai_risk_level")     // low | medium | high
+  aiRiskScore     Int?      @map("ai_risk_score")     // 0-100
+  aiRiskFlags     String[]  @default([]) @map("ai_risk_flags")
+  aiExtractionId  String?   @unique @map("ai_extraction_id")
+  aiProcessedAt   DateTime? @map("ai_processed_at")
+  vendorTaxNumber String?   @map("vendor_tax_number")
+  vendorName      String?   @map("vendor_name")
+  aiRawResponse   Json?     @map("ai_raw_response")
+
   createdById           String   @map("created_by_id")
   createdAt             DateTime @default(now()) @map("created_at")
 

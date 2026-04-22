@@ -263,18 +263,19 @@ export const insightsApi = {
 };
 
 // ─── AI Invoice Analyzer (محلّل الفواتير بالذكاء الاصطناعي) ───
+// Operates on CustodyFund (v2) — which is the model shown on /support-services.
 export const aiInvoiceApi = {
-  analyze: (custodyId: string, file: File) => {
+  analyze: (fundId: string, file: File) => {
     const form = new FormData();
     form.append('file', file);
     return api.post<any>(
-      `/support-services/custodies/${custodyId}/ai-invoice/analyze`,
+      `/custody-funds/${fundId}/ai-invoice/analyze`,
       form,
       { timeout: 120000 },
     );
   },
   confirm: (
-    custodyId: string,
+    fundId: string,
     data: {
       extractionId: string;
       editedData: any;
@@ -283,12 +284,12 @@ export const aiInvoiceApi = {
     },
   ) =>
     api.post<any>(
-      `/support-services/custodies/${custodyId}/ai-invoice/confirm`,
+      `/custody-funds/${fundId}/ai-invoice/confirm`,
       data,
     ),
-  cancel: (custodyId: string, extractionId: string) =>
+  cancel: (fundId: string, extractionId: string) =>
     api.delete(
-      `/support-services/custodies/${custodyId}/ai-invoice/${extractionId}`,
+      `/custody-funds/${fundId}/ai-invoice/${extractionId}`,
     ),
   previewUrl: (extractionId: string) =>
     `${API_URL}/api/support-services/ai-invoice/preview/${extractionId}`,

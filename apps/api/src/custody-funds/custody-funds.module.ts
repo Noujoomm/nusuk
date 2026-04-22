@@ -7,5 +7,6 @@ import { CustodyFundsService } from './custody-funds.service';
   imports: [PrismaModule],
   controllers: [CustodyFundsController],
   providers: [CustodyFundsService],
+  exports: [CustodyFundsService],
 })
 export class CustodyFundsModule {}

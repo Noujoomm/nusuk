@@ -94,7 +94,7 @@ type AnalyzeResult = {
 
 export default function AIInvoiceAnalyzerPage() {
   const router = useRouter();
-  const { custodyId } = useParams<{ custodyId: string }>();
+  const { fundId } = useParams<{ fundId: string }>();
   const { user } = useAuth();
 
   const allowed =
@@ -153,7 +153,7 @@ export default function AIInvoiceAnalyzerPage() {
     }, 2500);
 
     try {
-      const { data } = await aiInvoiceApi.analyze(custodyId, file);
+      const { data } = await aiInvoiceApi.analyze(fundId, file);
       const res = data as AnalyzeResult;
       setResult(res);
       setEdited(res.extracted);
@@ -178,14 +178,14 @@ export default function AIInvoiceAnalyzerPage() {
     if (!result || !edited) return;
     setPhase('confirming');
     try {
-      await aiInvoiceApi.confirm(custodyId, {
+      await aiInvoiceApi.confirm(fundId, {
         extractionId: result.extractionId,
         editedData: edited,
         notes: notes.trim() || undefined,
         category,
       });
       toast.success('تم حفظ الفاتورة بنجاح');
-      router.push(`/support-services?custody=${custodyId}`);
+      router.push('/support-services');
     } catch (e: any) {
       const msg = e?.response?.data?.message || 'فشل الحفظ';
       toast.error(msg);
@@ -195,7 +195,7 @@ export default function AIInvoiceAnalyzerPage() {
 
   async function cancel() {
     if (result) {
-      try { await aiInvoiceApi.cancel(custodyId, result.extractionId); } catch { /* ignore */ }
+      try { await aiInvoiceApi.cancel(fundId, result.extractionId); } catch { /* ignore */ }
     }
     resetAll();
   }
