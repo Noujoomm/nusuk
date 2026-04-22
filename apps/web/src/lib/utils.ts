@@ -5,6 +5,28 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Undo the classic multer/busboy mojibake where an Arabic UTF-8 filename was
+ * decoded as Latin-1. Used for render-time and download-time display of
+ * legacy rows whose DB values predate the server-side fix. Returns the
+ * original string unchanged when it isn't mojibake.
+ */
+const ARABIC_RE = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
+export function fixArabicMojibake(name: string | null | undefined): string {
+  if (!name) return '';
+  if (ARABIC_RE.test(name)) return name;
+  try {
+    const bytes = new Uint8Array(
+      Array.from(name, (c) => c.charCodeAt(0) & 0xff),
+    );
+    const decoded = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    if (ARABIC_RE.test(decoded)) return decoded;
+  } catch {
+    /* fall through */
+  }
+  return name;
+}
+
 export function formatDate(date: string | Date) {
   return new Intl.DateTimeFormat('ar-SA-u-nu-latn', {
     year: 'numeric',

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { custodyFundsApi, custodyInvoiceApi, supportServicesApi, usersApi } from '@/lib/api';
 import { useAuth } from '@/stores/auth';
-import { cn, formatNumber } from '@/lib/utils';
+import { cn, fixArabicMojibake, formatNumber } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 type MainTab = 'funds' | 'requests';
@@ -399,7 +399,7 @@ function FundDetail({ fund: f, allUsers, onBack, onRefresh }: { fund: any; allUs
                             const plainMatch = /filename="?([^";]+)"?/i.exec(disp);
                             const filename = starMatch
                               ? decodeURIComponent(starMatch[1])
-                              : plainMatch?.[1] || inv.attachmentOriginalName || 'attachment';
+                              : plainMatch?.[1] || fixArabicMojibake(inv.attachmentOriginalName) || 'attachment';
                             const blob = new Blob([res.data as BlobPart], {
                               type: (res.headers['content-type'] as string) || 'application/octet-stream',
                             });
@@ -427,10 +427,10 @@ function FundDetail({ fund: f, allUsers, onBack, onRefresh }: { fund: any; allUs
                         }}
                         className="text-[10px] text-sky-400 hover:underline"
                       >
-                        📎 {inv.attachmentOriginalName}
+                        📎 {fixArabicMojibake(inv.attachmentOriginalName)}
                       </button>
                     )}
-                    {inv.attachmentOriginalName && !isAdminUser && <span className="text-[10px] text-gray-500">📎 {inv.attachmentOriginalName}</span>}
+                    {inv.attachmentOriginalName && !isAdminUser && <span className="text-[10px] text-gray-500">📎 {fixArabicMojibake(inv.attachmentOriginalName)}</span>}
                     <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full',
                       inv.status === 'approved' ? 'bg-emerald-500/20 text-emerald-300' : inv.status === 'rejected' ? 'bg-red-500/20 text-red-300' : 'bg-amber-500/20 text-amber-300')}>
                       {inv.status === 'approved' ? 'مقبولة' : inv.status === 'rejected' ? 'مرفوضة' : 'قيد المراجعة'}

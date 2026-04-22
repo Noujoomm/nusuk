@@ -9,7 +9,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { fixMulterFilename } from '../common/fix-filename';
+import { fixMulterFilename, fixStoredFilename } from '../common/fix-filename';
 
 @Controller('custody-funds')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -113,7 +113,9 @@ export class CustodyFundsController {
     const invoice = await this.service.getInvoice(iid);
     if (!invoice) throw new NotFoundException('الفاتورة غير موجودة');
 
-    const filename = invoice.attachmentOriginalName || 'attachment';
+    // Legacy rows may have mojibake baked into the DB; decode at response time
+    // so the downloaded file gets its real Arabic name regardless of migration timing.
+    const filename = fixStoredFilename(invoice.attachmentOriginalName) || 'attachment';
     const ext = extname(filename).toLowerCase();
     const extToMime: Record<string, string> = {
       '.pdf': 'application/pdf',

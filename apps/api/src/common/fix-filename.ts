@@ -6,27 +6,45 @@
  *
  * Detection: if the original has NO Arabic chars but the latin1→utf8 decoded
  * version DOES, then it's mojibake and we fix it.
- *
- * Must be called BEFORE file.originalname is used anywhere.
+ */
+
+const ARABIC_RE = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
+
+/**
+ * Multer-upload variant — mutates the file in place. Must run BEFORE
+ * file.originalname is used anywhere downstream.
  */
 export function fixMulterFilename(file: Express.Multer.File): void {
   if (!file?.originalname) return;
 
-  const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
-
   try {
-    // Only attempt fix if the original does NOT already contain Arabic
     if (!ARABIC_RE.test(file.originalname)) {
       const decoded = Buffer.from(file.originalname, 'latin1').toString('utf8');
-      // Apply fix only if decoded version contains Arabic (confirms it was mojibake)
       if (ARABIC_RE.test(decoded)) {
         file.originalname = decoded;
       }
     }
   } catch {
-    // If decoding fails, keep the original
+    /* keep original */
   }
 
-  // Sanitize dangerous filesystem characters but keep Arabic, spaces, hyphens, dots, parens
+  // Sanitize dangerous filesystem characters but keep Arabic, spaces, hyphens, dots, parens.
   file.originalname = file.originalname.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
+}
+
+/**
+ * Pure-string variant for legacy rows already stored in the database.
+ * Same heuristic as fixMulterFilename, but returns a new string instead of
+ * mutating a multer File. Safe no-op when the input is already proper Arabic.
+ */
+export function fixStoredFilename(name: string | null | undefined): string {
+  if (!name) return '';
+  if (ARABIC_RE.test(name)) return name;
+  try {
+    const decoded = Buffer.from(name, 'latin1').toString('utf8');
+    if (ARABIC_RE.test(decoded)) return decoded;
+  } catch {
+    /* fall through */
+  }
+  return name;
 }
