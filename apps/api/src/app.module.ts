@@ -38,6 +38,7 @@ import { CustodyFundsModule } from './custody-funds/custody-funds.module';
 import { ReportsIntelligenceModule } from './reports-intelligence/reports-intelligence.module';
 import { AgentModule } from './agent/agent.module';
 import { AIAgentModule } from './ai-agent/ai-agent.module';
+import { AIAnalyzerModule } from './support-services/ai-analyzer/ai-analyzer.module';
 import { HealthController } from './health.controller';
 import { RootController } from './root.controller';
 
@@ -81,6 +82,7 @@ import { RootController } from './root.controller';
     ReportsIntelligenceModule,
     AgentModule,
     AIAgentModule,
+    AIAnalyzerModule,
   ],
   controllers: [HealthController, RootController],
   providers: [

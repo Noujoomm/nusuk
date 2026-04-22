@@ -262,6 +262,38 @@ export const insightsApi = {
   track: (trackId: string) => api.get(`/insights/track/${trackId}`),
 };
 
+// ─── AI Invoice Analyzer (محلّل الفواتير بالذكاء الاصطناعي) ───
+export const aiInvoiceApi = {
+  analyze: (custodyId: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<any>(
+      `/support-services/custodies/${custodyId}/ai-invoice/analyze`,
+      form,
+      { timeout: 120000 },
+    );
+  },
+  confirm: (
+    custodyId: string,
+    data: {
+      extractionId: string;
+      editedData: any;
+      notes?: string;
+      category?: string;
+    },
+  ) =>
+    api.post<any>(
+      `/support-services/custodies/${custodyId}/ai-invoice/confirm`,
+      data,
+    ),
+  cancel: (custodyId: string, extractionId: string) =>
+    api.delete(
+      `/support-services/custodies/${custodyId}/ai-invoice/${extractionId}`,
+    ),
+  previewUrl: (extractionId: string) =>
+    `${API_URL}/api/support-services/ai-invoice/preview/${extractionId}`,
+};
+
 // ─── Roya Assistant (مساعد رؤية) ───
 export const agentApi = {
   chat: (

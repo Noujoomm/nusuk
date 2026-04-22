@@ -1400,6 +1400,22 @@ model CustodyInvoice {
   attachmentUrl String?       @map("attachment_url")
   attachmentName String?      @map("attachment_name")
   attachmentPath String?      @map("attachment_path")
+
+  // AI Invoice Analyzer (Claude Vision) — populated when the invoice is
+  // created through /ai-analyze + /ai-confirm. All fields are optional so
+  // manually-created invoices are unaffected.
+  aiExtracted     Boolean   @default(false) @map("ai_extracted")
+  aiConfidence    Float?    @map("ai_confidence")
+  aiCategory      String?   @map("ai_category")
+  aiRiskLevel     String?   @map("ai_risk_level")     // low | medium | high
+  aiRiskScore     Int?      @map("ai_risk_score")     // 0-100
+  aiRiskFlags     String[]  @default([]) @map("ai_risk_flags")
+  aiExtractionId  String?   @unique @map("ai_extraction_id")
+  aiProcessedAt   DateTime? @map("ai_processed_at")
+  vendorTaxNumber String?   @map("vendor_tax_number")
+  vendorName      String?   @map("vendor_name")
+  aiRawResponse   Json?     @map("ai_raw_response")
+
   createdById   String        @map("created_by_id")
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
@@ -1411,18 +1427,44 @@ model CustodyInvoice {
   @@index([custodyId])
   @@index([status])
   @@index([invoiceDate])
+  @@index([vendorName])
   @@map("custody_invoices")
 }
 
+model AIExtractionLog {
+  id             String   @id @default(cuid())
+  custodyId      String   @map("custody_id")
+  userId         String   @map("user_id")
+  fileName       String   @map("file_name")
+  fileSize       Int      @map("file_size")
+  mimeType       String   @map("mime_type")
+  status         String   // pending | completed | failed
+  tokensUsed     Int?     @map("tokens_used")
+  costInSar      Float?   @map("cost_in_sar")
+  errorMessage   String?  @map("error_message") @db.Text
+  processingTime Int?     @map("processing_time")  // milliseconds
+  extractionId   String?  @unique @map("extraction_id") // links to CustodyInvoice.aiExtractionId
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([custodyId])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("ai_extraction_logs")
+}
+
 model InvoiceAttachment {
-  id           String   @id @default(cuid())
-  invoiceId    String   @map("invoice_id")
-  fileName     String   @map("file_name")
-  filePath     String   @map("file_path")
-  fileSize     Int      @map("file_size")
-  mimeType     String   @map("mime_type")
-  uploadedById String   @map("uploaded_by_id")
-  uploadedAt   DateTime @default(now()) @map("uploaded_at")
+  id              String   @id @default(cuid())
+  invoiceId       String   @map("invoice_id")
+  fileName        String   @map("file_name")
+  filePath        String   @map("file_path")
+  fileSize        Int      @map("file_size")
+  mimeType        String   @map("mime_type")
+  // Optional DB-backed storage so attachments survive Railway's ephemeral
+  // filesystem. Existing rows (LOCAL) are unaffected.
+  storageProvider String   @default("LOCAL") @map("storage_provider")
+  fileData        Bytes?   @map("file_data")
+  uploadedById    String   @map("uploaded_by_id")
+  uploadedAt      DateTime @default(now()) @map("uploaded_at")
 
   invoice    CustodyInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   uploadedBy User           @relation("InvoiceAttachmentUploader", fields: [uploadedById], references: [id])
