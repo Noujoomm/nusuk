@@ -2,18 +2,14 @@ import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Res, UseGuard
 import { Response } from 'express';
 import { existsSync, createReadStream } from 'fs';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { mkdirSync } from 'fs';
-import { extname, join } from 'path';
+import { memoryStorage } from 'multer';
+import { extname } from 'path';
 import { CustodyFundsService } from './custody-funds.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { fixMulterFilename } from '../common/fix-filename';
-
-const UPLOADS_DIR = join(process.cwd(), 'uploads', 'custody-invoices');
-try { mkdirSync(UPLOADS_DIR, { recursive: true }); } catch {}
 
 @Controller('custody-funds')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -75,12 +71,13 @@ export class CustodyFundsController {
   }
 
   // ─── Invoices ───────────────────────
+  // Upload stores the file in Postgres (attachmentData Bytes) — the container
+  // filesystem is ephemeral on Railway, so local `uploads/` dirs get wiped on
+  // every restart. `memoryStorage` holds the ≤10MB buffer briefly, we copy it
+  // into DB, done. No temp file, no FS leak, survives redeploys.
   @Post(':id/invoices')
   @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: (_r, _f, cb) => { try { mkdirSync(UPLOADS_DIR, { recursive: true }); } catch {} cb(null, UPLOADS_DIR); },
-      filename: (_r, file, cb) => cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + extname(file.originalname)),
-    }),
+    storage: memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_r, file, cb) => {
       const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.xlsx', '.xls', '.docx'];
@@ -97,21 +94,28 @@ export class CustodyFundsController {
     return this.service.addInvoice(id, {
       ...body,
       amount: parseFloat(body.amount),
-      attachmentUrl: file?.path,
+      attachmentBuffer: file?.buffer,
       attachmentOriginalName: file?.originalname,
+      attachmentMimeType: file?.mimetype,
     }, user.id);
   }
 
-  // Download: uses standard JWT guard (accepts ?token= via JwtStrategy)
+  /**
+   * Download: prefers DB-backed `attachmentData` (persistent). Falls back to
+   * the legacy `attachmentUrl` filesystem path for invoices uploaded before
+   * this migration. If neither is available (orphaned after Railway wiped
+   * the ephemeral FS), returns a clear 404 so the UI can toast instead of
+   * saving the error JSON as a .json download.
+   */
   @Get('invoices/:iid/download')
   @Roles('admin')
   async downloadInvoice(@Param('iid') iid: string, @Res() res: Response) {
     const invoice = await this.service.getInvoice(iid);
-    if (!invoice?.attachmentUrl) throw new NotFoundException('لا يوجد مرفق لهذه الفاتورة');
-    if (!existsSync(invoice.attachmentUrl)) throw new NotFoundException('الملف غير موجود على الخادم');
+    if (!invoice) throw new NotFoundException('الفاتورة غير موجودة');
+
     const filename = invoice.attachmentOriginalName || 'attachment';
     const ext = extname(filename).toLowerCase();
-    const mimeTypes: Record<string, string> = {
+    const extToMime: Record<string, string> = {
       '.pdf': 'application/pdf',
       '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
       '.png': 'image/png', '.webp': 'image/webp',
@@ -119,11 +123,42 @@ export class CustodyFundsController {
       '.xls': 'application/vnd.ms-excel',
       '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     };
-    res.set({
-      'Content-Type': mimeTypes[ext] || 'application/octet-stream',
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
-    });
-    createReadStream(invoice.attachmentUrl).pipe(res);
+    const mime =
+      (invoice as any).attachmentMimeType ||
+      extToMime[ext] ||
+      'application/octet-stream';
+
+    // Path 1 — DB-backed bytes (new uploads + AI-analyzed invoices).
+    const dbBytes = (invoice as any).attachmentData as Uint8Array | null | undefined;
+    if (dbBytes && dbBytes.length > 0) {
+      const buffer = Buffer.from(dbBytes);
+      res.setHeader('Content-Type', mime);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      );
+      res.setHeader('Content-Length', buffer.length.toString());
+      res.status(200).end(buffer);
+      return;
+    }
+
+    // Path 2 — legacy filesystem path (may be wiped by Railway ephemeral FS).
+    if (invoice.attachmentUrl && existsSync(invoice.attachmentUrl)) {
+      res.setHeader('Content-Type', mime);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      );
+      createReadStream(invoice.attachmentUrl).pipe(res);
+      return;
+    }
+
+    // No data anywhere — orphaned attachment.
+    throw new NotFoundException(
+      invoice.attachmentUrl || invoice.attachmentOriginalName
+        ? 'الملف غير متوفر — قد يكون رُفع قبل ترقية التخزين وتعذّر استرجاعه. يمكن إعادة رفعه.'
+        : 'لا يوجد مرفق لهذه الفاتورة',
+    );
   }
 
   @Patch('invoices/:iid')

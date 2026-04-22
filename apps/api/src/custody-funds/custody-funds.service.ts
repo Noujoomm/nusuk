@@ -134,11 +134,18 @@ export class CustodyFundsService {
   async addInvoice(fundId: string, data: {
     invoiceName: string; amount: number; invoiceDate: string;
     custodyMemberId?: string; notes?: string;
-    attachmentUrl?: string; attachmentOriginalName?: string;
+    /** Legacy FS path (still accepted for backward compat; new uploads use attachmentBuffer). */
+    attachmentUrl?: string;
+    attachmentOriginalName?: string;
+    /** Preferred DB-backed storage — survives Railway ephemeral FS restarts. */
+    attachmentBuffer?: Buffer;
+    attachmentMimeType?: string;
   }, userId: string) {
     const fund = await this.prisma.custodyFund.findUnique({ where: { id: fundId } });
     if (!fund) throw new NotFoundException('العهدة غير موجودة');
     if (fund.status === 'closed') throw new BadRequestException('لا يمكن إضافة فواتير على عهدة مغلقة');
+
+    const hasBuffer = !!data.attachmentBuffer && data.attachmentBuffer.length > 0;
 
     return this.prisma.custodyFundInvoice.create({
       data: {
@@ -148,6 +155,11 @@ export class CustodyFundsService {
         invoiceDate: new Date(data.invoiceDate),
         custodyMemberId: data.custodyMemberId || null,
         notes: data.notes,
+        // Persistent DB-backed bytes — preferred path for new uploads.
+        attachmentData: hasBuffer ? new Uint8Array(data.attachmentBuffer!) : undefined,
+        attachmentMimeType: hasBuffer ? (data.attachmentMimeType || null) : undefined,
+        attachmentSizeBytes: hasBuffer ? data.attachmentBuffer!.length : undefined,
+        // Legacy columns — kept only when the caller explicitly passes a path.
         attachmentUrl: data.attachmentUrl,
         attachmentOriginalName: data.attachmentOriginalName,
         createdById: userId,

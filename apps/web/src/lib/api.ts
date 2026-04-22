@@ -262,6 +262,14 @@ export const insightsApi = {
   track: (trackId: string) => api.get(`/insights/track/${trackId}`),
 };
 
+// ─── Custody Invoice download (survives Railway ephemeral FS via DB bytes) ───
+export const custodyInvoiceApi = {
+  download: (invoiceId: string) =>
+    api.get(`/custody-funds/invoices/${invoiceId}/download`, {
+      responseType: 'blob',
+    }),
+};
+
 // ─── AI Invoice Analyzer (محلّل الفواتير بالذكاء الاصطناعي) ───
 // Operates on CustodyFund (v2) — which is the model shown on /support-services.
 export const aiInvoiceApi = {

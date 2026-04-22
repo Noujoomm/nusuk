@@ -7,7 +7,7 @@ import {
   Receipt, ClipboardList, RefreshCw, Lock, UserPlus, Shield, TrendingDown,
   Sparkles,
 } from 'lucide-react';
-import { custodyFundsApi, supportServicesApi, usersApi } from '@/lib/api';
+import { custodyFundsApi, custodyInvoiceApi, supportServicesApi, usersApi } from '@/lib/api';
 import { useAuth } from '@/stores/auth';
 import { cn, formatNumber } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -387,7 +387,49 @@ function FundDetail({ fund: f, allUsers, onBack, onRefresh }: { fund: any; allUs
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {inv.attachmentOriginalName && isAdminUser && <a href={`/api/custody-funds/invoices/${inv.id}/download?token=${typeof window !== 'undefined' ? localStorage.getItem('access_token') || '' : ''}`} download className="text-[10px] text-sky-400 hover:underline">📎 {inv.attachmentOriginalName}</a>}
+                    {inv.attachmentOriginalName && isAdminUser && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await custodyInvoiceApi.download(inv.id);
+                            // Parse RFC 5987 filename back to its Arabic form.
+                            const disp = (res.headers['content-disposition'] as string) || '';
+                            const starMatch = /filename\*=UTF-8''([^;]+)/i.exec(disp);
+                            const plainMatch = /filename="?([^";]+)"?/i.exec(disp);
+                            const filename = starMatch
+                              ? decodeURIComponent(starMatch[1])
+                              : plainMatch?.[1] || inv.attachmentOriginalName || 'attachment';
+                            const blob = new Blob([res.data as BlobPart], {
+                              type: (res.headers['content-type'] as string) || 'application/octet-stream',
+                            });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = filename;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            URL.revokeObjectURL(url);
+                          } catch (err: any) {
+                            // The response is a blob even for errors — read it, parse JSON.
+                            let message = 'تعذّر تحميل المرفق';
+                            try {
+                              const blob = err?.response?.data as Blob | undefined;
+                              if (blob) {
+                                const text = await blob.text();
+                                const parsed = JSON.parse(text);
+                                if (parsed?.message) message = parsed.message;
+                              }
+                            } catch { /* keep default */ }
+                            toast.error(message);
+                          }
+                        }}
+                        className="text-[10px] text-sky-400 hover:underline"
+                      >
+                        📎 {inv.attachmentOriginalName}
+                      </button>
+                    )}
                     {inv.attachmentOriginalName && !isAdminUser && <span className="text-[10px] text-gray-500">📎 {inv.attachmentOriginalName}</span>}
                     <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full',
                       inv.status === 'approved' ? 'bg-emerald-500/20 text-emerald-300' : inv.status === 'rejected' ? 'bg-red-500/20 text-red-300' : 'bg-amber-500/20 text-amber-300')}>
