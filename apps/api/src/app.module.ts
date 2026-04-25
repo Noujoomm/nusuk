@@ -39,6 +39,7 @@ import { ReportsIntelligenceModule } from './reports-intelligence/reports-intell
 import { AgentModule } from './agent/agent.module';
 import { AIAgentModule } from './ai-agent/ai-agent.module';
 import { AIAnalyzerModule } from './support-services/ai-analyzer/ai-analyzer.module';
+import { AttendanceModule } from './attendance/attendance.module';
 import { HealthController } from './health.controller';
 import { RootController } from './root.controller';
 
@@ -83,6 +84,7 @@ import { RootController } from './root.controller';
     AgentModule,
     AIAgentModule,
     AIAnalyzerModule,
+    AttendanceModule,
   ],
   controllers: [HealthController, RootController],
   providers: [

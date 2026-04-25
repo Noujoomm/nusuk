@@ -1802,3 +1802,135 @@ model AIQuickAction {
   @@index([category, isActive])
   @@map("ai_quick_actions")
 }
+
+// ─── PDF ATTENDANCE MODULE ───
+// Manual PDF-based attendance flow (separate from the iClock auto-sync `attendance_*` tables above).
+// Source: HR uploads a daily PDF exported from the biometric system.
+
+enum PdfShiftType {
+  morning // صباحي
+  evening // مسائي
+  night // ليلي
+  on_call // On Call — exempt from 8h check
+  online // أونلاين — exempt from attendance check
+  unscheduled // بدون وقت محدد — exempt
+  rotating // صباحي/مسائي بالتناوب
+}
+
+enum PdfAttendanceStatus {
+  present // داوم بشكل كامل (≥ 8 ساعات + دخول وخروج)
+  incomplete_hours // داوم لكن أقل من 8 ساعات
+  check_in_only // دخول بدون خروج
+  check_out_only // خروج بدون دخول
+  absent // غايب (ما عنده أي بصمة)
+  exempt // معفى (On Call / Online / Unscheduled)
+}
+
+enum PdfAttendanceFlag {
+  none
+  less_than_8h // ⚠️ أقل من 8 ساعات
+  missing_checkout // ⚠️ دخول بدون خروج
+  missing_checkin // ⚠️ خروج بدون دخول
+  multiple_entries // أكثر من سجل في اليوم
+  unregistered // موظف غير مسجل في Excel
+}
+
+model PdfAttendanceEmployee {
+  id                String       @id @default(cuid())
+  employeeNumber    String?      @unique @map("employee_number")
+  fullName          String       @map("full_name")
+  normalizedName    String       @map("normalized_name")
+  track             String
+  trackDetail       String?      @map("track_detail")
+  phoneNumber       String?      @map("phone_number")
+  scheduledCheckIn  String?      @map("scheduled_check_in") // "07:00"
+  scheduledCheckOut String?      @map("scheduled_check_out") // "19:00"
+  shiftType         PdfShiftType @default(morning) @map("shift_type")
+  worksByCharter    Boolean      @default(false) @map("works_by_charter")
+  isActive          Boolean      @default(true) @map("is_active")
+  aliases           String[]     @default([])
+
+  records        PdfAttendanceRecord[]
+  dailySummaries PdfDailyAttendanceSummary[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([normalizedName])
+  @@index([track])
+  @@map("pdf_attendance_employees")
+}
+
+model PdfAttendanceUpload {
+  id             String   @id @default(cuid())
+  fileName       String   @map("file_name")
+  fileSize       Int      @map("file_size")
+  reportDate     DateTime @map("report_date") @db.Date
+  uploadedBy     String?  @map("uploaded_by")
+  totalRecords   Int      @default(0) @map("total_records")
+  matchedCount   Int      @default(0) @map("matched_count")
+  unmatchedCount Int      @default(0) @map("unmatched_count")
+  rawText        String?  @map("raw_text") @db.Text
+  status         String   @default("processed") // processed | failed
+  errorMessage   String?  @map("error_message") @db.Text
+
+  records   PdfAttendanceRecord[]
+  summaries PdfDailyAttendanceSummary[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([reportDate])
+  @@map("pdf_attendance_uploads")
+}
+
+model PdfAttendanceRecord {
+  id         String                 @id @default(cuid())
+  uploadId   String                 @map("upload_id")
+  upload     PdfAttendanceUpload    @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  employeeId String?                @map("employee_id")
+  employee   PdfAttendanceEmployee? @relation(fields: [employeeId], references: [id])
+
+  rawEmployeeNumber String   @map("raw_employee_number")
+  rawName           String   @map("raw_name")
+  rawDepartment     String   @map("raw_department")
+  recordDate        DateTime @map("record_date") @db.Date
+  recordTime        String   @map("record_time") // "HH:mm"
+  punchType         String   @map("punch_type") // check_in | check_out
+  workCode          String?  @map("work_code")
+  dataSource        String?  @map("data_source")
+
+  isMatched       Boolean @default(false) @map("is_matched")
+  matchConfidence Float?  @map("match_confidence")
+  matchMethod     String? @map("match_method") // employee_number | name_exact | fuzzy_name | token_match | manual
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([recordDate, employeeId])
+  @@index([rawEmployeeNumber])
+  @@index([uploadId])
+  @@map("pdf_attendance_records")
+}
+
+model PdfDailyAttendanceSummary {
+  id         String                @id @default(cuid())
+  uploadId   String                @map("upload_id")
+  upload     PdfAttendanceUpload   @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  employeeId String                @map("employee_id")
+  employee   PdfAttendanceEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  reportDate   DateTime @map("report_date") @db.Date
+  firstCheckIn String?  @map("first_check_in")
+  lastCheckOut String?  @map("last_check_out")
+  totalHours   Float?   @map("total_hours")
+  recordsCount Int      @default(0) @map("records_count")
+
+  status PdfAttendanceStatus
+  flags  PdfAttendanceFlag[] @default([])
+  notes  String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([uploadId, employeeId])
+  @@index([reportDate])
+  @@map("pdf_daily_attendance_summaries")
+}
