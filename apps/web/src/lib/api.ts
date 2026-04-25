@@ -648,3 +648,12 @@ export const adminExportApi = {
   tracksDeep: (trackId?: string) => api.get('/admin/tracks-deep', { params: trackId ? { trackId } : {}, timeout: 120000 }),
   downloadZip: () => api.get('/admin/export-zip', { responseType: 'blob', timeout: 300000 }),
 };
+
+// ─── Attendance (PDF flow) ───
+export const attendanceApi = {
+  seedEmployees: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/attendance/employees/seed', form, { timeout: 120000 });
+  },
+};

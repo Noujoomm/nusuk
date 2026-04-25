@@ -40,7 +40,7 @@ export class AttendanceController {
    */
   @Post('employees/seed')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'pm', 'hr')
+  @Roles('admin')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),

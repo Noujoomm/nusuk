@@ -30,6 +30,7 @@ import {
   CalendarRange,
   ClipboardList,
   Receipt,
+  Fingerprint,
 } from 'lucide-react';
 import NotificationBell from '@/components/notifications/notification-bell';
 
@@ -53,6 +54,7 @@ const NAV_ITEMS = [
   { href: '/executive-tasks', label: 'المهام التنفيذية', icon: ClipboardList, roles: ['admin', 'pm'] },
   { href: '/updates', label: 'التحديثات', icon: Activity, roles: ['admin', 'pm', 'track_lead', 'employee', 'hr'] },
   { href: '/support-services', label: 'خدمات المساندة', icon: Receipt, roles: ['admin', 'pm'] },
+  { href: '/attendance', label: 'الحضور والانصراف', icon: Fingerprint, roles: ['admin'] },
   { href: '/users', label: 'المستخدمين', icon: Users, roles: ['admin'] },
   { href: '/system-export', label: 'النظام والنسخ', icon: Database, roles: ['admin'] },
 ];
