@@ -656,4 +656,11 @@ export const attendanceApi = {
     form.append('file', file);
     return api.post('/attendance/employees/seed', form, { timeout: 120000 });
   },
+  uploadPdf: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/attendance/uploads', form, { timeout: 120000 });
+  },
+  listUploads: () => api.get('/attendance/uploads'),
+  getReport: (uploadId: string) => api.get(`/attendance/uploads/${uploadId}/report`),
 };
