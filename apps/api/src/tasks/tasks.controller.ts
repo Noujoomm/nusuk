@@ -14,6 +14,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { fixMulterFilename } from '../common/fix-filename';
+import { setFileResponseHeaders } from '../common/utils/file-response.util';
 import {
   CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, AssignTaskDto,
   CreateChecklistItemDto, UpdateChecklistItemDto,
@@ -382,12 +383,13 @@ export class TasksController {
       throw new NotFoundException('الملف غير موجود على الخادم');
     }
 
-    const encodedName = encodeURIComponent(file.fileName);
-    res.set({
-      'Content-Type': file.mimeType || 'application/octet-stream',
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodedName}`,
-      'Content-Length': String(file.fileSize),
-    });
+    setFileResponseHeaders(
+      res,
+      file.fileName,
+      file.mimeType || 'application/octet-stream',
+      file.fileSize,
+      'attachment',
+    );
 
     const stream = createReadStream(file.filePath);
     stream.pipe(res);

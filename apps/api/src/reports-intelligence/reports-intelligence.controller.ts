@@ -23,6 +23,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { setFileResponseHeaders } from '../common/utils/file-response.util';
 import { AuditService } from '../audit/audit.service';
 import { ReportsIntelligenceService } from './reports-intelligence.service';
 import {
@@ -182,15 +183,13 @@ export class ReportsIntelligenceController {
     @Res() res: Response,
   ) {
     const { buffer, template } = await this.service.downloadTemplate(id);
-    res.setHeader(
-      'Content-Type',
+    setFileResponseHeaders(
+      res,
+      template.originalName,
       template.mimeType || 'application/octet-stream',
+      buffer.length,
+      'attachment',
     );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename*=UTF-8''${encodeURIComponent(template.originalName)}`,
-    );
-    res.setHeader('Content-Length', buffer.length);
     res.status(200).end(buffer);
   }
 
@@ -210,12 +209,13 @@ export class ReportsIntelligenceController {
       );
     }
     const artifact = await this.service.export(id, user.id, fmt);
-    res.setHeader('Content-Type', artifact.contentType);
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename*=UTF-8''${encodeURIComponent(artifact.filename)}`,
+    setFileResponseHeaders(
+      res,
+      artifact.filename,
+      artifact.contentType,
+      artifact.buffer.length,
+      'attachment',
     );
-    res.setHeader('Content-Length', artifact.buffer.length);
     res.status(200).end(artifact.buffer);
   }
 }

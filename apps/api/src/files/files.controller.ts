@@ -11,6 +11,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuditService } from '../audit/audit.service';
 import { Request, Response } from 'express';
 import { fixMulterFilename } from '../common/fix-filename';
+import { setFileResponseHeaders } from '../common/utils/file-response.util';
 
 @Controller('files')
 @UseGuards(JwtAuthGuard)
@@ -161,11 +162,13 @@ export class FilesController {
       throw new NotFoundException('الملف غير موجود على الخادم');
     }
 
-    res.set({
-      'Content-Type': file.mimeType || 'application/octet-stream',
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
-      'Content-Length': file.fileSize.toString(),
-    });
+    setFileResponseHeaders(
+      res,
+      file.fileName,
+      file.mimeType || 'application/octet-stream',
+      file.fileSize,
+      'attachment',
+    );
     createReadStream(filePath).pipe(res);
   }
 

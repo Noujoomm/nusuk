@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { SystemExportService } from './system-export.service';
+import { setFileResponseHeaders } from '../common/utils/file-response.util';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -60,11 +61,7 @@ export class SystemExportController {
     this.logger.log('Admin requested ZIP export');
     const { stream, filename } = await this.exportService.createZipExport();
 
-    res.set({
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-    });
-
+    setFileResponseHeaders(res, filename, 'application/zip', null, 'attachment');
     stream.pipe(res);
   }
 }

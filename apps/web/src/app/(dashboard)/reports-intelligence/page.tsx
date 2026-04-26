@@ -285,14 +285,9 @@ export default function ReportsIntelligencePage() {
     }
   }
 
-  async function handleExport(format: 'txt' | 'md' | 'docx' | 'xlsx' | 'pptx' | 'pdf') {
+  async function handleExport(format: 'txt' | 'md' | 'docx' | 'xlsx' | 'pptx') {
     if (!activeSession) return;
     setExportMenuOpen(false);
-    if (format === 'pdf') {
-      // Browser print → user saves as PDF. Arabic renders natively.
-      window.open(`/reports-intelligence/${activeSession.id}/print`, '_blank');
-      return;
-    }
     try {
       const res = await intelligenceApi.downloadExport(activeSession.id, format);
       const disposition = res.headers['content-disposition'] || '';
@@ -571,16 +566,30 @@ export default function ReportsIntelligencePage() {
                 </button>
                 {exportMenuOpen && (
                   <div className="absolute top-full mt-2 left-0 z-20 min-w-[200px] rounded-xl border border-white/10 bg-[#0f1117] shadow-xl overflow-hidden">
-                    {EXPORT_FORMATS.map((f) => (
-                      <button
-                        key={f.key}
-                        onClick={() => handleExport(f.key)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/5 text-start"
-                      >
-                        <f.icon className="w-3.5 h-3.5 text-gray-400" />
-                        {f.label}
-                      </button>
-                    ))}
+                    {EXPORT_FORMATS.map((f) =>
+                      f.key === 'pdf' ? (
+                        <a
+                          key={f.key}
+                          href={`/reports-intelligence/${activeSession.id}/print`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setExportMenuOpen(false)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/5 text-start"
+                        >
+                          <f.icon className="w-3.5 h-3.5 text-gray-400" />
+                          {f.label}
+                        </a>
+                      ) : (
+                        <button
+                          key={f.key}
+                          onClick={() => handleExport(f.key as Exclude<typeof f.key, 'pdf'>)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/5 text-start"
+                        >
+                          <f.icon className="w-3.5 h-3.5 text-gray-400" />
+                          {f.label}
+                        </button>
+                      ),
+                    )}
                   </div>
                 )}
               </div>

@@ -24,6 +24,8 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ExcelSeederService } from './services/excel-seeder.service';
 import { PdfUploadService } from './services/pdf-upload.service';
 import { LetterGeneratorService } from './services/letter-generator.service';
+import { fixMulterFilename } from '../common/fix-filename';
+import { setFileResponseHeaders } from '../common/utils/file-response.util';
 
 const EXCEL_MAX_BYTES = 5 * 1024 * 1024;
 const PDF_MAX_BYTES = 10 * 1024 * 1024;
@@ -90,6 +92,7 @@ export class AttendanceController {
     if (!file) {
       throw new BadRequestException('يرجى رفع ملف PDF بحجم لا يتجاوز 10MB');
     }
+    fixMulterFilename(file);
     this.logger.log(`PDF upload by user=${user.id} file="${file.originalname}" size=${file.size}B`);
     return this.uploads.ingest(file.originalname, file.size, file.buffer, user.id);
   }
@@ -235,29 +238,4 @@ export class AttendanceController {
       { noteAboutLastDay: noteAboutLastDay === 'true' },
     );
   }
-}
-
-/**
- * Sets Content-Type / Content-Length / Content-Disposition with RFC 5987 UTF-8
- * encoding so Arabic filenames (e.g. "السجلات_20260418111117_export.pdf")
- * survive the browser download dialog.
- */
-function setFileResponseHeaders(
-  res: Response,
-  fileName: string,
-  mimeType: string,
-  contentLength: number,
-  disposition: 'attachment' | 'inline',
-) {
-  // ASCII fallback for legacy clients — strip non-ASCII so the bare
-  // `filename=` directive doesn't choke validators.
-  const asciiFallback = fileName.replace(/[^\x20-\x7E]/g, '_') || 'attendance.pdf';
-  const encodedName = encodeURIComponent(fileName);
-  res.setHeader('Content-Type', mimeType);
-  res.setHeader('Content-Length', contentLength);
-  res.setHeader(
-    'Content-Disposition',
-    `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
-  );
-  res.setHeader('Cache-Control', 'private, no-cache');
 }

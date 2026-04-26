@@ -10,6 +10,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { fixMulterFilename, fixStoredFilename } from '../common/fix-filename';
+import { setFileResponseHeaders } from '../common/utils/file-response.util';
 
 @Controller('custody-funds')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -134,23 +135,14 @@ export class CustodyFundsController {
     const dbBytes = (invoice as any).attachmentData as Uint8Array | null | undefined;
     if (dbBytes && dbBytes.length > 0) {
       const buffer = Buffer.from(dbBytes);
-      res.setHeader('Content-Type', mime);
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
-      );
-      res.setHeader('Content-Length', buffer.length.toString());
+      setFileResponseHeaders(res, filename, mime, buffer.length, 'attachment');
       res.status(200).end(buffer);
       return;
     }
 
     // Path 2 — legacy filesystem path (may be wiped by Railway ephemeral FS).
     if (invoice.attachmentUrl && existsSync(invoice.attachmentUrl)) {
-      res.setHeader('Content-Type', mime);
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
-      );
+      setFileResponseHeaders(res, filename, mime, null, 'attachment');
       createReadStream(invoice.attachmentUrl).pipe(res);
       return;
     }

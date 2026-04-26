@@ -22,6 +22,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AIAnalyzerService } from './ai-analyzer.service';
 import { AIConfirmDto } from './dto/ai-confirm.dto';
+import { setFileResponseHeaders } from '../../common/utils/file-response.util';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const TEMP_DIR = join(process.cwd(), 'uploads', 'temp', 'ai-invoices');
@@ -102,11 +103,7 @@ export class AIAnalyzerPreviewController {
       user.id,
     );
     if (!fs.existsSync(filePath)) throw new NotFoundException('انتهت صلاحية المعاينة.');
-    res.setHeader('Content-Type', mediaType);
-    res.setHeader(
-      'Content-Disposition',
-      `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-    );
+    setFileResponseHeaders(res, fileName, mediaType, null, 'inline');
     fs.createReadStream(filePath).pipe(res);
   }
 }

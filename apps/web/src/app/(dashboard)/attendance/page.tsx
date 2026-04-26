@@ -29,6 +29,7 @@ import Link from 'next/link';
 import { useAuth } from '@/stores/auth';
 import { attendanceApi } from '@/lib/api';
 import { parseFilenameFromHeaders, triggerBrowserDownload } from '@/lib/download';
+import { PreviewDialog } from '@/components/attendance/preview-dialog';
 
 interface SeedResult {
   totalRowsRead: number;
@@ -164,6 +165,8 @@ export default function AttendancePage() {
   const [letterLoading, setLetterLoading] = useState(false);
   const [letterCopied, setLetterCopied] = useState(false);
 
+  const [previewOpen, setPreviewOpen] = useState(false);
+
   const handleSeedFile = useCallback(async (file: File) => {
     const ext = file.name.toLowerCase().split('.').pop();
     if (ext !== 'xlsx' && ext !== 'xls') {
@@ -288,20 +291,9 @@ export default function AttendancePage() {
     }
   }, [report]);
 
-  const handlePreviewOriginal = useCallback(async () => {
+  const handlePreviewOriginal = useCallback(() => {
     if (!report?.upload.id) return;
-    const tid = toast.loading('جارٍ فتح المعاينة…');
-    try {
-      const res = await attendanceApi.previewFile(report.upload.id);
-      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-      // Revoke after the new tab has had a chance to load the bytes.
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      const w = window.open(url, '_blank');
-      if (!w) toast.error('فشل فتح نافذة جديدة — اسمح بالنوافذ المنبثقة', { id: tid });
-      else toast.dismiss(tid);
-    } catch {
-      toast.error('فشل المعاينة', { id: tid });
-    }
+    setPreviewOpen(true);
   }, [report]);
 
   if (!isAdmin) {
@@ -513,7 +505,7 @@ export default function AttendancePage() {
               <button
                 onClick={handlePreviewOriginal}
                 className="text-xs px-3 py-1.5 rounded-lg bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 flex items-center gap-1.5"
-                title="فتح ملف PDF الأصلي في نافذة جديدة"
+                title="معاينة ملف PDF الأصلي في المتصفح"
               >
                 <Eye className="w-3 h-3" />
                 معاينة
@@ -686,6 +678,13 @@ export default function AttendancePage() {
           )}
         </div>
       )}
+
+      <PreviewDialog
+        open={previewOpen}
+        uploadId={report?.upload.id ?? null}
+        reportDate={report?.upload.reportDate ?? null}
+        onClose={() => setPreviewOpen(false)}
+      />
     </div>
   );
 }

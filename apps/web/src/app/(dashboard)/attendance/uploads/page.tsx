@@ -20,6 +20,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/stores/auth';
 import { attendanceApi } from '@/lib/api';
 import { parseFilenameFromHeaders, triggerBrowserDownload } from '@/lib/download';
+import { PreviewDialog } from '@/components/attendance/preview-dialog';
 
 interface UploadItem {
   id: string;
@@ -57,6 +58,7 @@ export default function UploadsHistoryPage() {
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<UploadItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<UploadItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,23 +98,9 @@ export default function UploadsHistoryPage() {
     }
   }, [load]);
 
-  const handlePreview = useCallback(async (u: UploadItem) => {
-    setBusyId(u.id);
-    const tid = toast.loading('جارٍ فتح المعاينة…');
-    try {
-      const res = await attendanceApi.previewFile(u.id);
-      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      const w = window.open(url, '_blank');
-      if (!w) toast.error('فشل فتح نافذة جديدة — اسمح بالنوافذ المنبثقة', { id: tid });
-      else toast.dismiss(tid);
-      await load();
-    } catch {
-      toast.error('فشل المعاينة', { id: tid });
-    } finally {
-      setBusyId(null);
-    }
-  }, [load]);
+  const handlePreview = useCallback((u: UploadItem) => {
+    setPreviewItem(u);
+  }, []);
 
   const handleDelete = useCallback(async () => {
     if (!confirmDelete) return;
@@ -316,6 +304,14 @@ export default function UploadsHistoryPage() {
           </div>
         )}
       </div>
+
+      <PreviewDialog
+        open={!!previewItem}
+        uploadId={previewItem?.id ?? null}
+        reportDate={previewItem?.reportDate?.slice(0, 10) ?? null}
+        fallbackFileName={previewItem?.fileName}
+        onClose={() => setPreviewItem(null)}
+      />
 
       {/* Delete Confirmation */}
       {confirmDelete && (

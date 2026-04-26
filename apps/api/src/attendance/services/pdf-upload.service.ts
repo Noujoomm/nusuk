@@ -6,6 +6,7 @@ import { cleanPdfText, extractReportDate, parsePunches, ParsedPunch } from '../u
 import { matchEmployee, MatchCandidate } from '../utils/name-matcher';
 import { analyzeDay } from '../utils/analyzer';
 import { Prisma, PdfShiftType } from '@prisma/client';
+import { fixStoredFilename } from '../../common/fix-filename';
 
 @Injectable()
 export class PdfUploadService {
@@ -60,7 +61,7 @@ export class PdfUploadService {
     });
     if (existing) {
       throw new ConflictException(
-        `يوجد ملف مرفوع مسبقاً بتاريخ ${reportDate.toISOString().slice(0, 10)} (${existing.fileName}). احذفه أولاً ثم أعد الرفع.`,
+        `يوجد ملف مرفوع مسبقاً بتاريخ ${reportDate.toISOString().slice(0, 10)} (${fixStoredFilename(existing.fileName)}). احذفه أولاً ثم أعد الرفع.`,
       );
     }
 
@@ -270,7 +271,7 @@ export class PdfUploadService {
     return {
       upload: {
         id: upload.id,
-        fileName: upload.fileName,
+        fileName: fixStoredFilename(upload.fileName),
         reportDate: upload.reportDate.toISOString().slice(0, 10),
         totalRecords: upload.totalRecords,
         matchedCount: upload.matchedCount,
@@ -348,6 +349,7 @@ export class PdfUploadService {
     return {
       items: items.map((u) => ({
         ...u,
+        fileName: fixStoredFilename(u.fileName),
         absencesByTrack: trackBreakdownByUpload.get(u.id) ?? {},
       })),
       total,

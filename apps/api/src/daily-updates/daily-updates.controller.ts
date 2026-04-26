@@ -15,6 +15,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuditService } from '../audit/audit.service';
 import { CreateDailyUpdateDto, UpdateDailyUpdateDto } from './daily-updates.dto';
 import { parsePage, parseLimit } from '../common/utils/pagination.util';
+import { setFileResponseHeaders } from '../common/utils/file-response.util';
 
 const MAX_FILE_SIZE = parseInt(process.env.MAX_UPLOAD_MB || '25', 10) * 1024 * 1024;
 
@@ -68,11 +69,13 @@ export class DailyUpdatesController {
     @Res() res: Response,
   ) {
     const { stream, attachment } = await this.service.getAttachmentStream(attachmentId);
-    res.set({
-      'Content-Type': attachment.mimeType,
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(attachment.originalName)}`,
-      'Content-Length': attachment.sizeBytes.toString(),
-    });
+    setFileResponseHeaders(
+      res,
+      attachment.originalName,
+      attachment.mimeType,
+      attachment.sizeBytes,
+      'attachment',
+    );
     stream.pipe(res);
   }
 
