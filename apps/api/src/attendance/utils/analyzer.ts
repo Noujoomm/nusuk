@@ -17,48 +17,35 @@ export interface AnalysisResult {
 }
 
 /**
- * Per-employee, per-day analysis.
+ * Per-employee, per-day analysis. Status branches by shift type:
  *
- * Cases:
- *  - EXEMPT shifts (on_call, online, unscheduled): skipped from the 8h check.
- *  - No records → ABSENT.
- *  - Only check_in → CHECK_IN_ONLY (+ MISSING_CHECKOUT flag).
- *  - Only check_out → CHECK_OUT_ONLY (+ MISSING_CHECKIN flag).
- *  - Both: take first check_in + last check_out, compute hours.
- *    For NIGHT shifts, if checkout < checkin numerically, it's the next morning
- *    so we add 24h to the checkout side.
- *  - hours < 8 → INCOMPLETE_HOURS (+ LESS_THAN_8H flag).
- *  - hours ≥ 8 → PRESENT.
- *  - More than 2 punches in the day → MULTIPLE_ENTRIES flag (status unaffected).
+ *  REGULAR shifts (morning / evening / night)
+ *    no records       → absent          (enters the official absence letter)
+ *    only check_in    → check_in_only   ⚠ missing_checkout
+ *    only check_out   → check_out_only  ⚠ missing_checkin
+ *    both, <8 hours   → incomplete_hours ⚠ less_than_8h
+ *    both, ≥8 hours   → present
+ *    night with checkout < checkin numerically: treated as next-day (+24h)
+ *
+ *  ON CALL — punches are recorded and hours computed normally, but the
+ *  employee is NEVER counted as absent and NEVER triggers the <8h alert.
+ *  Missing one side of the punch IS still flagged for review.
+ *    no records       → on_call_no_visit   (normal — not absence)
+ *    only check_in    → on_call_check_in_only  ⚠ missing_checkout
+ *    only check_out   → on_call_check_out_only ⚠ missing_checkin
+ *    both             → on_call_present        (no <8h flag, ever)
+ *
+ *  ONLINE / UNSCHEDULED — flat status, no expectations on punches.
+ *    Records (if any) are still surfaced as firstCheckIn/lastCheckOut/hours.
+ *
+ *  ALL branches: more than 2 records on the day → multiple_entries flag.
  */
 export function analyzeDay(
   records: AnalyzerInputRecord[],
   shiftType: PdfShiftType,
 ): AnalysisResult {
-  const flags: PdfAttendanceFlag[] = [];
-
-  if (shiftType === 'on_call' || shiftType === 'online' || shiftType === 'unscheduled') {
-    return {
-      firstCheckIn: null,
-      lastCheckOut: null,
-      totalHours: null,
-      recordsCount: records.length,
-      status: 'exempt',
-      flags,
-    };
-  }
-
-  if (records.length === 0) {
-    return {
-      firstCheckIn: null,
-      lastCheckOut: null,
-      totalHours: null,
-      recordsCount: 0,
-      status: 'absent',
-      flags,
-    };
-  }
-
+  // 1. Compute the punch summary first — it's needed for every branch
+  //    except absent / no_visit, and the work duplicates otherwise.
   const checkIns = records
     .filter((r) => r.punchType === 'check_in')
     .map((r) => r.recordTime)
@@ -68,70 +55,162 @@ export function analyzeDay(
     .map((r) => r.recordTime)
     .sort();
 
-  if (records.length > 2) flags.push('multiple_entries');
+  const firstCheckIn = checkIns[0] ?? null;
+  const lastCheckOut = checkOuts[checkOuts.length - 1] ?? null;
+  const totalHours =
+    firstCheckIn && lastCheckOut
+      ? round2(computeHours(firstCheckIn, lastCheckOut, shiftType))
+      : null;
 
-  if (checkIns.length > 0 && checkOuts.length === 0) {
-    flags.push('missing_checkout');
+  const baseFlags: PdfAttendanceFlag[] = [];
+  if (records.length > 2) baseFlags.push('multiple_entries');
+
+  // 2. Branch on shift type.
+  switch (shiftType) {
+    case 'on_call':
+      return determineOnCallStatus(records, firstCheckIn, lastCheckOut, totalHours, baseFlags);
+    case 'online':
+      return {
+        firstCheckIn,
+        lastCheckOut,
+        totalHours,
+        recordsCount: records.length,
+        status: 'online',
+        flags: baseFlags,
+      };
+    case 'unscheduled':
+      return {
+        firstCheckIn,
+        lastCheckOut,
+        totalHours,
+        recordsCount: records.length,
+        status: 'unscheduled',
+        flags: baseFlags,
+      };
+    case 'morning':
+    case 'evening':
+    case 'night':
+    case 'rotating':
+    default:
+      return determineRegularStatus(records, firstCheckIn, lastCheckOut, totalHours, baseFlags);
+  }
+}
+
+function determineRegularStatus(
+  records: AnalyzerInputRecord[],
+  firstCheckIn: string | null,
+  lastCheckOut: string | null,
+  totalHours: number | null,
+  baseFlags: PdfAttendanceFlag[],
+): AnalysisResult {
+  if (records.length === 0) {
     return {
-      firstCheckIn: checkIns[0],
+      firstCheckIn: null,
+      lastCheckOut: null,
+      totalHours: null,
+      recordsCount: 0,
+      status: 'absent',
+      flags: baseFlags,
+    };
+  }
+  if (firstCheckIn && !lastCheckOut) {
+    return {
+      firstCheckIn,
       lastCheckOut: null,
       totalHours: null,
       recordsCount: records.length,
       status: 'check_in_only',
-      flags,
+      flags: [...baseFlags, 'missing_checkout'],
     };
   }
-
-  if (checkOuts.length > 0 && checkIns.length === 0) {
-    flags.push('missing_checkin');
+  if (!firstCheckIn && lastCheckOut) {
     return {
       firstCheckIn: null,
-      lastCheckOut: checkOuts[checkOuts.length - 1],
+      lastCheckOut,
       totalHours: null,
       recordsCount: records.length,
       status: 'check_out_only',
-      flags,
+      flags: [...baseFlags, 'missing_checkin'],
     };
   }
-
-  const firstIn = checkIns[0];
-  const lastOut = checkOuts[checkOuts.length - 1];
-  const hours = computeHours(firstIn, lastOut, shiftType);
-
-  if (hours < MIN_REQUIRED_HOURS) {
-    flags.push('less_than_8h');
+  if (totalHours !== null && totalHours < MIN_REQUIRED_HOURS) {
     return {
-      firstCheckIn: firstIn,
-      lastCheckOut: lastOut,
-      totalHours: round2(hours),
+      firstCheckIn,
+      lastCheckOut,
+      totalHours,
       recordsCount: records.length,
       status: 'incomplete_hours',
-      flags,
+      flags: [...baseFlags, 'less_than_8h'],
     };
   }
-
   return {
-    firstCheckIn: firstIn,
-    lastCheckOut: lastOut,
-    totalHours: round2(hours),
+    firstCheckIn,
+    lastCheckOut,
+    totalHours,
     recordsCount: records.length,
     status: 'present',
-    flags,
+    flags: baseFlags,
   };
 }
 
-/** Compute decimal-hour duration from "HH:mm" → "HH:mm". */
+function determineOnCallStatus(
+  records: AnalyzerInputRecord[],
+  firstCheckIn: string | null,
+  lastCheckOut: string | null,
+  totalHours: number | null,
+  baseFlags: PdfAttendanceFlag[],
+): AnalysisResult {
+  if (records.length === 0) {
+    return {
+      firstCheckIn: null,
+      lastCheckOut: null,
+      totalHours: null,
+      recordsCount: 0,
+      status: 'on_call_no_visit',
+      flags: baseFlags,
+    };
+  }
+  if (firstCheckIn && !lastCheckOut) {
+    return {
+      firstCheckIn,
+      lastCheckOut: null,
+      totalHours: null,
+      recordsCount: records.length,
+      status: 'on_call_check_in_only',
+      flags: [...baseFlags, 'missing_checkout'],
+    };
+  }
+  if (!firstCheckIn && lastCheckOut) {
+    return {
+      firstCheckIn: null,
+      lastCheckOut,
+      totalHours: null,
+      recordsCount: records.length,
+      status: 'on_call_check_out_only',
+      flags: [...baseFlags, 'missing_checkin'],
+    };
+  }
+  // Both punches present — record hours but NEVER add the <8h flag.
+  return {
+    firstCheckIn,
+    lastCheckOut,
+    totalHours,
+    recordsCount: records.length,
+    status: 'on_call_present',
+    flags: baseFlags,
+  };
+}
+
+/** Decimal-hour duration from "HH:mm" → "HH:mm". Wraps midnight when needed. */
 function computeHours(checkIn: string, checkOut: string, shift: PdfShiftType): number {
   const inMin = toMinutes(checkIn);
   let outMin = toMinutes(checkOut);
   if (outMin < inMin) {
-    // Crosses midnight. Always treat as next-day for night shift; for other
-    // shifts this can also happen if the biometric system records 00:xx as
-    // the closing punch — same fix applies.
+    // Crosses midnight — common for night shifts but also happens when the
+    // biometric system records 00:xx as the closing punch.
     outMin += 24 * 60;
   }
-  // Suppress unused-warning in strict modes — the param documents intent.
-  void shift;
+  void shift; // accepted for documentation; midnight-wrap rule is uniform
   return (outMin - inMin) / 60;
 }
 

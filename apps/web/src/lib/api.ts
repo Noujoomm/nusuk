@@ -663,4 +663,6 @@ export const attendanceApi = {
   },
   listUploads: () => api.get('/attendance/uploads'),
   getReport: (uploadId: string) => api.get(`/attendance/uploads/${uploadId}/report`),
+  reanalyze: (uploadId: string) => api.post(`/attendance/uploads/${uploadId}/reanalyze`, null, { timeout: 60000 }),
+  reanalyzeAll: () => api.post('/attendance/admin/reanalyze-all', null, { timeout: 300000 }),
 };

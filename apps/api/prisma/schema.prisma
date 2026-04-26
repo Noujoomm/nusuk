@@ -1818,12 +1818,29 @@ enum PdfShiftType {
 }
 
 enum PdfAttendanceStatus {
+  // Regular employees (morning / evening / night shifts)
   present // داوم بشكل كامل (≥ 8 ساعات + دخول وخروج)
-  incomplete_hours // داوم لكن أقل من 8 ساعات
-  check_in_only // دخول بدون خروج
-  check_out_only // خروج بدون دخول
-  absent // غايب (ما عنده أي بصمة)
-  exempt // معفى (On Call / Online / Unscheduled)
+  incomplete_hours // داوم لكن أقل من 8 ساعات ⚠
+  check_in_only // دخول بدون خروج ⚠
+  check_out_only // خروج بدون دخول ⚠
+  absent // غايب — يدخل خطاب الغياب الرسمي
+
+  // On Call employees — punches & hours are recorded but they are NEVER
+  // counted as absent and NEVER trigger the "<8 hours" alert.
+  on_call_present // حضر وانصرف (الساعات تُحسب وتُعرض)
+  on_call_no_visit // ما حضر اليوم — طبيعي، ليس غياباً
+  on_call_check_in_only // دخول بدون خروج ⚠ (يبقى تنبيه للمراجعة)
+  on_call_check_out_only // خروج بدون دخول ⚠
+
+  // Other special shifts
+  online // أونلاين / عن بعد
+  unscheduled // بدون وقت محدد
+
+  // ⚠ Deprecated — kept ONLY so old rows written before the enum split
+  // remain valid. Re-analyze (Phase 2) replaces every row that still uses
+  // this with one of the more specific values above. Remove in a later
+  // migration once `SELECT count(*) … WHERE status='exempt'` returns 0.
+  exempt
 }
 
 enum PdfAttendanceFlag {

@@ -273,4 +273,89 @@ export class PdfUploadService {
       },
     });
   }
+
+  /**
+   * Recompute every DailySummary for a single past upload using the CURRENT
+   * analyzer logic. Used after deploying analyzer changes that affect status
+   * mapping (e.g. the on_call split that replaces the deprecated `exempt`).
+   *
+   * Records and matches are left untouched — only summaries are rewritten.
+   */
+  async reanalyze(uploadId: string) {
+    const upload = await this.prisma.pdfAttendanceUpload.findUnique({
+      where: { id: uploadId },
+      select: { id: true, reportDate: true },
+    });
+    if (!upload) throw new NotFoundException('الرفعة غير موجودة');
+
+    const employees = await this.prisma.pdfAttendanceEmployee.findMany({
+      where: { isActive: true },
+      select: { id: true, shiftType: true },
+    });
+
+    const records = await this.prisma.pdfAttendanceRecord.findMany({
+      where: { uploadId, isMatched: true },
+      select: { employeeId: true, recordTime: true, punchType: true },
+    });
+
+    const recordsByEmployee = new Map<string, Array<{ recordTime: string; punchType: 'check_in' | 'check_out' }>>();
+    for (const r of records) {
+      if (!r.employeeId) continue;
+      const list = recordsByEmployee.get(r.employeeId) ?? [];
+      list.push({ recordTime: r.recordTime, punchType: r.punchType as 'check_in' | 'check_out' });
+      recordsByEmployee.set(r.employeeId, list);
+    }
+
+    let updated = 0;
+    let created = 0;
+
+    await this.prisma.$transaction(async (tx) => {
+      // Wipe and recreate the summaries for this upload — simpler and safer
+      // than per-row diffs when the analyzer's status set has expanded.
+      await tx.pdfDailyAttendanceSummary.deleteMany({ where: { uploadId } });
+
+      const data: Prisma.PdfDailyAttendanceSummaryUncheckedCreateInput[] = [];
+      for (const emp of employees) {
+        const empRecords = recordsByEmployee.get(emp.id) ?? [];
+        const analysis = analyzeDay(empRecords, emp.shiftType as PdfShiftType);
+        data.push({
+          uploadId,
+          employeeId: emp.id,
+          reportDate: upload.reportDate,
+          firstCheckIn: analysis.firstCheckIn,
+          lastCheckOut: analysis.lastCheckOut,
+          totalHours: analysis.totalHours,
+          recordsCount: analysis.recordsCount,
+          status: analysis.status,
+          flags: analysis.flags,
+        });
+      }
+      if (data.length > 0) {
+        await tx.pdfDailyAttendanceSummary.createMany({ data });
+        created = data.length;
+      }
+    }, { timeout: 60000 });
+
+    this.logger.log(`Re-analyzed upload=${uploadId}: ${created} summaries written (${updated} updated)`);
+    return { uploadId, summariesWritten: created };
+  }
+
+  /** Re-analyze every past upload — admin maintenance after analyzer changes. */
+  async reanalyzeAll() {
+    const uploads = await this.prisma.pdfAttendanceUpload.findMany({
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const results: Array<{ uploadId: string; summariesWritten: number }> = [];
+    for (const u of uploads) {
+      try {
+        const r = await this.reanalyze(u.id);
+        results.push(r);
+      } catch (err: any) {
+        this.logger.error(`Re-analyze failed for upload=${u.id}: ${err.message}`);
+        results.push({ uploadId: u.id, summariesWritten: -1 });
+      }
+    }
+    return { totalUploads: uploads.length, results };
+  }
 }

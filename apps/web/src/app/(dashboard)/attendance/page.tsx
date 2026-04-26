@@ -11,11 +11,13 @@ import {
   Loader2,
   Users,
   Calendar,
-  Clock,
   AlertTriangle,
   XCircle,
   Coffee,
   HelpCircle,
+  Phone,
+  Wifi,
+  RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/stores/auth';
@@ -44,7 +46,13 @@ type AttendanceStatus =
   | 'check_in_only'
   | 'check_out_only'
   | 'absent'
-  | 'exempt';
+  | 'on_call_present'
+  | 'on_call_no_visit'
+  | 'on_call_check_in_only'
+  | 'on_call_check_out_only'
+  | 'online'
+  | 'unscheduled'
+  | 'exempt'; // legacy — re-analyze replaces it
 
 interface DailySummary {
   id: string;
@@ -80,22 +88,38 @@ interface DailyReport {
   unmatched: UnmatchedRecord[];
 }
 
-const STATUS_META: Record<AttendanceStatus, { label: string; cls: string; Icon: any }> = {
-  present:          { label: 'حاضر',           cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', Icon: CheckCircle },
-  incomplete_hours: { label: 'أقل من 8 ساعات', cls: 'bg-amber-500/20 text-amber-300 border-amber-500/30',       Icon: AlertTriangle },
-  check_in_only:    { label: 'بدون انصراف',    cls: 'bg-orange-500/20 text-orange-300 border-orange-500/30',    Icon: AlertTriangle },
-  check_out_only:   { label: 'بدون حضور',      cls: 'bg-orange-500/20 text-orange-300 border-orange-500/30',    Icon: AlertTriangle },
-  absent:           { label: 'غائب',           cls: 'bg-red-500/20 text-red-300 border-red-500/30',             Icon: XCircle },
-  exempt:           { label: 'معفى',           cls: 'bg-slate-500/20 text-slate-300 border-slate-500/30',       Icon: Coffee },
+const STATUS_META: Record<
+  AttendanceStatus,
+  { label: string; cls: string; Icon: any; group: 'regular' | 'on_call' | 'other' }
+> = {
+  present:                { label: 'حاضر',                cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', Icon: CheckCircle,    group: 'regular' },
+  incomplete_hours:       { label: 'أقل من 8 ساعات',      cls: 'bg-amber-500/20 text-amber-300 border-amber-500/30',       Icon: AlertTriangle,  group: 'regular' },
+  check_in_only:          { label: 'دخول بدون خروج',      cls: 'bg-orange-500/20 text-orange-300 border-orange-500/30',    Icon: AlertTriangle,  group: 'regular' },
+  check_out_only:         { label: 'خروج بدون دخول',      cls: 'bg-orange-500/20 text-orange-300 border-orange-500/30',    Icon: AlertTriangle,  group: 'regular' },
+  absent:                 { label: 'غائب',                cls: 'bg-red-500/20 text-red-300 border-red-500/30',             Icon: XCircle,        group: 'regular' },
+  on_call_present:        { label: 'On Call — حضر',       cls: 'bg-sky-500/20 text-sky-300 border-sky-500/30',             Icon: Phone,          group: 'on_call' },
+  on_call_no_visit:       { label: 'On Call — لم يحضر',   cls: 'bg-slate-500/20 text-slate-300 border-slate-500/30',       Icon: Phone,          group: 'on_call' },
+  on_call_check_in_only:  { label: 'On Call — بدون خروج', cls: 'bg-amber-500/20 text-amber-300 border-amber-500/30',       Icon: AlertTriangle,  group: 'on_call' },
+  on_call_check_out_only: { label: 'On Call — بدون دخول', cls: 'bg-amber-500/20 text-amber-300 border-amber-500/30',       Icon: AlertTriangle,  group: 'on_call' },
+  online:                 { label: 'أونلاين',             cls: 'bg-purple-500/20 text-purple-300 border-purple-500/30',    Icon: Wifi,           group: 'other' },
+  unscheduled:            { label: 'بدون وقت محدد',       cls: 'bg-slate-500/20 text-slate-300 border-slate-500/30',       Icon: Coffee,         group: 'other' },
+  exempt:                 { label: 'معفى (قديم)',          cls: 'bg-slate-500/20 text-slate-300 border-slate-500/30',       Icon: Coffee,         group: 'other' },
 };
 
-const TAB_FILTERS: Array<{ key: 'all' | AttendanceStatus | 'flagged'; label: string }> = [
-  { key: 'all', label: 'الكل' },
-  { key: 'flagged', label: 'تنبيهات' },
-  { key: 'present', label: 'حاضر' },
-  { key: 'incomplete_hours', label: 'أقل من 8 ساعات' },
-  { key: 'absent', label: 'غائب' },
-  { key: 'exempt', label: 'معفى' },
+const ALERT_STATUSES: AttendanceStatus[] = [
+  'incomplete_hours',
+  'check_in_only',
+  'check_out_only',
+  'on_call_check_in_only',
+  'on_call_check_out_only',
+];
+
+const TAB_FILTERS: Array<{ key: string; label: string; match: (s: DailySummary) => boolean }> = [
+  { key: 'all',      label: 'الكل',         match: () => true },
+  { key: 'alerts',   label: 'تنبيهات ⚠',    match: (s) => ALERT_STATUSES.includes(s.status) || (s.flags?.length ?? 0) > 0 },
+  { key: 'present',  label: 'حاضر',         match: (s) => s.status === 'present' },
+  { key: 'absent',   label: 'غائب',         match: (s) => s.status === 'absent' },
+  { key: 'on_call',  label: 'On Call 📱',    match: (s) => s.status.startsWith('on_call_') },
 ];
 
 export default function AttendancePage() {
@@ -112,9 +136,9 @@ export default function AttendancePage() {
 
   const [report, setReport] = useState<DailyReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
-  const [filter, setFilter] = useState<typeof TAB_FILTERS[number]['key']>('all');
+  const [reanalyzing, setReanalyzing] = useState(false);
+  const [filter, setFilter] = useState('all');
 
-  // ─── Excel seeder ────────────────────────────────────────────────────
   const handleSeedFile = useCallback(async (file: File) => {
     const ext = file.name.toLowerCase().split('.').pop();
     if (ext !== 'xlsx' && ext !== 'xls') {
@@ -140,7 +164,6 @@ export default function AttendancePage() {
     }
   }, []);
 
-  // ─── PDF upload ──────────────────────────────────────────────────────
   const loadReport = useCallback(async (uploadId: string) => {
     setReportLoading(true);
     try {
@@ -182,6 +205,21 @@ export default function AttendancePage() {
     }
   }, [loadReport]);
 
+  const handleReanalyze = useCallback(async () => {
+    if (!report?.upload.id) return;
+    setReanalyzing(true);
+    const tid = toast.loading('جارٍ إعادة تحليل الرفعة…');
+    try {
+      const { data } = await attendanceApi.reanalyze(report.upload.id);
+      toast.success(`تم تحديث ${data.summariesWritten} ملخص`, { id: tid });
+      await loadReport(report.upload.id);
+    } catch {
+      toast.error('فشل إعادة التحليل', { id: tid });
+    } finally {
+      setReanalyzing(false);
+    }
+  }, [report, loadReport]);
+
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
@@ -191,23 +229,29 @@ export default function AttendancePage() {
     );
   }
 
-  // ─── Counts and filter ───────────────────────────────────────────────
-  const counts = {
-    all: report?.summaries.length ?? 0,
-    present: report?.summaries.filter((s) => s.status === 'present').length ?? 0,
-    incomplete_hours: report?.summaries.filter((s) => s.status === 'incomplete_hours').length ?? 0,
-    absent: report?.summaries.filter((s) => s.status === 'absent').length ?? 0,
-    exempt: report?.summaries.filter((s) => s.status === 'exempt').length ?? 0,
-    flagged: report?.summaries.filter((s) => (s.flags?.length ?? 0) > 0 || ['check_in_only', 'check_out_only', 'incomplete_hours'].includes(s.status)).length ?? 0,
+  // ─── Group counts ────────────────────────────────────────────────────
+  const summaries = report?.summaries ?? [];
+  const regular = {
+    total:           summaries.filter((s) => STATUS_META[s.status]?.group === 'regular').length,
+    present:         summaries.filter((s) => s.status === 'present').length,
+    incompleteHours: summaries.filter((s) => s.status === 'incomplete_hours').length,
+    checkInOnly:     summaries.filter((s) => s.status === 'check_in_only').length,
+    checkOutOnly:    summaries.filter((s) => s.status === 'check_out_only').length,
+    absent:          summaries.filter((s) => s.status === 'absent').length,
   };
+  const onCall = {
+    total:        summaries.filter((s) => STATUS_META[s.status]?.group === 'on_call').length,
+    present:      summaries.filter((s) => s.status === 'on_call_present').length,
+    noVisit:      summaries.filter((s) => s.status === 'on_call_no_visit').length,
+    checkInOnly:  summaries.filter((s) => s.status === 'on_call_check_in_only').length,
+    checkOutOnly: summaries.filter((s) => s.status === 'on_call_check_out_only').length,
+  };
+  const tabCounts = TAB_FILTERS.reduce((acc, t) => {
+    acc[t.key] = summaries.filter(t.match).length;
+    return acc;
+  }, {} as Record<string, number>);
 
-  const filtered = report?.summaries.filter((s) => {
-    if (filter === 'all') return true;
-    if (filter === 'flagged') {
-      return (s.flags?.length ?? 0) > 0 || ['check_in_only', 'check_out_only', 'incomplete_hours'].includes(s.status);
-    }
-    return s.status === filter;
-  }) ?? [];
+  const filtered = summaries.filter(TAB_FILTERS.find((t) => t.key === filter)?.match ?? (() => true));
 
   return (
     <div className="space-y-6">
@@ -314,6 +358,38 @@ export default function AttendancePage() {
         )}
       </div>
 
+      {/* ─── Stats Cards (Regular | On Call) ─── */}
+      {report && !reportLoading && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="rounded-2xl bg-white/[0.03] backdrop-blur-xl border border-white/10 p-5">
+            <div className="flex items-center gap-2 mb-4 text-sm font-semibold text-gray-300">
+              <Users className="w-4 h-4 text-brand-400" />
+              الموظفون العاديون <span className="text-gray-500">({regular.total})</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <MiniStat label="حاضر"           value={regular.present}         tone="emerald" Icon={CheckCircle} />
+              <MiniStat label="غائب"            value={regular.absent}          tone="red"     Icon={XCircle} />
+              <MiniStat label="< 8 ساعات"        value={regular.incompleteHours} tone="amber"   Icon={AlertTriangle} />
+              <MiniStat label="بصمة ناقصة"     value={regular.checkInOnly + regular.checkOutOnly} tone="orange" Icon={AlertTriangle} />
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white/[0.03] backdrop-blur-xl border border-white/10 p-5">
+            <div className="flex items-center gap-2 mb-4 text-sm font-semibold text-gray-300">
+              <Phone className="w-4 h-4 text-sky-400" />
+              On Call <span className="text-gray-500">({onCall.total})</span>
+              <span className="text-[10px] text-gray-500 mr-auto">لا يدخلون الغياب أو تنبيه &lt;8 ساعات</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <MiniStat label="حضر"             value={onCall.present}      tone="sky"     Icon={CheckCircle} />
+              <MiniStat label="لم يحضر"         value={onCall.noVisit}      tone="slate"   Icon={Coffee} />
+              <MiniStat label="بدون خروج"       value={onCall.checkInOnly}  tone="amber"   Icon={AlertTriangle} />
+              <MiniStat label="بدون دخول"       value={onCall.checkOutOnly} tone="amber"   Icon={AlertTriangle} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── Daily Report Table ─── */}
       {reportLoading && (
         <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-12 flex justify-center">
@@ -328,9 +404,8 @@ export default function AttendancePage() {
               <Calendar className="w-5 h-5 text-brand-400" />
               <h3 className="font-semibold">تقرير {report.upload.reportDate}</h3>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {TAB_FILTERS.map((t) => {
-                const count = counts[t.key as keyof typeof counts] ?? 0;
                 const active = filter === t.key;
                 return (
                   <button
@@ -338,10 +413,19 @@ export default function AttendancePage() {
                     onClick={() => setFilter(t.key)}
                     className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${active ? 'bg-brand-500/30 text-brand-200 border border-brand-400/40' : 'bg-white/5 text-gray-400 border border-transparent hover:bg-white/10'}`}
                   >
-                    {t.label} <span className="opacity-60">({count})</span>
+                    {t.label} <span className="opacity-60">({tabCounts[t.key] ?? 0})</span>
                   </button>
                 );
               })}
+              <button
+                onClick={handleReanalyze}
+                disabled={reanalyzing}
+                className="text-xs px-3 py-1.5 rounded-lg bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 disabled:opacity-50 flex items-center gap-1.5"
+                title="إعادة حساب الـ statuses بالـ analyzer الحالي (مفيد بعد تحديثات النظام)"
+              >
+                <RefreshCw className={`w-3 h-3 ${reanalyzing ? 'animate-spin' : ''}`} />
+                إعادة تحليل
+              </button>
             </div>
           </div>
 
@@ -359,7 +443,7 @@ export default function AttendancePage() {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {filtered.map((s) => {
-                  const meta = STATUS_META[s.status];
+                  const meta = STATUS_META[s.status] ?? STATUS_META.unscheduled;
                   return (
                     <tr key={s.id} className="hover:bg-white/[0.02]">
                       <td className="px-4 py-3 text-gray-200">
@@ -368,7 +452,10 @@ export default function AttendancePage() {
                           <span className="text-xs text-gray-500 mr-2">#{s.employee.employeeNumber}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-400">{s.employee.track}{s.employee.trackDetail ? ` — ${s.employee.trackDetail}` : ''}</td>
+                      <td className="px-4 py-3 text-gray-400">
+                        {s.employee.track}
+                        {s.employee.trackDetail ? ` — ${s.employee.trackDetail}` : ''}
+                      </td>
                       <td className="px-4 py-3 text-gray-300 tabular-nums">{s.firstCheckIn ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-300 tabular-nums">{s.lastCheckOut ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-300 tabular-nums">{s.totalHours != null ? s.totalHours.toFixed(1) : '—'}</td>
@@ -383,7 +470,9 @@ export default function AttendancePage() {
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-gray-500 text-sm">لا توجد سجلات في هذا الفلتر</td>
+                    <td colSpan={6} className="px-4 py-12 text-center text-gray-500 text-sm">
+                      لا توجد سجلات في هذا الفلتر
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -394,7 +483,7 @@ export default function AttendancePage() {
             <div className="border-t border-white/10 p-5">
               <div className="flex items-center gap-2 text-sm font-semibold text-amber-300 mb-3">
                 <HelpCircle className="w-4 h-4" />
-                {report.unmatched.length} سجل لم تتم مطابقتها مع موظف مسجّل
+                {report.unmatched.length} سجل لم تتم مطابقته مع موظف مسجّل
               </div>
               <div className="rounded-lg bg-white/[0.02] border border-white/5 max-h-64 overflow-y-auto text-xs">
                 <table className="w-full">
@@ -508,6 +597,36 @@ function Stat({
     <div className="rounded-lg bg-white/[0.03] border border-white/5 p-3">
       <div className="text-xs text-gray-400">{label}</div>
       <div className={`text-2xl font-bold mt-1 ${accentClass}`}>{value}</div>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+  tone,
+  Icon,
+}: {
+  label: string;
+  value: number;
+  tone: 'emerald' | 'red' | 'amber' | 'orange' | 'sky' | 'slate';
+  Icon: any;
+}) {
+  const toneText: Record<string, string> = {
+    emerald: 'text-emerald-300',
+    red: 'text-red-300',
+    amber: 'text-amber-300',
+    orange: 'text-orange-300',
+    sky: 'text-sky-300',
+    slate: 'text-slate-300',
+  };
+  return (
+    <div className="rounded-lg bg-white/[0.03] border border-white/5 p-3 flex items-center gap-3">
+      <Icon className={`w-5 h-5 ${toneText[tone]}`} />
+      <div>
+        <div className="text-[11px] text-gray-400">{label}</div>
+        <div className={`text-xl font-bold tabular-nums ${toneText[tone]}`}>{value}</div>
+      </div>
     </div>
   );
 }

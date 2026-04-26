@@ -100,4 +100,25 @@ export class AttendanceController {
   async getReport(@Param('id') id: string) {
     return this.uploads.getDailyReport(id);
   }
+
+  /**
+   * Recompute every DailySummary for one upload using the current analyzer.
+   * Use this after deploying analyzer changes (e.g. the on_call status split).
+   */
+  @Post('uploads/:id/reanalyze')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async reanalyze(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    this.logger.log(`Re-analyze upload=${id} by user=${user.id}`);
+    return this.uploads.reanalyze(id);
+  }
+
+  /** Re-analyze every past upload. One-shot maintenance for analyzer migrations. */
+  @Post('admin/reanalyze-all')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async reanalyzeAll(@CurrentUser() user: { id: string }) {
+    this.logger.log(`Re-analyze ALL uploads by user=${user.id}`);
+    return this.uploads.reanalyzeAll();
+  }
 }
