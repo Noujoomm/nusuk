@@ -1891,13 +1891,40 @@ model PdfAttendanceUpload {
   status         String   @default("processed") // processed | failed
   errorMessage   String?  @map("error_message") @db.Text
 
+  // ─── Original-file persistence ────────────────────────────────────
+  // Stored as Bytes? in Postgres because Railway's filesystem is ephemeral
+  // (every deploy / restart wipes /tmp and the working dir). The same
+  // pattern is used by InvoiceAttachment / CustodyFundInvoice elsewhere in
+  // this schema. Nullable so historical rows uploaded before this column
+  // existed remain valid; new uploads MUST populate it.
+  mimeType     String  @default("application/pdf") @map("mime_type")
+  fileChecksum String? @map("file_checksum") // SHA-256 of fileData, set on upload
+  fileData     Bytes?  @map("file_data")
+
   records   PdfAttendanceRecord[]
   summaries PdfDailyAttendanceSummary[]
+  downloads PdfAttendanceFileDownload[]
 
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([reportDate])
   @@map("pdf_attendance_uploads")
+}
+
+/// Audit trail — one row per file download. Used to answer "who pulled this
+/// PDF and when" without needing application-level logging.
+model PdfAttendanceFileDownload {
+  id           String              @id @default(cuid())
+  uploadId     String              @map("upload_id")
+  upload       PdfAttendanceUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  downloadedBy String?             @map("downloaded_by")
+  ipAddress    String?             @map("ip_address")
+  userAgent    String?             @map("user_agent") @db.Text
+  downloadedAt DateTime            @default(now()) @map("downloaded_at")
+
+  @@index([uploadId])
+  @@index([downloadedAt])
+  @@map("pdf_attendance_file_downloads")
 }
 
 model PdfAttendanceRecord {

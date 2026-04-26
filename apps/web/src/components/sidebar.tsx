@@ -31,6 +31,7 @@ import {
   ClipboardList,
   Receipt,
   Fingerprint,
+  Files,
 } from 'lucide-react';
 import NotificationBell from '@/components/notifications/notification-bell';
 
@@ -55,6 +56,7 @@ const NAV_ITEMS = [
   { href: '/updates', label: 'التحديثات', icon: Activity, roles: ['admin', 'pm', 'track_lead', 'employee', 'hr'] },
   { href: '/support-services', label: 'خدمات المساندة', icon: Receipt, roles: ['admin', 'pm'] },
   { href: '/attendance', label: 'الحضور والانصراف', icon: Fingerprint, roles: ['admin'] },
+  { href: '/attendance/uploads', label: 'سجل ملفات الحضور', icon: Files, roles: ['admin'] },
   { href: '/users', label: 'المستخدمين', icon: Users, roles: ['admin'] },
   { href: '/system-export', label: 'النظام والنسخ', icon: Database, roles: ['admin'] },
 ];

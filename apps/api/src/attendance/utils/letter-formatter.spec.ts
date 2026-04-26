@@ -63,38 +63,42 @@ describe('deriveShortName', () => {
 describe('formatAbsenceLine', () => {
   const base = { employeeId: 'x', fullName: 'فراس فقيها', track: 'التوزيع' };
 
-  it('Test 2: single-day absence → "بتاريخ DD MONTH YYYY"', () => {
+  it('Test 2: single-day absence → name (track)، بتاريخ DD MONTH YYYY', () => {
     const a: AbsenceEntry = { ...base, absenceDates: [utc('2026-04-24')] };
-    expect(formatAbsenceLine(a)).toBe('فراس فقيها، بتاريخ 24 أبريل 2026.');
+    expect(formatAbsenceLine(a)).toBe('فراس فقيها (التوزيع)، بتاريخ 24 أبريل 2026.');
   });
 
-  it('Test 1: continuous range → "وذلك خلال الفترة من DD MONTH وحتى DD MONTH"', () => {
-    // 9 → 23 April, 15 consecutive days
+  it('Test 1: continuous range → name (track)، وذلك خلال الفترة من DD MONTH وحتى DD MONTH', () => {
     const dates = Array.from({ length: 15 }, (_, i) =>
       utc(`2026-04-${String(9 + i).padStart(2, '0')}`),
     );
     const a: AbsenceEntry = { ...base, absenceDates: dates };
     expect(formatAbsenceLine(a)).toBe(
-      'فراس فقيها، وذلك خلال الفترة من 9 أبريل وحتى 23 أبريل.',
+      'فراس فقيها (التوزيع)، وذلك خلال الفترة من 9 أبريل وحتى 23 أبريل.',
     );
   });
 
-  it('Test 3: 3 scattered dates → "بتواريخ: A، B، وC"', () => {
+  it('Test 3: 3 scattered dates → بتواريخ: A، B، وC', () => {
     const a: AbsenceEntry = {
       ...base,
       absenceDates: [utc('2026-04-09'), utc('2026-04-15'), utc('2026-04-22')],
     };
     expect(formatAbsenceLine(a)).toBe(
-      'فراس فقيها، بتواريخ: 9 أبريل، 15 أبريل، و22 أبريل.',
+      'فراس فقيها (التوزيع)، بتواريخ: 9 أبريل، 15 أبريل، و22 أبريل.',
     );
   });
 
-  it('2 scattered dates → "بتاريخَي A وB"', () => {
+  it('2 scattered dates → بتاريخَي A وB', () => {
     const a: AbsenceEntry = {
       ...base,
       absenceDates: [utc('2026-04-09'), utc('2026-04-15')],
     };
-    expect(formatAbsenceLine(a)).toBe('فراس فقيها، بتاريخَي 9 أبريل و15 أبريل.');
+    expect(formatAbsenceLine(a)).toBe('فراس فقيها (التوزيع)، بتاريخَي 9 أبريل و15 أبريل.');
+  });
+
+  it('omits the (track) suffix when track is empty', () => {
+    const a: AbsenceEntry = { ...base, track: '', absenceDates: [utc('2026-04-24')] };
+    expect(formatAbsenceLine(a)).toBe('فراس فقيها، بتاريخ 24 أبريل 2026.');
   });
 
   it('uses shortName when provided', () => {
@@ -104,7 +108,7 @@ describe('formatAbsenceLine', () => {
       shortName: 'فراس فقيها',
       absenceDates: [utc('2026-04-24')],
     };
-    expect(formatAbsenceLine(a)).toBe('فراس فقيها، بتاريخ 24 أبريل 2026.');
+    expect(formatAbsenceLine(a)).toBe('فراس فقيها (التوزيع)، بتاريخ 24 أبريل 2026.');
   });
 
   it('sorts dates before formatting', () => {
@@ -113,7 +117,7 @@ describe('formatAbsenceLine', () => {
       absenceDates: [utc('2026-04-22'), utc('2026-04-09'), utc('2026-04-15')],
     };
     expect(formatAbsenceLine(a)).toBe(
-      'فراس فقيها، بتواريخ: 9 أبريل، 15 أبريل، و22 أبريل.',
+      'فراس فقيها (التوزيع)، بتواريخ: 9 أبريل، 15 أبريل، و22 أبريل.',
     );
   });
 });
@@ -129,8 +133,8 @@ describe('buildLetter', () => {
         { employeeId: 'b', fullName: 'محمد المالكي', track: 'التوزيع', absenceDates: [utc('2026-04-17')] },
       ],
     });
-    expect(letter.text).toContain('فراس فقيها، بتاريخ 17 أبريل 2026.');
-    expect(letter.text).toContain('محمد المالكي، بتاريخ 17 أبريل 2026.');
+    expect(letter.text).toContain('فراس فقيها (التوزيع)، بتاريخ 17 أبريل 2026.');
+    expect(letter.text).toContain('محمد المالكي (التوزيع)، بتاريخ 17 أبريل 2026.');
     expect(letter.metadata.uniqueEmployees).toBe(2);
     expect(letter.metadata.totalAbsences).toBe(2);
   });
@@ -188,7 +192,7 @@ describe('buildLetter', () => {
     // user's intent — and is internally consistent (the spec's expected text had
     // "حتى 24 أبريل" in the range line which contradicts "absent through 23").
     expect(letter.text).toContain(
-      'فراس فقيها، وذلك خلال الفترة من 9 أبريل وحتى 23 أبريل.',
+      'فراس فقيها (التوزيع)، وذلك خلال الفترة من 9 أبريل وحتى 23 أبريل.',
     );
     expect(letter.text).toContain(
       'كما نود الإشارة إلى أنه لا توجد أي حالات غياب بتاريخ 24 أبريل.',

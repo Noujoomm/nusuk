@@ -676,4 +676,15 @@ export const attendanceApi = {
         ...(params.noteAboutLastDay != null ? { noteAboutLastDay: params.noteAboutLastDay ? 'true' : 'false' } : {}),
       },
     }),
+  // ─── File storage ───
+  listUploadsPaged: (params?: { from?: string; to?: string; page?: number; limit?: number }) =>
+    api.get('/attendance/uploads', { params }),
+  // Blob-fetch — needed because window.open() / <a href> bypass our auth
+  // header. Caller is expected to URL.createObjectURL the result.
+  downloadFile: (uploadId: string) =>
+    api.get(`/attendance/uploads/${uploadId}/download`, { responseType: 'blob', timeout: 60000 }),
+  previewFile: (uploadId: string) =>
+    api.get(`/attendance/uploads/${uploadId}/preview`, { responseType: 'blob', timeout: 60000 }),
+  deleteUpload: (uploadId: string) => api.delete(`/attendance/uploads/${uploadId}`),
+  downloadHistory: (uploadId: string) => api.get(`/attendance/uploads/${uploadId}/downloads`),
 };

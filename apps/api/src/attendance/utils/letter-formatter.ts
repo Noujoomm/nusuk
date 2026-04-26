@@ -98,13 +98,17 @@ export function buildLetter(ctx: LetterContext): GeneratedLetter {
 
 /**
  * Renders one employee's absence line. Auto-picks the form:
- *  - 1 date     → "{name}، بتاريخ {DD MONTH YYYY}."
- *  - continuous → "{name}، وذلك خلال الفترة من {DD MONTH} وحتى {DD MONTH}."
- *  - 2 separate → "{name}، بتاريخَي {DD MONTH} و{DD MONTH}."
- *  - 3+ separate→ "{name}، بتواريخ: {…}، {…}، و{…}."
+ *  - 1 date     → "{name} ({track})، بتاريخ {DD MONTH YYYY}."
+ *  - continuous → "{name} ({track})، وذلك خلال الفترة من {DD MONTH} وحتى {DD MONTH}."
+ *  - 2 separate → "{name} ({track})، بتاريخَي {DD MONTH} و{DD MONTH}."
+ *  - 3+ separate→ "{name} ({track})، بتواريخ: {…}، {…}، و{…}."
+ *
+ * The track in parentheses is appended only when present; missing track keeps
+ * the line clean ("{name}، بتاريخ …").
  */
 export function formatAbsenceLine(absence: AbsenceEntry): string {
-  const name = absence.shortName || absence.fullName;
+  const baseName = absence.shortName || absence.fullName;
+  const name = absence.track ? `${baseName} (${absence.track})` : baseName;
   const sorted = [...absence.absenceDates].sort((a, b) => a.getTime() - b.getTime());
 
   if (sorted.length === 1) {

@@ -1,6 +1,7 @@
-import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma.service';
 import { PDFParse } from 'pdf-parse';
+import { createHash } from 'crypto';
 import { cleanPdfText, extractReportDate, parsePunches, ParsedPunch } from '../utils/pdf-text-cleaner';
 import { matchEmployee, MatchCandidate } from '../utils/name-matcher';
 import { analyzeDay } from '../utils/analyzer';
@@ -48,6 +49,23 @@ export class PdfUploadService {
     if (parsed.length === 0) {
       throw new BadRequestException('لم يتم استخراج أي سجلات بصمة من الملف');
     }
+
+    // ─── 1b. Reject duplicates for the same report date ──────────────────
+    // The biometric system emits one PDF per day; re-uploading the same date
+    // would silently double-count records and break the daily summary.
+    // Caller must DELETE the prior upload first if they really want to redo.
+    const existing = await this.prisma.pdfAttendanceUpload.findFirst({
+      where: { reportDate, status: 'processed' },
+      select: { id: true, fileName: true },
+    });
+    if (existing) {
+      throw new ConflictException(
+        `يوجد ملف مرفوع مسبقاً بتاريخ ${reportDate.toISOString().slice(0, 10)} (${existing.fileName}). احذفه أولاً ثم أعد الرفع.`,
+      );
+    }
+
+    // ─── 1c. Hash for integrity check on later download ──────────────────
+    const fileChecksum = createHash('sha256').update(buffer).digest('hex');
 
     // ─── 2. Match against master list ──────────────────────────────────
     const employees = await this.prisma.pdfAttendanceEmployee.findMany({
@@ -108,6 +126,12 @@ export class PdfUploadService {
         data: {
           fileName,
           fileSize,
+          mimeType: 'application/pdf',
+          fileChecksum,
+          // Cast: Prisma typings expect Uint8Array<ArrayBuffer> exactly, but
+          // Node Buffer is Uint8Array<ArrayBufferLike>. The bytes are
+          // identical at runtime — the cast is safe.
+          fileData: buffer as any, // ← stored in Postgres so it survives Railway redeploys
           reportDate,
           uploadedBy,
           totalRecords: parsed.length,
@@ -258,19 +282,132 @@ export class PdfUploadService {
     };
   }
 
-  async listUploads() {
-    return this.prisma.pdfAttendanceUpload.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-      select: {
-        id: true,
-        fileName: true,
-        reportDate: true,
-        totalRecords: true,
-        matchedCount: true,
-        unmatchedCount: true,
-        createdAt: true,
+  /**
+   * Paginated list of past uploads. Each row carries a per-track absence
+   * breakdown so the history page can show "أين كانت الغيابات" at a glance
+   * without loading the full daily report.
+   */
+  async listUploads(query: {
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = Math.max(1, query.page ?? 1);
+    const limit = Math.min(100, Math.max(1, query.limit ?? 30));
+
+    const where: Prisma.PdfAttendanceUploadWhereInput = {};
+    if (query.from || query.to) {
+      where.reportDate = {};
+      if (query.from) where.reportDate.gte = new Date(`${query.from}T00:00:00.000Z`);
+      if (query.to) where.reportDate.lte = new Date(`${query.to}T00:00:00.000Z`);
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.pdfAttendanceUpload.findMany({
+        where,
+        orderBy: { reportDate: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          fileName: true,
+          fileSize: true,
+          reportDate: true,
+          status: true,
+          totalRecords: true,
+          matchedCount: true,
+          unmatchedCount: true,
+          fileChecksum: true,
+          uploadedBy: true,
+          createdAt: true,
+          _count: { select: { downloads: true } },
+        },
+      }),
+      this.prisma.pdfAttendanceUpload.count({ where }),
+    ]);
+
+    // Cheap per-track absence breakdown — one grouped query per upload set
+    // beats N+1, and the result is small (uploads × tracks).
+    const uploadIds = items.map((u) => u.id);
+    const breakdownRows = uploadIds.length
+      ? await this.prisma.pdfDailyAttendanceSummary.findMany({
+          where: { uploadId: { in: uploadIds }, status: 'absent' },
+          select: { uploadId: true, employee: { select: { track: true } } },
+        })
+      : [];
+
+    const trackBreakdownByUpload = new Map<string, Record<string, number>>();
+    for (const row of breakdownRows) {
+      const map = trackBreakdownByUpload.get(row.uploadId) ?? {};
+      const t = row.employee.track || 'غير محدد';
+      map[t] = (map[t] ?? 0) + 1;
+      trackBreakdownByUpload.set(row.uploadId, map);
+    }
+
+    return {
+      items: items.map((u) => ({
+        ...u,
+        absencesByTrack: trackBreakdownByUpload.get(u.id) ?? {},
+      })),
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
+  }
+
+  /**
+   * Returns the original PDF bytes + filename. Records the download in the
+   * audit table so we can later answer "who pulled this and when".
+   */
+  async downloadFile(
+    uploadId: string,
+    requestInfo: { userId?: string | null; ipAddress?: string; userAgent?: string },
+  ): Promise<{ buffer: Buffer; fileName: string; mimeType: string; checksum: string | null }> {
+    const upload = await this.prisma.pdfAttendanceUpload.findUnique({
+      where: { id: uploadId },
+      select: { fileName: true, mimeType: true, fileChecksum: true, fileData: true },
+    });
+    if (!upload) throw new NotFoundException('الرفعة غير موجودة');
+    if (!upload.fileData) {
+      throw new NotFoundException('الملف الأصلي غير محفوظ لهذه الرفعة (ربما تم رفعها قبل تفعيل التخزين)');
+    }
+
+    await this.prisma.pdfAttendanceFileDownload.create({
+      data: {
+        uploadId,
+        downloadedBy: requestInfo.userId ?? null,
+        ipAddress: requestInfo.ipAddress,
+        userAgent: requestInfo.userAgent?.slice(0, 1000), // cap absurdly long UA strings
       },
+    });
+
+    return {
+      buffer: Buffer.from(upload.fileData),
+      fileName: upload.fileName,
+      mimeType: upload.mimeType,
+      checksum: upload.fileChecksum,
+    };
+  }
+
+  /** Hard delete — drops Upload + cascades Records/Summaries/Downloads. */
+  async deleteUpload(uploadId: string): Promise<void> {
+    const exists = await this.prisma.pdfAttendanceUpload.findUnique({
+      where: { id: uploadId },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException('الرفعة غير موجودة');
+
+    await this.prisma.pdfAttendanceUpload.delete({ where: { id: uploadId } });
+    this.logger.log(`Deleted upload=${uploadId}`);
+  }
+
+  async getDownloadHistory(uploadId: string) {
+    return this.prisma.pdfAttendanceFileDownload.findMany({
+      where: { uploadId },
+      orderBy: { downloadedAt: 'desc' },
+      take: 100,
     });
   }
 

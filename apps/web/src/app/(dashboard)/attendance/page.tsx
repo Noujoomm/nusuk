@@ -21,10 +21,14 @@ import {
   Mail,
   Copy,
   Check,
+  Download,
+  Eye,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Link from 'next/link';
 import { useAuth } from '@/stores/auth';
 import { attendanceApi } from '@/lib/api';
+import { parseFilenameFromHeaders, triggerBrowserDownload } from '@/lib/download';
 
 interface SeedResult {
   totalRowsRead: number;
@@ -268,6 +272,38 @@ export default function AttendancePage() {
     }
   }, [letter]);
 
+  const handleDownloadOriginal = useCallback(async () => {
+    if (!report?.upload.id) return;
+    const tid = toast.loading('جارٍ تحميل الملف…');
+    try {
+      const res = await attendanceApi.downloadFile(report.upload.id);
+      // Pull the filename from Content-Disposition (RFC 5987) so we keep the
+      // original Arabic name. Falls back to the upload's fileName.
+      const fallback = `attendance-${report.upload.reportDate}.pdf`;
+      const filename = parseFilenameFromHeaders(res.headers, fallback);
+      triggerBrowserDownload(res.data, filename, 'application/pdf');
+      toast.success('تم التحميل ✓', { id: tid });
+    } catch {
+      toast.error('فشل تحميل الملف', { id: tid });
+    }
+  }, [report]);
+
+  const handlePreviewOriginal = useCallback(async () => {
+    if (!report?.upload.id) return;
+    const tid = toast.loading('جارٍ فتح المعاينة…');
+    try {
+      const res = await attendanceApi.previewFile(report.upload.id);
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      // Revoke after the new tab has had a chance to load the bytes.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      const w = window.open(url, '_blank');
+      if (!w) toast.error('فشل فتح نافذة جديدة — اسمح بالنوافذ المنبثقة', { id: tid });
+      else toast.dismiss(tid);
+    } catch {
+      toast.error('فشل المعاينة', { id: tid });
+    }
+  }, [report]);
+
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
@@ -303,14 +339,23 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-3">
-          <Fingerprint className="w-7 h-7 text-brand-400" />
-          الحضور والانصراف
-        </h1>
-        <p className="text-gray-400 mt-1">
-          إدارة بيانات الحضور والانصراف اليومي وتوليد التقارير الرسمية
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-3">
+            <Fingerprint className="w-7 h-7 text-brand-400" />
+            الحضور والانصراف
+          </h1>
+          <p className="text-gray-400 mt-1">
+            إدارة بيانات الحضور والانصراف اليومي وتوليد التقارير الرسمية
+          </p>
+        </div>
+        <Link
+          href="/attendance/uploads"
+          className="text-xs px-3 py-2 rounded-lg bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 flex items-center gap-1.5"
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5" />
+          سجل الملفات السابقة
+        </Link>
       </div>
 
       {/* ─── Excel Seeder ─── */}
@@ -465,6 +510,22 @@ export default function AttendancePage() {
                   </button>
                 );
               })}
+              <button
+                onClick={handlePreviewOriginal}
+                className="text-xs px-3 py-1.5 rounded-lg bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 flex items-center gap-1.5"
+                title="فتح ملف PDF الأصلي في نافذة جديدة"
+              >
+                <Eye className="w-3 h-3" />
+                معاينة
+              </button>
+              <button
+                onClick={handleDownloadOriginal}
+                className="text-xs px-3 py-1.5 rounded-lg bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 flex items-center gap-1.5"
+                title="تنزيل ملف PDF الأصلي بنفس الاسم"
+              >
+                <Download className="w-3 h-3" />
+                تنزيل
+              </button>
               <button
                 onClick={handleReanalyze}
                 disabled={reanalyzing}

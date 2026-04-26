@@ -2,8 +2,11 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Param,
   Query,
+  Req,
+  Res,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -13,6 +16,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { extname } from 'path';
+import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -93,8 +97,18 @@ export class AttendanceController {
   @Get('uploads')
   @UseGuards(RolesGuard)
   @Roles('admin')
-  async listUploads() {
-    return this.uploads.listUploads();
+  async listUploads(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.uploads.listUploads({
+      from,
+      to,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
   }
 
   @Get('uploads/:id/report')
@@ -102,6 +116,64 @@ export class AttendanceController {
   @Roles('admin')
   async getReport(@Param('id') id: string) {
     return this.uploads.getDailyReport(id);
+  }
+
+  /**
+   * Original PDF download. Returns the bytes with the original (Arabic)
+   * filename. Records the download in the audit table.
+   */
+  @Get('uploads/:id/download')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async downloadFile(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const file = await this.uploads.downloadFile(id, {
+      userId: user.id,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+    setFileResponseHeaders(res, file.fileName, file.mimeType, file.buffer.length, 'attachment');
+    if (file.checksum) res.setHeader('X-File-Checksum-SHA256', file.checksum);
+    return res.send(file.buffer);
+  }
+
+  /** Same bytes, but `Content-Disposition: inline` so the browser previews. */
+  @Get('uploads/:id/preview')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async previewFile(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const file = await this.uploads.downloadFile(id, {
+      userId: user.id,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+    setFileResponseHeaders(res, file.fileName, file.mimeType, file.buffer.length, 'inline');
+    return res.send(file.buffer);
+  }
+
+  @Delete('uploads/:id')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async deleteUpload(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    this.logger.log(`Deleting upload=${id} by user=${user.id}`);
+    await this.uploads.deleteUpload(id);
+    return { success: true };
+  }
+
+  @Get('uploads/:id/downloads')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async getDownloadHistory(@Param('id') id: string) {
+    return this.uploads.getDownloadHistory(id);
   }
 
   /**
@@ -163,4 +235,29 @@ export class AttendanceController {
       { noteAboutLastDay: noteAboutLastDay === 'true' },
     );
   }
+}
+
+/**
+ * Sets Content-Type / Content-Length / Content-Disposition with RFC 5987 UTF-8
+ * encoding so Arabic filenames (e.g. "السجلات_20260418111117_export.pdf")
+ * survive the browser download dialog.
+ */
+function setFileResponseHeaders(
+  res: Response,
+  fileName: string,
+  mimeType: string,
+  contentLength: number,
+  disposition: 'attachment' | 'inline',
+) {
+  // ASCII fallback for legacy clients — strip non-ASCII so the bare
+  // `filename=` directive doesn't choke validators.
+  const asciiFallback = fileName.replace(/[^\x20-\x7E]/g, '_') || 'attendance.pdf';
+  const encodedName = encodeURIComponent(fileName);
+  res.setHeader('Content-Type', mimeType);
+  res.setHeader('Content-Length', contentLength);
+  res.setHeader(
+    'Content-Disposition',
+    `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
+  );
+  res.setHeader('Cache-Control', 'private, no-cache');
 }
