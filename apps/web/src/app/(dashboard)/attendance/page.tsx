@@ -18,6 +18,9 @@ import {
   Phone,
   Wifi,
   RefreshCw,
+  Mail,
+  Copy,
+  Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/stores/auth';
@@ -88,6 +91,19 @@ interface DailyReport {
   unmatched: UnmatchedRecord[];
 }
 
+interface OfficialLetter {
+  text: string;
+  html: string;
+  metadata: {
+    generatedAt: string;
+    totalAbsences: number;
+    uniqueEmployees: number;
+    period: string;
+  };
+}
+
+const DEFAULT_RECIPIENT = 'الدكتور/ حسام فقيها';
+
 const STATUS_META: Record<
   AttendanceStatus,
   { label: string; cls: string; Icon: any; group: 'regular' | 'on_call' | 'other' }
@@ -138,6 +154,11 @@ export default function AttendancePage() {
   const [reportLoading, setReportLoading] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [filter, setFilter] = useState('all');
+
+  const [recipient, setRecipient] = useState(DEFAULT_RECIPIENT);
+  const [letter, setLetter] = useState<OfficialLetter | null>(null);
+  const [letterLoading, setLetterLoading] = useState(false);
+  const [letterCopied, setLetterCopied] = useState(false);
 
   const handleSeedFile = useCallback(async (file: File) => {
     const ext = file.name.toLowerCase().split('.').pop();
@@ -219,6 +240,33 @@ export default function AttendancePage() {
       setReanalyzing(false);
     }
   }, [report, loadReport]);
+
+  const handleGenerateLetter = useCallback(async () => {
+    if (!report?.upload.id) return;
+    setLetterLoading(true);
+    setLetter(null);
+    setLetterCopied(false);
+    try {
+      const { data } = await attendanceApi.dailyLetter(report.upload.id, recipient.trim() || undefined);
+      setLetter(data);
+    } catch {
+      toast.error('فشل توليد الخطاب');
+    } finally {
+      setLetterLoading(false);
+    }
+  }, [report, recipient]);
+
+  const handleCopyLetter = useCallback(async () => {
+    if (!letter) return;
+    try {
+      await navigator.clipboard.writeText(letter.text);
+      setLetterCopied(true);
+      toast.success('تم نسخ الخطاب بنجاح ✓');
+      setTimeout(() => setLetterCopied(false), 2500);
+    } catch {
+      toast.error('تعذّر النسخ — انسخ النص يدوياً من الصندوق');
+    }
+  }, [letter]);
 
   if (!isAdmin) {
     return (
@@ -508,6 +556,70 @@ export default function AttendancePage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Official Letter ─── */}
+      {report && !reportLoading && (
+        <div className="rounded-2xl bg-white/[0.03] backdrop-blur-xl border border-white/10 p-6">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="rounded-xl bg-amber-500/20 p-2.5">
+              <Mail className="w-5 h-5 text-amber-300" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-lg font-semibold">الخطاب الرسمي للغياب</h2>
+              <p className="text-sm text-gray-400 mt-0.5">
+                يحتوي فقط الموظفين بحالة "غائب" لتاريخ {report.upload.reportDate}.
+                موظفو On Call ومن لديه بصمة ناقصة لا يدخلون.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end mb-4">
+            <div>
+              <label htmlFor="recipient" className="block text-xs text-gray-400 mb-1.5">المرسل إليه</label>
+              <input
+                id="recipient"
+                type="text"
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                dir="rtl"
+                className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-400/50"
+              />
+            </div>
+            <button
+              onClick={handleGenerateLetter}
+              disabled={letterLoading}
+              className="rounded-lg bg-brand-500/30 border border-brand-400/40 text-brand-200 px-4 py-2 text-sm hover:bg-brand-500/40 disabled:opacity-50 flex items-center gap-2"
+            >
+              {letterLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              توليد الخطاب
+            </button>
+          </div>
+
+          {letter && (
+            <div className="space-y-3">
+              <div
+                dir="rtl"
+                className="rounded-xl bg-white/[0.05] border border-white/10 p-6 text-gray-100 leading-loose font-[IBM_Plex_Sans_Arabic] whitespace-pre-wrap text-sm"
+                dangerouslySetInnerHTML={{ __html: letter.html }}
+              />
+              <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-gray-500">
+                <span>
+                  {letter.metadata.uniqueEmployees > 0
+                    ? `${letter.metadata.uniqueEmployees} موظف · ${letter.metadata.totalAbsences} غياب`
+                    : 'لا توجد غيابات'}
+                </span>
+                <button
+                  onClick={handleCopyLetter}
+                  className="rounded-lg bg-white/5 border border-white/10 text-gray-300 px-3 py-1.5 text-xs hover:bg-white/10 flex items-center gap-1.5"
+                >
+                  {letterCopied ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                  {letterCopied ? 'تم النسخ ✓' : 'نسخ النص'}
+                </button>
               </div>
             </div>
           )}

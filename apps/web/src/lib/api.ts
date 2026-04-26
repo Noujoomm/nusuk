@@ -665,4 +665,15 @@ export const attendanceApi = {
   getReport: (uploadId: string) => api.get(`/attendance/uploads/${uploadId}/report`),
   reanalyze: (uploadId: string) => api.post(`/attendance/uploads/${uploadId}/reanalyze`, null, { timeout: 60000 }),
   reanalyzeAll: () => api.post('/attendance/admin/reanalyze-all', null, { timeout: 300000 }),
+  dailyLetter: (uploadId: string, recipientName?: string) =>
+    api.get(`/attendance/letters/daily/${uploadId}`, { params: recipientName ? { recipientName } : {} }),
+  rangeLetter: (params: { from: string; to: string; recipientName?: string; noteAboutLastDay?: boolean }) =>
+    api.get('/attendance/letters/range', {
+      params: {
+        from: params.from,
+        to: params.to,
+        ...(params.recipientName ? { recipientName: params.recipientName } : {}),
+        ...(params.noteAboutLastDay != null ? { noteAboutLastDay: params.noteAboutLastDay ? 'true' : 'false' } : {}),
+      },
+    }),
 };

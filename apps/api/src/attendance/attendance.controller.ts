@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Param,
+  Query,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -18,6 +19,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ExcelSeederService } from './services/excel-seeder.service';
 import { PdfUploadService } from './services/pdf-upload.service';
+import { LetterGeneratorService } from './services/letter-generator.service';
 
 const EXCEL_MAX_BYTES = 5 * 1024 * 1024;
 const PDF_MAX_BYTES = 10 * 1024 * 1024;
@@ -37,6 +39,7 @@ export class AttendanceController {
   constructor(
     private seeder: ExcelSeederService,
     private uploads: PdfUploadService,
+    private letters: LetterGeneratorService,
   ) {}
 
   @Post('employees/seed')
@@ -120,5 +123,44 @@ export class AttendanceController {
   async reanalyzeAll(@CurrentUser() user: { id: string }) {
     this.logger.log(`Re-analyze ALL uploads by user=${user.id}`);
     return this.uploads.reanalyzeAll();
+  }
+
+  /** Official Arabic absence letter for one daily upload. */
+  @Get('letters/daily/:uploadId')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async dailyLetter(
+    @Param('uploadId') uploadId: string,
+    @Query('recipientName') recipientName?: string,
+  ) {
+    return this.letters.generateDailyLetter(uploadId, recipientName);
+  }
+
+  /**
+   * Letter for a date range (e.g. 9 → 24 April).
+   *  GET /attendance/letters/range?from=2026-04-09&to=2026-04-24&noteAboutLastDay=true
+   */
+  @Get('letters/range')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async rangeLetter(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('recipientName') recipientName?: string,
+    @Query('noteAboutLastDay') noteAboutLastDay?: string,
+  ) {
+    if (!from || !to) {
+      throw new BadRequestException('يجب تحديد from و to (YYYY-MM-DD)');
+    }
+    // `from`/`to` arrive as YYYY-MM-DD; parse as UTC-midnight to align with
+    // how the daily-summary `reportDate @db.Date` rows are stored.
+    const start = new Date(`${from}T00:00:00.000Z`);
+    const end = new Date(`${to}T00:00:00.000Z`);
+    return this.letters.generateRangeLetter(
+      start,
+      end,
+      recipientName,
+      { noteAboutLastDay: noteAboutLastDay === 'true' },
+    );
   }
 }
