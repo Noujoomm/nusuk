@@ -5,8 +5,10 @@ import * as ExcelJS from 'exceljs';
 import { normalizeArabic } from '../utils/arabic-normalizer';
 import {
   HeaderKey,
+  CenterStr,
   cellString,
   cellTime,
+  deriveCenter,
   deriveTrackDetail,
   mapHeaders,
   parseShiftType,
@@ -34,6 +36,7 @@ interface EmployeeDraft {
   scheduledCheckOut: string | null;
   shiftType: PdfShiftType;
   worksByCharter: boolean;
+  center: CenterStr;
   source: 'summary' | 'subsheet';
 }
 
@@ -102,6 +105,7 @@ export class ExcelSeederService {
           scheduledCheckOut: draft.scheduledCheckOut,
           shiftType: draft.shiftType,
           worksByCharter: draft.worksByCharter,
+          center: draft.center,
           isActive: true,
         };
 
@@ -165,6 +169,7 @@ export class ExcelSeederService {
         scheduledCheckOut: cols.checkOut != null ? cellTime(row.getCell(cols.checkOut)) : null,
         shiftType: parseShiftType(cols.shift != null ? cellString(row.getCell(cols.shift)) : ''),
         worksByCharter: parseTruthy(cols.charter != null ? cellString(row.getCell(cols.charter)) : ''),
+        center: deriveCenter(trackFromSheetName, track),
         source,
       });
     });
@@ -184,6 +189,8 @@ export class ExcelSeederService {
       scheduledCheckOut: override.scheduledCheckOut ?? base.scheduledCheckOut,
       shiftType: override.shiftType !== 'morning' ? override.shiftType : base.shiftType,
       worksByCharter: override.worksByCharter || base.worksByCharter,
+      // Subsheet wins because سنوكِل لـ "التوزيع - مكة" أكثر من Sheet1 الإجمالي.
+      center: override.center !== 'shared' ? override.center : base.center,
       source: 'subsheet',
     };
   }

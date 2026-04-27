@@ -23,6 +23,8 @@ import {
   Check,
   Download,
   Eye,
+  ChevronDown,
+  MapPin,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
@@ -78,6 +80,8 @@ interface DailySummary {
     trackDetail: string | null;
     employeeNumber: string | null;
     shiftType: string;
+    center: 'makkah' | 'madinah' | 'shared' | null;
+    worksByCharter: boolean;
   };
 }
 
@@ -166,6 +170,8 @@ export default function AttendancePage() {
   const [letterCopied, setLetterCopied] = useState(false);
 
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [rosterOnly, setRosterOnly] = useState(true);
 
   const handleSeedFile = useCallback(async (file: File) => {
     const ext = file.name.toLowerCase().split('.').pop();
@@ -296,6 +302,29 @@ export default function AttendancePage() {
     setPreviewOpen(true);
   }, [report]);
 
+  const handleExport = useCallback(
+    async (scope: 'all' | 'track' | 'center', filter?: string) => {
+      if (!report?.upload.id) return;
+      setExportMenuOpen(false);
+      const tid = toast.loading('جارٍ تجهيز ملف Excel…');
+      try {
+        const res = await attendanceApi.exportXlsx(report.upload.id, scope, filter, rosterOnly);
+        const fallback = `الحضور_${report.upload.reportDate}.xlsx`;
+        const filename = parseFilenameFromHeaders(res.headers, fallback);
+        triggerBrowserDownload(
+          res.data,
+          filename,
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        );
+        toast.success('تم التحميل ✓', { id: tid });
+      } catch (err: any) {
+        const msg = err?.response?.data?.message || 'فشل التصدير';
+        toast.error(typeof msg === 'string' ? msg : 'فشل التصدير', { id: tid });
+      }
+    },
+    [report, rosterOnly],
+  );
+
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
@@ -306,7 +335,12 @@ export default function AttendancePage() {
   }
 
   // ─── Group counts ────────────────────────────────────────────────────
-  const summaries = report?.summaries ?? [];
+  const allSummaries = report?.summaries ?? [];
+  // الفلتر "ضمن الكراسة" مستقل ويُجمَّع مع الـ tab الحالي. كل العدّادات
+  // والإحصائيات تحت ينطبق عليها هذا الفلتر — حتى الأرقام تتحدّث مع التبديل.
+  const summaries = rosterOnly ? allSummaries.filter((s) => s.employee.worksByCharter) : allSummaries;
+  const rosterCount = allSummaries.filter((s) => s.employee.worksByCharter).length;
+  const outOfRosterCount = allSummaries.length - rosterCount;
   const regular = {
     total:           summaries.filter((s) => STATUS_META[s.status]?.group === 'regular').length,
     present:         summaries.filter((s) => s.status === 'present').length,
@@ -490,6 +524,22 @@ export default function AttendancePage() {
               <h3 className="font-semibold">تقرير {report.upload.reportDate}</h3>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setRosterOnly(!rosterOnly)}
+                className={`text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 border ${
+                  rosterOnly
+                    ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/40'
+                    : 'bg-white/5 text-gray-400 border-transparent hover:bg-white/10'
+                }`}
+                title={rosterOnly
+                  ? `عرض الموظفين ضمن الكراسة فقط (${rosterCount}). اضغط لإظهار الجميع.`
+                  : `عرض جميع الموظفين (${rosterCount + outOfRosterCount}). اضغط لإظهار من ضمن الكراسة فقط.`}
+              >
+                <span>{rosterOnly ? '✓' : '○'}</span>
+                <span>حسب الكراسة</span>
+                <span className="opacity-60">({rosterCount})</span>
+              </button>
+              <span className="w-px h-5 bg-white/10" />
               {TAB_FILTERS.map((t) => {
                 const active = filter === t.key;
                 return (
@@ -502,6 +552,14 @@ export default function AttendancePage() {
                   </button>
                 );
               })}
+              <ExportMenu
+                open={exportMenuOpen}
+                setOpen={setExportMenuOpen}
+                tracks={Array.from(new Set(summaries.map((s) => s.employee.track).filter(Boolean)))}
+                rosterOnly={rosterOnly}
+                setRosterOnly={setRosterOnly}
+                onExport={handleExport}
+              />
               <button
                 onClick={handlePreviewOriginal}
                 className="text-xs px-3 py-1.5 rounded-lg bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 flex items-center gap-1.5"
@@ -548,7 +606,17 @@ export default function AttendancePage() {
                   return (
                     <tr key={s.id} className="hover:bg-white/[0.02]">
                       <td className="px-4 py-3 text-gray-200">
-                        {s.employee.fullName}
+                        <span className="inline-flex items-center gap-1.5">
+                          {s.employee.worksByCharter && (
+                            <span
+                              className="text-emerald-400"
+                              title="ضمن الكراسة الرسمية"
+                            >
+                              ✓
+                            </span>
+                          )}
+                          {s.employee.fullName}
+                        </span>
                         {s.employee.employeeNumber && (
                           <span className="text-xs text-gray-500 mr-2">#{s.employee.employeeNumber}</span>
                         )}
@@ -799,6 +867,95 @@ function MiniStat({
         <div className="text-[11px] text-gray-400">{label}</div>
         <div className={`text-xl font-bold tabular-nums ${toneText[tone]}`}>{value}</div>
       </div>
+    </div>
+  );
+}
+
+function ExportMenu({
+  open,
+  setOpen,
+  tracks,
+  rosterOnly,
+  setRosterOnly,
+  onExport,
+}: {
+  open: boolean;
+  setOpen: (b: boolean) => void;
+  tracks: string[];
+  rosterOnly: boolean;
+  setRosterOnly: (b: boolean) => void;
+  onExport: (scope: 'all' | 'track' | 'center', filter?: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="text-xs px-3 py-1.5 rounded-lg bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 flex items-center gap-1.5"
+        title="تصدير التقرير إلى Excel"
+      >
+        <FileSpreadsheet className="w-3 h-3" />
+        تصدير Excel
+        <ChevronDown className="w-3 h-3" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute top-full mt-2 left-0 z-40 min-w-[260px] max-h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-[#0f1117] shadow-xl">
+            <label className="flex items-center gap-2 px-3 py-2.5 text-xs text-gray-200 hover:bg-white/5 cursor-pointer border-b border-white/5">
+              <input
+                type="checkbox"
+                checked={rosterOnly}
+                onChange={(e) => setRosterOnly(e.target.checked)}
+                className="rounded border-white/20 bg-white/5"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <span>الموظفون ضمن الكراسة فقط (✓)</span>
+            </label>
+            <div className="p-1.5">
+              <button
+                onClick={() => onExport('all')}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/5 rounded-md text-start"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                التقرير الشامل
+              </button>
+            </div>
+            <div className="border-t border-white/5 p-1.5">
+              <div className="px-3 py-1 text-[10px] uppercase text-gray-500 flex items-center gap-1.5">
+                <MapPin className="w-3 h-3" />
+                حسب المركز
+              </div>
+              {[
+                { key: 'makkah', label: 'مكة المكرمة' },
+                { key: 'madinah', label: 'المدينة المنورة' },
+                { key: 'shared', label: 'مشترك' },
+              ].map((c) => (
+                <button
+                  key={c.key}
+                  onClick={() => onExport('center', c.key)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/5 rounded-md text-start"
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            {tracks.length > 0 && (
+              <div className="border-t border-white/5 p-1.5">
+                <div className="px-3 py-1 text-[10px] uppercase text-gray-500">حسب المسار</div>
+                {tracks.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => onExport('track', t)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/5 rounded-md text-start"
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

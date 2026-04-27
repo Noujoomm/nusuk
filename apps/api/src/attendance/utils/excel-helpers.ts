@@ -109,6 +109,20 @@ export function deriveTrackDetail(sheetName: string | null | undefined): string 
   return sheetName.slice(dashIdx + 1).trim() || null;
 }
 
+export type CenterStr = 'makkah' | 'madinah' | 'shared';
+
+/**
+ * Derives the center (مكة / المدينة / مشترك) from a track string OR sheet
+ * name. Looks for the city name; falls back to "shared" for everything else
+ * (إدارة، استشاري، تدريب، قادة، خدمات مساندة، إلخ).
+ */
+export function deriveCenter(...sources: Array<string | null | undefined>): CenterStr {
+  const haystack = sources.filter(Boolean).join(' ');
+  if (/مكة|مكه/.test(haystack)) return 'makkah';
+  if (/المدينة|المدينه/.test(haystack)) return 'madinah';
+  return 'shared';
+}
+
 /**
  * Headers we look for. Matched by EXACT equality (after NFC + trim).
  *

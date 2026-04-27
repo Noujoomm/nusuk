@@ -24,6 +24,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ExcelSeederService } from './services/excel-seeder.service';
 import { PdfUploadService } from './services/pdf-upload.service';
 import { LetterGeneratorService } from './services/letter-generator.service';
+import { AttendanceExportService, ExportScope } from './services/attendance-export.service';
 import { fixMulterFilename } from '../common/fix-filename';
 import { setFileResponseHeaders } from '../common/utils/file-response.util';
 
@@ -46,6 +47,7 @@ export class AttendanceController {
     private seeder: ExcelSeederService,
     private uploads: PdfUploadService,
     private letters: LetterGeneratorService,
+    private exporter: AttendanceExportService,
   ) {}
 
   @Post('employees/seed')
@@ -237,5 +239,37 @@ export class AttendanceController {
       recipientName,
       { noteAboutLastDay: noteAboutLastDay === 'true' },
     );
+  }
+
+  /**
+   * تصدير تقرير حضور إلى Excel.
+   *  - scope=all   → ملخص شامل + pivot بالمسار + pivot بالمركز + sheet لكل مسار
+   *  - scope=track → فقط الموظفون في `filter` (اسم المسار)
+   *  - scope=center→ فقط المركز المحدد (makkah | madinah | shared)
+   */
+  @Get('uploads/:id/export.xlsx')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async exportXlsx(
+    @Param('id') id: string,
+    @Query('scope') scope: ExportScope = 'all',
+    @Query('filter') filter: string | undefined,
+    @Query('rosterOnly') rosterOnly: string | undefined,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.exporter.exportXlsx(
+      id,
+      scope,
+      filter,
+      rosterOnly === 'true' || rosterOnly === '1',
+    );
+    setFileResponseHeaders(
+      res,
+      filename,
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer.length,
+      'attachment',
+    );
+    return res.send(buffer);
   }
 }

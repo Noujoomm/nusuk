@@ -1852,6 +1852,14 @@ enum PdfAttendanceFlag {
   unregistered // موظف غير مسجل في Excel
 }
 
+// المركز الذي يعمل به الموظف. مشتق من اسم الـ sheet أو الـ track في الكراسة.
+// nullable لأن البيانات التاريخية رُفعت قبل إضافة هذا الحقل.
+enum PdfAttendanceCenter {
+  makkah // مكة المكرمة
+  madinah // المدينة المنورة
+  shared // مشترك (إدارة، استشاري، تدريب، قادة، خدمات مساندة، إلخ)
+}
+
 model PdfAttendanceEmployee {
   id                String       @id @default(cuid())
   employeeNumber    String?      @unique @map("employee_number")
@@ -1862,10 +1870,11 @@ model PdfAttendanceEmployee {
   phoneNumber       String?      @map("phone_number")
   scheduledCheckIn  String?      @map("scheduled_check_in") // "07:00"
   scheduledCheckOut String?      @map("scheduled_check_out") // "19:00"
-  shiftType         PdfShiftType @default(morning) @map("shift_type")
-  worksByCharter    Boolean      @default(false) @map("works_by_charter")
-  isActive          Boolean      @default(true) @map("is_active")
-  aliases           String[]     @default([])
+  shiftType         PdfShiftType         @default(morning) @map("shift_type")
+  worksByCharter    Boolean              @default(false) @map("works_by_charter")
+  isActive          Boolean              @default(true) @map("is_active")
+  aliases           String[]             @default([])
+  center            PdfAttendanceCenter? @map("center")
 
   records        PdfAttendanceRecord[]
   dailySummaries PdfDailyAttendanceSummary[]
@@ -1875,6 +1884,7 @@ model PdfAttendanceEmployee {
 
   @@index([normalizedName])
   @@index([track])
+  @@index([center])
   @@map("pdf_attendance_employees")
 }
 

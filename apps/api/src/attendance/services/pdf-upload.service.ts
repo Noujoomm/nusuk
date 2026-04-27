@@ -249,6 +249,8 @@ export class PdfUploadService {
             shiftType: true,
             scheduledCheckIn: true,
             scheduledCheckOut: true,
+            center: true,
+            worksByCharter: true,
           },
         },
       },

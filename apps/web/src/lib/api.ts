@@ -687,4 +687,19 @@ export const attendanceApi = {
     api.get(`/attendance/uploads/${uploadId}/preview`, { responseType: 'blob', timeout: 60000 }),
   deleteUpload: (uploadId: string) => api.delete(`/attendance/uploads/${uploadId}`),
   downloadHistory: (uploadId: string) => api.get(`/attendance/uploads/${uploadId}/downloads`),
+  exportXlsx: (
+    uploadId: string,
+    scope: 'all' | 'track' | 'center' = 'all',
+    filter?: string,
+    rosterOnly = false,
+  ) =>
+    api.get(`/attendance/uploads/${uploadId}/export.xlsx`, {
+      params: {
+        scope,
+        ...(filter ? { filter } : {}),
+        ...(rosterOnly ? { rosterOnly: 'true' } : {}),
+      },
+      responseType: 'blob',
+      timeout: 60000,
+    }),
 };
