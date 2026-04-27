@@ -5,11 +5,16 @@ import { Mic, Square, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { reportsApi } from '@/lib/api';
 
+export type ReportTypeStr = 'daily' | 'weekly' | 'monthly' | 'annual' | 'operational';
+
 export interface VoiceFillResult {
   transcription: string;
   detectedLanguage?: string;
   fields: {
     title: string;
+    type: ReportTypeStr | null;
+    trackName: string;
+    reportDate: string;
     achievements: string;
     kpiUpdates: string;
     challenges: string;

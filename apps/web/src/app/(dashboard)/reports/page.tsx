@@ -96,6 +96,36 @@ const TYPE_COLORS: Record<string, string> = {
   operational: 'bg-rose-500/20 text-rose-300',
 };
 
+/** تطبيع نص عربي للمقارنة المرنة: ا/أ/إ/آ → ا، ي/ى → ي، ة → ه، ولا تشكيل. */
+function normalizeArabic(s: string): string {
+  return (s || '')
+    .replace(/[ً-ٰٟ]/g, '') // تشكيل
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/[ىئ]/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * يطابق اسم مسار من الصوت على قائمة المسارات: تطابق كامل أولاً، ثم
+ * احتواء كامل، ثم احتواء بعد التطبيع. يُرجع id المسار أو null.
+ */
+function findTrackId(spoken: string, tracks: Track[]): string | null {
+  const target = normalizeArabic(spoken);
+  if (!target) return null;
+  // تطابق كامل
+  let hit = tracks.find((t) => normalizeArabic(t.nameAr) === target);
+  if (hit) return hit.id;
+  // المنطوق يحتوي اسم المسار أو العكس
+  hit = tracks.find((t) => {
+    const n = normalizeArabic(t.nameAr);
+    return n.includes(target) || target.includes(n);
+  });
+  return hit?.id ?? null;
+}
+
 const INITIAL_FORM: CreateReportForm = {
   trackId: '',
   type: 'daily',
@@ -280,22 +310,37 @@ export default function ReportsPage() {
   };
 
   /**
-   * يدمج الحقول المستخرجة من الصوت في النموذج الحالي. يحافظ على القيم
-   * المختارة مسبقاً (المسار، النوع، التاريخ) ولا يكتب على الحقول النصية إلا
-   * لو كان فيها محتوى مستخرج — حتى لو كان المستخدم سجّل ذكر بعض الحقول فقط
-   * لا نمسح ما كتبه يدوياً قبل بدء التسجيل.
+   * يدمج الحقول المستخرجة من الصوت في النموذج الحالي. لا يكتب على حقل إلا
+   * لو الموديل أرجع له قيمة فعلية — حتى لو كتب المستخدم شيئاً يدوياً قبل
+   * التسجيل لا نمسحه. المسار يُطابَق على القائمة الموجودة بمقارنة نصية
+   * مرنة (تطبيع الألف/الياء + احتواء جزئي).
    */
   const handleVoiceFilled = (result: VoiceFillResult) => {
+    const f = result.fields;
+    const matchedTrackId = f.trackName ? findTrackId(f.trackName, tracks) : null;
+    const validType = f.type && (TYPE_LABELS as any)[f.type] ? f.type : null;
+
     setForm((prev) => ({
       ...prev,
-      title: result.fields.title || prev.title,
-      achievements: result.fields.achievements || prev.achievements,
-      kpiUpdates: result.fields.kpiUpdates || prev.kpiUpdates,
-      challenges: result.fields.challenges || prev.challenges,
-      supportNeeded: result.fields.supportNeeded || prev.supportNeeded,
-      upcomingTasks: result.fields.upcomingTasks || prev.upcomingTasks,
-      notes: result.fields.notes || prev.notes,
+      trackId:        matchedTrackId  || prev.trackId,
+      type:           (validType as any) || prev.type,
+      reportDate:     f.reportDate    || prev.reportDate,
+      title:          f.title         || prev.title,
+      achievements:   f.achievements  || prev.achievements,
+      kpiUpdates:     f.kpiUpdates    || prev.kpiUpdates,
+      challenges:     f.challenges    || prev.challenges,
+      supportNeeded:  f.supportNeeded || prev.supportNeeded,
+      upcomingTasks:  f.upcomingTasks || prev.upcomingTasks,
+      notes:          f.notes         || prev.notes,
     }));
+
+    // ملاحظة للمستخدم لو ذكر مسار لم نتمكن من مطابقته
+    if (f.trackName && !matchedTrackId) {
+      toast(`لم نتمكّن من مطابقة المسار "${f.trackName}" مع القائمة — اخترْه يدوياً`, {
+        icon: '⚠️',
+        duration: 4000,
+      });
+    }
   };
 
   const handleFilesSelected = (files: FileList | File[]) => {
