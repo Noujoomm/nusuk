@@ -78,4 +78,36 @@ export class OpenAIService {
       throw error;
     }
   }
+
+  /**
+   * Transcribe an Arabic audio buffer using Whisper. The `prompt` hint
+   * (سياق العمل) helps Whisper bias toward business/PMO terminology rather
+   * than generic dictation, which substantially reduces mis-transcription
+   * for KPI numbers and project jargon.
+   */
+  async transcribeAudio(
+    buffer: Buffer,
+    options?: { fileName?: string; mimeType?: string; promptHint?: string },
+  ): Promise<{ text: string; language?: string }> {
+    const client = this.ensureClient();
+    // OpenAI SDK accepts a File-like with a `name`; Node's File polyfill is
+    // available since Node 20. Naming sets the extension Whisper uses to
+    // pick the decoder, so we prefer the original name when given.
+    const fileName = options?.fileName ?? 'audio.webm';
+    const mimeType = options?.mimeType ?? 'audio/webm';
+    const file = new File([new Uint8Array(buffer)], fileName, { type: mimeType });
+
+    const response = await client.audio.transcriptions.create({
+      file,
+      model: this.config.get('OPENAI_WHISPER_MODEL', 'whisper-1'),
+      language: 'ar',
+      prompt:
+        options?.promptHint ??
+        'تقرير عمل لمشروع بطاقة نسك يحتوي على إنجازات وتحديات ومؤشرات أداء وأرقام وتواريخ.',
+      response_format: 'verbose_json',
+    } as any);
+
+    const data = response as unknown as { text: string; language?: string };
+    return { text: data.text, language: data.language };
+  }
 }

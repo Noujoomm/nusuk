@@ -1,13 +1,14 @@
 import {
   Controller, Get, Post, Patch, Delete, Param, Body, Query,
-  UseGuards, UseInterceptors, UploadedFiles, Req, Res,
+  UseGuards, UseInterceptors, UploadedFile, UploadedFiles, Req, Res,
   BadRequestException, Logger,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage, memoryStorage } from 'multer';
 import { extname, join } from 'path';
 import { Request, Response } from 'express';
 import { ReportsService } from './reports.service';
+import { VoiceFillService } from './voice-fill.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -44,7 +45,33 @@ export class ReportsController {
   constructor(
     private reports: ReportsService,
     private audit: AuditService,
+    private voiceFill: VoiceFillService,
   ) {}
+
+  /**
+   * يستقبل تسجيل صوتي ويُرجع مقترحاً لحقول التقرير (transcription + fields).
+   * المستخدم يراجعها ويعدّلها في النموذج ثم يحفظ التقرير عبر POST العادي
+   * — لا حفظ تلقائي. الصوت لا يُخزّن (transcribe-then-discard).
+   */
+  @Post('voice-fill')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'track_lead')
+  @UseInterceptors(
+    FileInterceptor('audio', {
+      storage: memoryStorage(),
+      limits: { fileSize: 25 * 1024 * 1024 },
+    }),
+  )
+  async voiceFillReport(
+    @UploadedFile() audio: Express.Multer.File,
+    @CurrentUser() user: { id: string },
+  ) {
+    const result = await this.voiceFill.fillFromAudio(audio);
+    new Logger('ReportsController').log(
+      `voice-fill by user=${user.id} bytes=${audio?.size ?? 0} chars=${result.transcription.length}`,
+    );
+    return result;
+  }
 
   @Get()
   findAll(

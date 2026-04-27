@@ -9,6 +9,7 @@ import {
   Pencil, AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { VoiceFillButton, VoiceFillResult } from '@/components/reports/voice-fill-button';
 
 // ─── Types ───
 
@@ -276,6 +277,25 @@ export default function ReportsPage() {
 
   const updateForm = (field: keyof CreateReportForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  /**
+   * يدمج الحقول المستخرجة من الصوت في النموذج الحالي. يحافظ على القيم
+   * المختارة مسبقاً (المسار، النوع، التاريخ) ولا يكتب على الحقول النصية إلا
+   * لو كان فيها محتوى مستخرج — حتى لو كان المستخدم سجّل ذكر بعض الحقول فقط
+   * لا نمسح ما كتبه يدوياً قبل بدء التسجيل.
+   */
+  const handleVoiceFilled = (result: VoiceFillResult) => {
+    setForm((prev) => ({
+      ...prev,
+      title: result.fields.title || prev.title,
+      achievements: result.fields.achievements || prev.achievements,
+      kpiUpdates: result.fields.kpiUpdates || prev.kpiUpdates,
+      challenges: result.fields.challenges || prev.challenges,
+      supportNeeded: result.fields.supportNeeded || prev.supportNeeded,
+      upcomingTasks: result.fields.upcomingTasks || prev.upcomingTasks,
+      notes: result.fields.notes || prev.notes,
+    }));
   };
 
   const handleFilesSelected = (files: FileList | File[]) => {
@@ -589,10 +609,13 @@ export default function ReportsPage() {
       {/* Create Report Form */}
       {showForm && (
         <form onSubmit={handleSubmit} className="glass p-5 space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <FileText className="w-5 h-5 text-brand-400" />
-            {editingReport ? 'تعديل التقرير' : 'إنشاء تقرير جديد'}
-          </h2>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <FileText className="w-5 h-5 text-brand-400" />
+              {editingReport ? 'تعديل التقرير' : 'إنشاء تقرير جديد'}
+            </h2>
+            {!editingReport && <VoiceFillButton onFilled={handleVoiceFilled} />}
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Track */}

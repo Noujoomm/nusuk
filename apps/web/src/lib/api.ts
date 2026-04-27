@@ -230,6 +230,13 @@ export const reportsApi = {
   deleteAttachment: (attachmentId: string) => api.delete(`/reports/attachments/${attachmentId}`),
   downloadAttachment: (attachmentId: string) =>
     api.get(`/reports/attachments/${attachmentId}/download`, { responseType: 'blob' }),
+  // Voice → fields. Audio is transcribed (Whisper) and split into report
+  // fields (GPT-4o); the audio itself is not stored on the server.
+  voiceFill: (audio: Blob, fileName = 'recording.webm') => {
+    const form = new FormData();
+    form.append('audio', audio, fileName);
+    return api.post('/reports/voice-fill', form, { timeout: 120000 });
+  },
 };
 
 // ─── Files ───
