@@ -15,12 +15,14 @@ import {
   ArrowLeft,
   AlertTriangle,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/stores/auth';
 import { attendanceApi } from '@/lib/api';
 import { parseFilenameFromHeaders, triggerBrowserDownload } from '@/lib/download';
 import { PreviewDialog } from '@/components/attendance/preview-dialog';
+import { AnalysisDialog } from '@/components/attendance/analysis-dialog';
 
 interface UploadItem {
   id: string;
@@ -59,6 +61,10 @@ export default function UploadsHistoryPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<UploadItem | null>(null);
   const [previewItem, setPreviewItem] = useState<UploadItem | null>(null);
+  const [analysisItem, setAnalysisItem] = useState<UploadItem | null>(null);
+  // upload.id → has cached analysis. Bulk-checked when the page list loads
+  // (no per-row request needed).
+  const [hasAnalysis, setHasAnalysis] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,6 +76,19 @@ export default function UploadsHistoryPage() {
         limit: 30,
       });
       setData(data);
+      // Bulk-check which uploads already have a saved analysis so the
+      // sparkle badge can render without N requests.
+      const ids: string[] = (data?.items ?? []).map((u: UploadItem) => u.id);
+      if (ids.length > 0) {
+        try {
+          const res = await attendanceApi.hasAnalysisMany(ids);
+          setHasAnalysis(res.data || {});
+        } catch {
+          setHasAnalysis({});
+        }
+      } else {
+        setHasAnalysis({});
+      }
     } catch {
       toast.error('فشل تحميل سجل الرفعات');
     } finally {
@@ -250,6 +269,10 @@ export default function UploadsHistoryPage() {
                       <td className="px-4 py-3 text-gray-400 tabular-nums">{u._count.downloads}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
+                          <AnalysisActionButton
+                            onClick={() => setAnalysisItem(u)}
+                            hasAnalysis={!!hasAnalysis[u.id]}
+                          />
                           <ActionButton
                             onClick={() => handlePreview(u)}
                             disabled={busyId === u.id}
@@ -313,6 +336,24 @@ export default function UploadsHistoryPage() {
         onClose={() => setPreviewItem(null)}
       />
 
+      <AnalysisDialog
+        open={!!analysisItem}
+        uploadId={analysisItem?.id ?? null}
+        fileName={analysisItem?.fileName}
+        onClose={() => {
+          const closed = analysisItem;
+          setAnalysisItem(null);
+          // After first analysis the badge needs to flip on. Cheap re-check
+          // for that single id only.
+          if (closed) {
+            attendanceApi
+              .hasAnalysis(closed.id)
+              .then(({ data }) => setHasAnalysis((prev) => ({ ...prev, [closed.id]: !!data.exists })))
+              .catch(() => {});
+          }
+        }}
+      />
+
       {/* Delete Confirmation */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -349,6 +390,27 @@ export default function UploadsHistoryPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function AnalysisActionButton({
+  onClick,
+  hasAnalysis,
+}: {
+  onClick: () => void;
+  hasAnalysis: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={hasAnalysis ? 'عرض التحليل المحفوظ' : 'تحليل ذكي للملف'}
+      className="relative p-1.5 rounded-md border border-transparent transition-colors text-emerald-300/80 hover:text-emerald-200 hover:bg-emerald-500/10 hover:border-emerald-500/20"
+    >
+      <Sparkles className="w-3.5 h-3.5" />
+      {hasAnalysis && (
+        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border border-slate-900" />
+      )}
+    </button>
   );
 }
 

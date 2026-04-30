@@ -116,6 +116,51 @@ export const tracksApi = {
     api.post('/tracks/file-extract', { content, trackId, fileName }, { timeout: 300000, maxBodyLength: 500 * 1024 * 1024, maxContentLength: 500 * 1024 * 1024 }),
 };
 
+// ─── Booklets (within Tracks) ───
+export const bookletsApi = {
+  listByTrack: (trackId: string) => api.get(`/tracks/${trackId}/booklets`),
+  create: (data: { trackId: string; code: string; nameAr: string; nameEn?: string; description?: string; sortOrder?: number }) =>
+    api.post('/tracks/booklets', data),
+  update: (id: string, data: any) => api.patch(`/tracks/booklets/${id}`, data),
+  delete: (id: string) => api.delete(`/tracks/booklets/${id}`),
+  // Assignments
+  listAssignments: (bookletId: string, trackId: string) =>
+    api.get(`/tracks/booklets/${bookletId}/assignments`, { params: { trackId } }),
+  assign: (data: { employeeId: string; trackId: string; bookletId: string; startDate?: string; endDate?: string }) =>
+    api.post('/tracks/employee-assignments', data),
+  bulkAssign: (data: { trackId: string; bookletId: string; employeeIds: string[]; startDate?: string }) =>
+    api.post('/tracks/employee-assignments/bulk', data),
+  unassign: (id: string) => api.delete(`/tracks/employee-assignments/${id}`),
+};
+
+// ─── Absences (Bulk by Track + Booklet) ───
+export type AbsenceTypeKey =
+  | 'ABSENT'
+  | 'LATE'
+  | 'EARLY_LEAVE'
+  | 'EXCUSED'
+  | 'SICK_LEAVE'
+  | 'ANNUAL_LEAVE';
+
+export const absencesApi = {
+  getEmployeesByTrackBooklet: (trackId: string, bookletId: string, date?: string) =>
+    api.get('/attendance/employees-by-track-booklet', {
+      params: { trackId, bookletId, ...(date ? { date } : {}) },
+    }),
+  createBulk: (data: {
+    trackId: string;
+    bookletId: string;
+    absenceDate: string;
+    globalReason?: string;
+    employees: Array<{ employeeId: string; type: AbsenceTypeKey; reason?: string; hours?: number; notes?: string }>;
+  }) => api.post('/attendance/absences/bulk', data),
+  report: (trackId: string, bookletId: string, date: string) =>
+    api.get('/attendance/absences/report', { params: { trackId, bookletId, date } }),
+  approve: (id: string) => api.patch(`/attendance/absences/${id}/approve`),
+  reject: (id: string) => api.patch(`/attendance/absences/${id}/reject`),
+  delete: (id: string) => api.delete(`/attendance/absences/${id}`),
+};
+
 // ─── Progress & Achievements ───
 export const progressApi = {
   globalStats: () => api.get('/progress/global-stats'),
@@ -686,6 +731,17 @@ export const attendanceApi = {
   // ─── File storage ───
   listUploadsPaged: (params?: { from?: string; to?: string; page?: number; limit?: number }) =>
     api.get('/attendance/uploads', { params }),
+  // ─── AI analysis (cached in DB) ───
+  getAnalysis: (uploadId: string) =>
+    api.get(`/attendance/uploads/${uploadId}/analysis`, { timeout: 120000 }),
+  refreshAnalysis: (uploadId: string) =>
+    api.post(`/attendance/uploads/${uploadId}/analysis/refresh`, null, { timeout: 120000 }),
+  deleteAnalysis: (uploadId: string) =>
+    api.delete(`/attendance/uploads/${uploadId}/analysis`),
+  hasAnalysis: (uploadId: string) =>
+    api.get<{ exists: boolean }>(`/attendance/uploads/${uploadId}/analysis/exists`),
+  hasAnalysisMany: (ids: string[]) =>
+    api.post<Record<string, boolean>>('/attendance/uploads/analysis/exists-many', { ids }),
   // Blob-fetch — needed because window.open() / <a href> bypass our auth
   // header. Caller is expected to URL.createObjectURL the result.
   downloadFile: (uploadId: string) =>

@@ -21,6 +21,10 @@ import {
   UpdateTrackKPIDto,
   CreatePenaltyDto,
   UpdatePenaltyDto,
+  CreateBookletDto,
+  UpdateBookletDto,
+  CreateEmployeeAssignmentDto,
+  BulkAssignEmployeesDto,
 } from './tracks.dto';
 
 @Controller('tracks')
@@ -422,6 +426,122 @@ export class TracksController {
   ) {
     this.ensureTrackAccess(user, body.trackId);
     return this.pptxImport.extractFromFile(body.content, body.trackId, body.fileName);
+  }
+
+  // ─── BOOKLETS ───
+
+  @Get(':trackId/booklets')
+  listBooklets(@Param('trackId') trackId: string) {
+    return this.tracks.listBooklets(trackId);
+  }
+
+  @Post('booklets')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'hr')
+  async createBooklet(@Body() dto: CreateBookletDto, @CurrentUser() user: any, @Req() req: Request) {
+    const result = await this.tracks.createBooklet(dto);
+    await this.audit.log({
+      actorId: user.id,
+      actionType: 'create',
+      entityType: 'booklet',
+      entityId: result.id,
+      trackId: dto.trackId,
+      afterData: result as any,
+      ip: req.ip,
+    });
+    return result;
+  }
+
+  @Patch('booklets/:id')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'hr')
+  async updateBooklet(@Param('id') id: string, @Body() dto: UpdateBookletDto, @CurrentUser() user: any, @Req() req: Request) {
+    const before = await this.prisma.booklet.findUnique({ where: { id } });
+    const result = await this.tracks.updateBooklet(id, dto);
+    await this.audit.log({
+      actorId: user.id,
+      actionType: 'update',
+      entityType: 'booklet',
+      entityId: id,
+      trackId: before?.trackId,
+      beforeData: before as any,
+      afterData: result as any,
+      ip: req.ip,
+    });
+    return result;
+  }
+
+  @Delete('booklets/:id')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'hr')
+  async deleteBooklet(@Param('id') id: string, @CurrentUser() user: any, @Req() req: Request) {
+    const before = await this.prisma.booklet.findUnique({ where: { id } });
+    const result = await this.tracks.deleteBooklet(id);
+    await this.audit.log({
+      actorId: user.id,
+      actionType: 'delete',
+      entityType: 'booklet',
+      entityId: id,
+      trackId: before?.trackId,
+      beforeData: before as any,
+      ip: req.ip,
+    });
+    return result;
+  }
+
+  // ─── EMPLOYEE ASSIGNMENTS (Track + Booklet) ───
+
+  @Get('booklets/:bookletId/assignments')
+  listAssignments(@Param('bookletId') bookletId: string, @Query('trackId') trackId: string) {
+    return this.tracks.listAssignments(trackId, bookletId);
+  }
+
+  @Post('employee-assignments')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'hr')
+  async createAssignment(@Body() dto: CreateEmployeeAssignmentDto, @CurrentUser() user: any, @Req() req: Request) {
+    const result = await this.tracks.createAssignment(dto);
+    await this.audit.log({
+      actorId: user.id,
+      actionType: 'create',
+      entityType: 'employee_assignment',
+      entityId: result.id,
+      trackId: dto.trackId,
+      afterData: result as any,
+      ip: req.ip,
+    });
+    return result;
+  }
+
+  @Post('employee-assignments/bulk')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'hr')
+  async bulkAssign(@Body() dto: BulkAssignEmployeesDto, @CurrentUser() user: any, @Req() req: Request) {
+    const result = await this.tracks.bulkAssign(dto);
+    await this.audit.log({
+      actorId: user.id,
+      actionType: 'bulk_create',
+      entityType: 'employee_assignment',
+      trackId: dto.trackId,
+      afterData: { count: result.count, bookletId: dto.bookletId } as any,
+      ip: req.ip,
+    });
+    return result;
+  }
+
+  @Delete('employee-assignments/:id')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'hr')
+  async deleteAssignment(@Param('id') id: string, @CurrentUser() user: any, @Req() req: Request) {
+    const result = await this.tracks.deleteAssignment(id);
+    await this.audit.log({
+      actorId: user.id,
+      actionType: 'delete',
+      entityType: 'employee_assignment',
+      entityId: id,
+      ip: req.ip,
+    });
+    return result;
   }
 
   @Get(':id')

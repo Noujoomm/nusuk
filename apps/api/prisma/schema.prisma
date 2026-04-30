@@ -10,22 +10,22 @@ datasource db {
 // ─── USERS & AUTH ───
 
 model User {
-  id                    String    @id @default(cuid())
-  email                 String    @unique
-  name                  String
-  nameAr                String    @map("name_ar")
-  passwordHash          String    @map("password_hash")
-  role                  Role      @default(employee)
-  isActive              Boolean   @default(true) @map("is_active")
-  lastLoginAt           DateTime? @map("last_login_at")
-  loginCount            Int       @default(0) @map("login_count")
-  failedLoginAttempts   Int       @default(0) @map("failed_login_attempts")
-  isLocked              Boolean   @default(false) @map("is_locked")
-  lockedAt              DateTime? @map("locked_at")
-  resetToken            String?   @map("reset_token")
-  resetTokenExpiry      DateTime? @map("reset_token_expiry")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  name                String
+  nameAr              String    @map("name_ar")
+  passwordHash        String    @map("password_hash")
+  role                Role      @default(employee)
+  isActive            Boolean   @default(true) @map("is_active")
+  lastLoginAt         DateTime? @map("last_login_at")
+  loginCount          Int       @default(0) @map("login_count")
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  isLocked            Boolean   @default(false) @map("is_locked")
+  lockedAt            DateTime? @map("locked_at")
+  resetToken          String?   @map("reset_token")
+  resetTokenExpiry    DateTime? @map("reset_token_expiry")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   refreshTokens    RefreshToken[]
   trackPermissions TrackPermission[]
@@ -34,37 +34,37 @@ model User {
   uploadedFiles    UploadedFile[]
 
   // Phase 1: Collaboration
-  comments           Comment[]              @relation("CommentAuthor")
-  notificationsReceived Notification[]      @relation("NotificationRecipient")
-  notificationsSent     Notification[]      @relation("NotificationSender")
+  comments               Comment[]               @relation("CommentAuthor")
+  notificationsReceived  Notification[]          @relation("NotificationRecipient")
+  notificationsSent      Notification[]          @relation("NotificationSender")
   notificationPreference NotificationPreference?
 
   // Phase 2: Tasks & AI
-  createdTasks       Task[]                 @relation("TaskCreator")
-  assignedTasks      Task[]                 @relation("TaskAssigneeUser")
-  taskAssignments    TaskAssignment[]       @relation("TaskAssignee")
-  taskAssignedBy     TaskAssignment[]       @relation("TaskAssigner")
-  taskFiles          TaskFile[]             @relation("TaskFileUploader")
-  taskAuditLogs      TaskAuditLog[]         @relation("TaskAuditActor")
-  taskChecklistItems TaskChecklist[]        @relation("TaskChecklistCreator")
-  adminNotes         AdminNote[]            @relation("AdminNoteAuthor")
-  taskUpdates        TaskUpdate[]           @relation("TaskUpdateAuthor")
-  aiReports          AIReport[]             @relation("AIReportAuthor")
-  distributionEntries DistributionEntry[]   @relation("DistributionEntryCreator")
+  createdTasks        Task[]                    @relation("TaskCreator")
+  assignedTasks       Task[]                    @relation("TaskAssigneeUser")
+  taskAssignments     TaskAssignment[]          @relation("TaskAssignee")
+  taskAssignedBy      TaskAssignment[]          @relation("TaskAssigner")
+  taskFiles           TaskFile[]                @relation("TaskFileUploader")
+  taskAuditLogs       TaskAuditLog[]            @relation("TaskAuditActor")
+  taskChecklistItems  TaskChecklist[]           @relation("TaskChecklistCreator")
+  adminNotes          AdminNote[]               @relation("AdminNoteAuthor")
+  taskUpdates         TaskUpdate[]              @relation("TaskUpdateAuthor")
+  aiReports           AIReport[]                @relation("AIReportAuthor")
+  distributionEntries DistributionEntry[]       @relation("DistributionEntryCreator")
   distAchievements    DistributionAchievement[] @relation("DistAchievementCreator")
   distDeviations      DistributionDeviation[]   @relation("DistDeviationCreator")
 
   // Phase 3: Updates & Import
-  dailyUpdates       DailyUpdate[]          @relation("DailyUpdateAuthor")
-  dailyUpdateReads       DailyUpdateRead[]          @relation("DailyUpdateReader")
-  dailyUpdateAttachments DailyUpdateAttachment[]    @relation("DailyUpdateAttachmentUploader")
-  importHistory          ImportHistory[]             @relation("ImportHistoryAuthor")
+  dailyUpdates           DailyUpdate[]           @relation("DailyUpdateAuthor")
+  dailyUpdateReads       DailyUpdateRead[]       @relation("DailyUpdateReader")
+  dailyUpdateAttachments DailyUpdateAttachment[] @relation("DailyUpdateAttachmentUploader")
+  importHistory          ImportHistory[]         @relation("ImportHistoryAuthor")
 
   // Gantt: Resource Assignments
   resourceAssignments ResourceAssignment[]
 
   // Report attachments
-  reportAttachments  ReportAttachment[] @relation("ReportAttachmentUploader")
+  reportAttachments ReportAttachment[] @relation("ReportAttachmentUploader")
 
   // Scope Block relations
   scopeBlockAttachments ScopeBlockAttachment[] @relation("ScopeBlockAttachmentUploader")
@@ -72,32 +72,36 @@ model User {
 
   // Support Services (خدمات مساندة)
   // Support Services (خدمات مساندة)
-  custodies              Custody[]          @relation("CustodyCreator")
-  custodiesOwned         Custody[]          @relation("CustodyOwner")
-  custodiesClosed        Custody[]          @relation("CustodyCloser")
-  custodyMemberships     CustodyMember[]    @relation("CustodyMemberUser")
-  custodyMemberAssigned  CustodyMember[]    @relation("CustodyMemberAssigner")
-  custodyInvoices        CustodyInvoice[]   @relation("InvoiceCreator")
-  invoiceAttachments     InvoiceAttachment[] @relation("InvoiceAttachmentUploader")
-  balanceTransactions    CustodyBalanceTransaction[] @relation("BalanceTxCreator")
-  custodyItemsResponsible CustodyItem[]     @relation("CustodyItemResponsible")
-  custodyItemsCreated    CustodyItem[]      @relation("CustodyItemCreator")
-  custodyAuditLogs       CustodyAuditLog[]  @relation("CustodyAuditActor")
-  supportRequests        SupportRequest[]   @relation("SupportRequestCreator")
+  custodies               Custody[]                   @relation("CustodyCreator")
+  custodiesOwned          Custody[]                   @relation("CustodyOwner")
+  custodiesClosed         Custody[]                   @relation("CustodyCloser")
+  custodyMemberships      CustodyMember[]             @relation("CustodyMemberUser")
+  custodyMemberAssigned   CustodyMember[]             @relation("CustodyMemberAssigner")
+  custodyInvoices         CustodyInvoice[]            @relation("InvoiceCreator")
+  invoiceAttachments      InvoiceAttachment[]         @relation("InvoiceAttachmentUploader")
+  balanceTransactions     CustodyBalanceTransaction[] @relation("BalanceTxCreator")
+  custodyItemsResponsible CustodyItem[]               @relation("CustodyItemResponsible")
+  custodyItemsCreated     CustodyItem[]               @relation("CustodyItemCreator")
+  custodyAuditLogs        CustodyAuditLog[]           @relation("CustodyAuditActor")
+  supportRequests         SupportRequest[]            @relation("SupportRequestCreator")
   // Custody Fund v2
-  custodyFundsCreated    CustodyFund[]      @relation("CustodyFundCreator")
-  custodyFundsClosed     CustodyFund[]      @relation("CustodyFundCloser")
-  custodyFundTxs         CustodyFundTransaction[] @relation("CustodyFundTxCreator")
-  custodyFundMemberships CustodyFundMember[] @relation("CustodyFundMemberUser")
-  custodyFundMemberAdds  CustodyFundMember[] @relation("CustodyFundMemberAdder")
-  custodyFundInvoices    CustodyFundInvoice[] @relation("CustodyFundInvCreator")
+  custodyFundsCreated     CustodyFund[]               @relation("CustodyFundCreator")
+  custodyFundsClosed      CustodyFund[]               @relation("CustodyFundCloser")
+  custodyFundTxs          CustodyFundTransaction[]    @relation("CustodyFundTxCreator")
+  custodyFundMemberships  CustodyFundMember[]         @relation("CustodyFundMemberUser")
+  custodyFundMemberAdds   CustodyFundMember[]         @relation("CustodyFundMemberAdder")
+  custodyFundInvoices     CustodyFundInvoice[]        @relation("CustodyFundInvCreator")
 
   // AI Reports Intelligence Center
-  intelligenceSessions   IntelligenceSession[]   @relation("IntelligenceSessionCreator")
-  intelligenceTemplates  IntelligenceTemplate[]  @relation("IntelligenceTemplateUploader")
+  intelligenceSessions  IntelligenceSession[]  @relation("IntelligenceSessionCreator")
+  intelligenceTemplates IntelligenceTemplate[] @relation("IntelligenceTemplateUploader")
 
   // AI Agent (Roya Assistant) audit trail
-  aiAuditLogs            AIAuditLog[]            @relation("AIAuditLogUser")
+  aiAuditLogs AIAuditLog[] @relation("AIAuditLogUser")
+
+  // Absence module
+  recordedAbsences Absence[] @relation("AbsenceRecorder")
+  approvedAbsences Absence[] @relation("AbsenceApprover")
 
   @@map("users")
 }
@@ -140,23 +144,27 @@ model Track {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  permissions  TrackPermission[]
-  auditLogs    AuditLog[]
-  employees    Employee[]
-  deliverables Deliverable[]
-  kpis         TrackKPI[]
-  penalties    Penalty[]
-  scopes       Scope[]
-  scopeBlocks  ScopeBlock[]
-  reports      Report[]
-  files        UploadedFile[]
-  kpiEntries   KPIEntry[]
-  tasks        Task[]
-  assignedTasks Task[]              @relation("TaskAssigneeTrack")
-  aiReports    AIReport[]
-  dailyUpdates DailyUpdate[]
-  contractValue Float?       @map("contract_value")
+  permissions           TrackPermission[]
+  auditLogs             AuditLog[]
+  employees             Employee[]
+  deliverables          Deliverable[]
+  kpis                  TrackKPI[]
+  penalties             Penalty[]
+  scopes                Scope[]
+  scopeBlocks           ScopeBlock[]
+  reports               Report[]
+  files                 UploadedFile[]
+  kpiEntries            KPIEntry[]
+  tasks                 Task[]
+  assignedTasks         Task[]                 @relation("TaskAssigneeTrack")
+  aiReports             AIReport[]
+  dailyUpdates          DailyUpdate[]
+  contractValue         Float?                 @map("contract_value")
   productivitySnapshots ProductivitySnapshot[]
+
+  booklets            Booklet[]
+  employeeAssignments EmployeeAssignment[]
+  absences            Absence[]
 
   @@map("tracks")
 }
@@ -200,7 +208,10 @@ model Employee {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  track     Track?     @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  track Track? @relation(fields: [trackId], references: [id], onDelete: SetNull)
+
+  assignments EmployeeAssignment[]
+  absences    Absence[]
 
   @@index([trackId])
   @@index([status])
@@ -208,15 +219,15 @@ model Employee {
 }
 
 model Deliverable {
-  id                  String   @id @default(cuid())
-  trackId             String   @map("track_id")
-  name                String
-  nameAr              String   @map("name_ar")
-  outputs             String?  @db.Text
-  deliveryIndicators  String?  @map("delivery_indicators") @db.Text
-  sortOrder           Int      @default(0)  @map("sort_order")
-  isDeleted           Boolean  @default(false) @map("is_deleted")
-  createdAt           DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(cuid())
+  trackId            String   @map("track_id")
+  name               String
+  nameAr             String   @map("name_ar")
+  outputs            String?  @db.Text
+  deliveryIndicators String?  @map("delivery_indicators") @db.Text
+  sortOrder          Int      @default(0) @map("sort_order")
+  isDeleted          Boolean  @default(false) @map("is_deleted")
+  createdAt          DateTime @default(now()) @map("created_at")
 
   track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
 
@@ -243,9 +254,9 @@ model Penalty {
   id          String   @id @default(cuid())
   trackId     String   @map("track_id")
   violation   String   @db.Text
-  violationAr String  @map("violation_ar") @db.Text
+  violationAr String   @map("violation_ar") @db.Text
   severity    String?  @default("medium")
-  impactScore Float?   @map("impact_score") @default(0)
+  impactScore Float?   @default(0) @map("impact_score")
   isResolved  Boolean  @default(false) @map("is_resolved")
   linkedKpiId String?  @map("linked_kpi_id")
   sortOrder   Int      @default(0) @map("sort_order")
@@ -277,20 +288,20 @@ model Scope {
 // ─── SCOPE BLOCKS (hierarchical scope of work) ───
 
 model ScopeBlock {
-  id          String   @id @default(cuid())
-  trackId     String   @map("track_id")
-  code        String
-  title       String   @db.Text
-  content     String?  @db.Text
-  parentId    String?  @map("parent_id")
-  orderIndex  Int      @default(0) @map("order_index")
-  progress    Float    @default(0)
-  status      String   @default("pending")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id         String   @id @default(cuid())
+  trackId    String   @map("track_id")
+  code       String
+  title      String   @db.Text
+  content    String?  @db.Text
+  parentId   String?  @map("parent_id")
+  orderIndex Int      @default(0) @map("order_index")
+  progress   Float    @default(0)
+  status     String   @default("pending")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
-  track    Track       @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  parent   ScopeBlock? @relation("ScopeBlockHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  track    Track        @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  parent   ScopeBlock?  @relation("ScopeBlockHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children ScopeBlock[] @relation("ScopeBlockHierarchy")
   tasks    Task[]       @relation("TaskScopeBlock")
 
@@ -304,30 +315,30 @@ model ScopeBlock {
 }
 
 model ScopeBlockAttachment {
-  id           String     @id @default(cuid())
-  scopeBlockId String     @map("scope_block_id")
-  fileName     String     @map("file_name")
-  fileUrl      String     @map("file_url") @db.Text
-  fileSize     Int?       @map("file_size")
-  uploadedById String     @map("uploaded_by_id")
-  createdAt    DateTime   @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  scopeBlockId String   @map("scope_block_id")
+  fileName     String   @map("file_name")
+  fileUrl      String   @map("file_url") @db.Text
+  fileSize     Int?     @map("file_size")
+  uploadedById String   @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  scopeBlock   ScopeBlock @relation(fields: [scopeBlockId], references: [id], onDelete: Cascade)
-  uploadedBy   User       @relation("ScopeBlockAttachmentUploader", fields: [uploadedById], references: [id])
+  scopeBlock ScopeBlock @relation(fields: [scopeBlockId], references: [id], onDelete: Cascade)
+  uploadedBy User       @relation("ScopeBlockAttachmentUploader", fields: [uploadedById], references: [id])
 
   @@index([scopeBlockId])
   @@map("scope_block_attachments")
 }
 
 model ScopeBlockUpdate {
-  id           String     @id @default(cuid())
-  scopeBlockId String     @map("scope_block_id")
-  content      String     @db.Text
-  createdById  String     @map("created_by_id")
-  createdAt    DateTime   @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  scopeBlockId String   @map("scope_block_id")
+  content      String   @db.Text
+  createdById  String   @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  scopeBlock   ScopeBlock @relation(fields: [scopeBlockId], references: [id], onDelete: Cascade)
-  createdBy    User       @relation("ScopeBlockUpdateAuthor", fields: [createdById], references: [id])
+  scopeBlock ScopeBlock @relation(fields: [scopeBlockId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation("ScopeBlockUpdateAuthor", fields: [createdById], references: [id])
 
   @@index([scopeBlockId])
   @@map("scope_block_updates")
@@ -336,16 +347,16 @@ model ScopeBlockUpdate {
 // ─── PROGRESS & ACHIEVEMENTS ───
 
 model ProgressItem {
-  id              String   @id @default(cuid())
-  entityType      String   @map("entity_type")
-  entityId        String   @map("entity_id")
-  progressPercent Float    @default(0) @map("progress_percent")
-  status          String   @default("pending")
+  id              String    @id @default(cuid())
+  entityType      String    @map("entity_type")
+  entityId        String    @map("entity_id")
+  progressPercent Float     @default(0) @map("progress_percent")
+  status          String    @default("pending")
   startDate       DateTime? @map("start_date")
   endDate         DateTime? @map("end_date")
   metadata        Json?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   @@unique([entityType, entityId])
   @@index([entityType])
@@ -362,7 +373,7 @@ model Achievement {
   description   String?  @db.Text
   descriptionAr String?  @map("description_ar") @db.Text
   impactType    String?  @map("impact_type")
-  evidenceLinks Json?    @map("evidence_links") @default("[]")
+  evidenceLinks Json?    @default("[]") @map("evidence_links")
   createdAt     DateTime @default(now()) @map("created_at")
 
   @@index([entityType, entityId])
@@ -372,14 +383,14 @@ model Achievement {
 }
 
 model ProgressEvent {
-  id          String   @id @default(cuid())
-  entityType  String   @map("entity_type")
-  entityId    String   @map("entity_id")
-  eventType   String   @map("event_type")
-  oldValue    Float?   @map("old_value")
-  newValue    Float?   @map("new_value")
-  metadata    Json?
-  createdAt   DateTime @default(now()) @map("created_at")
+  id         String   @id @default(cuid())
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  eventType  String   @map("event_type")
+  oldValue   Float?   @map("old_value")
+  newValue   Float?   @map("new_value")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([entityType, entityId])
   @@index([createdAt])
@@ -389,20 +400,20 @@ model ProgressEvent {
 // ─── KPI ENTRIES (structured KPI tracking) ───
 
 model KPIEntry {
-  id           String    @id @default(cuid())
-  trackId      String    @map("track_id")
-  name         String
-  nameAr       String    @map("name_ar")
-  category     String    @default("general")
-  targetValue  Float     @default(100) @map("target_value")
-  actualValue  Float     @default(0) @map("actual_value")
-  unit         String    @default("%")
-  status       KPIStatus @default(pending)
-  dueDate      DateTime? @map("due_date")
-  assignedTo   String?   @map("assigned_to")
-  notes        String?   @db.Text
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id          String    @id @default(cuid())
+  trackId     String    @map("track_id")
+  name        String
+  nameAr      String    @map("name_ar")
+  category    String    @default("general")
+  targetValue Float     @default(100) @map("target_value")
+  actualValue Float     @default(0) @map("actual_value")
+  unit        String    @default("%")
+  status      KPIStatus @default(pending)
+  dueDate     DateTime? @map("due_date")
+  assignedTo  String?   @map("assigned_to")
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
 
@@ -423,26 +434,26 @@ enum KPIStatus {
 // ─── REPORTS ───
 
 model Report {
-  id             String     @id @default(cuid())
-  trackId        String     @map("track_id")
-  authorId       String     @map("author_id")
-  type           ReportType @default(daily)
-  title          String
-  achievements   String?    @db.Text
-  kpiUpdates     String?    @map("kpi_updates") @db.Text
-  challenges     String?    @db.Text
-  supportNeeded  String?    @map("support_needed") @db.Text
-  upcomingTasks  String?    @map("upcoming_tasks") @db.Text
-  notes          String?    @db.Text
-  aiSummary      String?    @map("ai_summary") @db.Text
-  reportDate     DateTime   @map("report_date") @default(now())
-  submittedAt    DateTime   @default(now()) @map("submitted_at")
-  nextUpdateAt   DateTime?  @map("next_update_at")
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @updatedAt @map("updated_at")
+  id            String     @id @default(cuid())
+  trackId       String     @map("track_id")
+  authorId      String     @map("author_id")
+  type          ReportType @default(daily)
+  title         String
+  achievements  String?    @db.Text
+  kpiUpdates    String?    @map("kpi_updates") @db.Text
+  challenges    String?    @db.Text
+  supportNeeded String?    @map("support_needed") @db.Text
+  upcomingTasks String?    @map("upcoming_tasks") @db.Text
+  notes         String?    @db.Text
+  aiSummary     String?    @map("ai_summary") @db.Text
+  reportDate    DateTime   @default(now()) @map("report_date")
+  submittedAt   DateTime   @default(now()) @map("submitted_at")
+  nextUpdateAt  DateTime?  @map("next_update_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
 
-  track       Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  author      User  @relation(fields: [authorId], references: [id])
+  track       Track              @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  author      User               @relation(fields: [authorId], references: [id])
   attachments ReportAttachment[]
 
   @@index([trackId])
@@ -465,8 +476,8 @@ model ReportAttachment {
   uploadedById    String   @map("uploaded_by_id")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  report     Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  uploadedBy User   @relation("ReportAttachmentUploader", fields: [uploadedById], references: [id])
+  report     Report            @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  uploadedBy User              @relation("ReportAttachmentUploader", fields: [uploadedById], references: [id])
   chunks     ReportFileChunk[]
 
   @@index([reportId])
@@ -498,18 +509,18 @@ enum ReportType {
 // ─── FILE MANAGEMENT ───
 
 model UploadedFile {
-  id          String     @id @default(cuid())
-  trackId     String?    @map("track_id")
-  uploadedById String    @map("uploaded_by_id")
-  fileName    String     @map("file_name")
-  fileSize    Int        @map("file_size")
-  mimeType    String     @map("mime_type")
-  filePath    String     @map("file_path")
-  category    String     @default("general")
-  status      FileStatus @default(uploaded)
-  notes       String?    @db.Text
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
+  id           String     @id @default(cuid())
+  trackId      String?    @map("track_id")
+  uploadedById String     @map("uploaded_by_id")
+  fileName     String     @map("file_name")
+  fileSize     Int        @map("file_size")
+  mimeType     String     @map("mime_type")
+  filePath     String     @map("file_path")
+  category     String     @default("general")
+  status       FileStatus @default(uploaded)
+  notes        String?    @db.Text
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
 
   track      Track? @relation(fields: [trackId], references: [id], onDelete: SetNull)
   uploadedBy User   @relation(fields: [uploadedById], references: [id])
@@ -562,28 +573,28 @@ model AuditLog {
 // ─── DAILY UPDATES ───
 
 model DailyUpdate {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   title       String
-  titleAr     String   @map("title_ar")
-  content     String   @db.Text
-  contentAr   String?  @map("content_ar") @db.Text
-  type        String   @default("global") // global, track, department
-  status      String   @default("in_progress") // completed, in_progress, delayed, rejected
-  progress    Int      @default(0) // 0-100
-  trackId     String?  @map("track_id")
-  authorId    String   @map("author_id")
-  pinned      Boolean  @default(false)
-  priority    String   @default("normal") // normal, important, urgent
-  attachments Json?    @default("[]")
-  editHistory Json?    @map("edit_history") @default("[]")
-  isDeleted   Boolean  @default(false) @map("is_deleted")
+  titleAr     String    @map("title_ar")
+  content     String    @db.Text
+  contentAr   String?   @map("content_ar") @db.Text
+  type        String    @default("global") // global, track, department
+  status      String    @default("in_progress") // completed, in_progress, delayed, rejected
+  progress    Int       @default(0) // 0-100
+  trackId     String?   @map("track_id")
+  authorId    String    @map("author_id")
+  pinned      Boolean   @default(false)
+  priority    String    @default("normal") // normal, important, urgent
+  attachments Json?     @default("[]")
+  editHistory Json?     @default("[]") @map("edit_history")
+  isDeleted   Boolean   @default(false) @map("is_deleted")
   deletedAt   DateTime? @map("deleted_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  author      User   @relation("DailyUpdateAuthor", fields: [authorId], references: [id])
-  track       Track? @relation(fields: [trackId], references: [id], onDelete: SetNull)
-  reads       DailyUpdateRead[]
+  author          User                    @relation("DailyUpdateAuthor", fields: [authorId], references: [id])
+  track           Track?                  @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  reads           DailyUpdateRead[]
   fileAttachments DailyUpdateAttachment[]
 
   @@index([authorId])
@@ -616,10 +627,10 @@ model DailyUpdateAttachment {
 }
 
 model DailyUpdateRead {
-  id        String   @id @default(cuid())
-  updateId  String   @map("update_id")
-  userId    String   @map("user_id")
-  readAt    DateTime @default(now()) @map("read_at")
+  id       String   @id @default(cuid())
+  updateId String   @map("update_id")
+  userId   String   @map("user_id")
+  readAt   DateTime @default(now()) @map("read_at")
 
   update DailyUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
   user   User        @relation("DailyUpdateReader", fields: [userId], references: [id], onDelete: Cascade)
@@ -633,15 +644,15 @@ model DailyUpdateRead {
 // ─── IMPORT HISTORY ───
 
 model ImportHistory {
-  id          String   @id @default(cuid())
-  fileName    String   @map("file_name")
-  fileSize    Int?     @map("file_size")
-  importedBy  String   @map("imported_by")
-  status      String   @default("completed") // completed, failed, rolled_back
-  summary     Json?    // { inserted, updated, skipped, errors }
-  backupPath  String?  @map("backup_path")
-  errorLog    Json?    @map("error_log") @default("[]")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id         String   @id @default(cuid())
+  fileName   String   @map("file_name")
+  fileSize   Int?     @map("file_size")
+  importedBy String   @map("imported_by")
+  status     String   @default("completed") // completed, failed, rolled_back
+  summary    Json? // { inserted, updated, skipped, errors }
+  backupPath String?  @map("backup_path")
+  errorLog   Json?    @default("[]") @map("error_log")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   author User @relation("ImportHistoryAuthor", fields: [importedBy], references: [id])
 
@@ -755,34 +766,34 @@ enum AssigneeType {
 }
 
 model Task {
-  id            String       @id @default(cuid())
-  title         String
-  titleAr       String       @map("title_ar")
-  description   String?      @db.Text
-  descriptionAr String?      @map("description_ar") @db.Text
-  status        TaskStatus   @default(pending)
-  priority      Priority     @default(medium)
-  trackId       String?      @map("track_id")
-  scopeBlockId  String?      @map("scope_block_id")
-  dueDate       DateTime?    @map("due_date")
-  progress      Float        @default(0)
-  weight        Float        @default(1)
-  completionDate DateTime?   @map("completion_date")
-  notes         String?      @db.Text
-  createdById   String       @map("created_by_id")
-  isGlobal      Boolean      @default(false) @map("is_global")
-  isDirective   Boolean      @default(false) @map("is_directive")
+  id                    String     @id @default(cuid())
+  title                 String
+  titleAr               String     @map("title_ar")
+  description           String?    @db.Text
+  descriptionAr         String?    @map("description_ar") @db.Text
+  status                TaskStatus @default(pending)
+  priority              Priority   @default(medium)
+  trackId               String?    @map("track_id")
+  scopeBlockId          String?    @map("scope_block_id")
+  dueDate               DateTime?  @map("due_date")
+  progress              Float      @default(0)
+  weight                Float      @default(1)
+  completionDate        DateTime?  @map("completion_date")
+  notes                 String?    @db.Text
+  createdById           String     @map("created_by_id")
+  isGlobal              Boolean    @default(false) @map("is_global")
+  isDirective           Boolean    @default(false) @map("is_directive")
   // Productivity model fields
-  taskSource    String       @default("additional") @map("task_source") // agreement, agent, additional
-  approvalStatus String      @default("pending") @map("approval_status") // approved, approved_with_notes, pending, resubmit
-  isBlocked     Boolean      @default(false) @map("is_blocked")
-  blockReason   String?      @map("block_reason")
-  resubmitCount Int          @default(0) @map("resubmit_count")
-  isDeleted     Boolean      @default(false) @map("is_deleted")
-  deletedAt     DateTime?    @map("deleted_at")
-  lastOverdueNotifiedAt DateTime? @map("last_overdue_notified_at")
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt @map("updated_at")
+  taskSource            String     @default("additional") @map("task_source") // agreement, agent, additional
+  approvalStatus        String     @default("pending") @map("approval_status") // approved, approved_with_notes, pending, resubmit
+  isBlocked             Boolean    @default(false) @map("is_blocked")
+  blockReason           String?    @map("block_reason")
+  resubmitCount         Int        @default(0) @map("resubmit_count")
+  isDeleted             Boolean    @default(false) @map("is_deleted")
+  deletedAt             DateTime?  @map("deleted_at")
+  lastOverdueNotifiedAt DateTime?  @map("last_overdue_notified_at")
+  createdAt             DateTime   @default(now()) @map("created_at")
+  updatedAt             DateTime   @updatedAt @map("updated_at")
 
   // Polymorphic assignment
   assigneeType    AssigneeType @default(GLOBAL) @map("assignee_type")
@@ -790,45 +801,45 @@ model Task {
   assigneeUserId  String?      @map("assignee_user_id")
 
   // ─── GANTT / SCHEDULING FIELDS ───
-  startDate       DateTime?    @map("start_date")
-  duration        Float?       // working days
-  isMilestone     Boolean      @default(false) @map("is_milestone")
-  isSummary       Boolean      @default(false) @map("is_summary")
-  parentTaskId    String?      @map("parent_task_id")
-  wbs             String?      // e.g. "1.2.3"
-  sortOrder       Int          @default(0) @map("sort_order")
-  outlineLevel    Int          @default(1) @map("outline_level")
+  startDate        DateTime?       @map("start_date")
+  duration         Float? // working days
+  isMilestone      Boolean         @default(false) @map("is_milestone")
+  isSummary        Boolean         @default(false) @map("is_summary")
+  parentTaskId     String?         @map("parent_task_id")
+  wbs              String? // e.g. "1.2.3"
+  sortOrder        Int             @default(0) @map("sort_order")
+  outlineLevel     Int             @default(1) @map("outline_level")
   // Baselines
-  baselineStart   DateTime?    @map("baseline_start")
-  baselineFinish  DateTime?    @map("baseline_finish")
-  baselineDuration Float?      @map("baseline_duration")
+  baselineStart    DateTime?       @map("baseline_start")
+  baselineFinish   DateTime?       @map("baseline_finish")
+  baselineDuration Float?          @map("baseline_duration")
   // Constraints
-  constraintType  ConstraintType? @map("constraint_type")
-  constraintDate  DateTime?    @map("constraint_date")
+  constraintType   ConstraintType? @map("constraint_type")
+  constraintDate   DateTime?       @map("constraint_date")
   // Slack
-  freeSlack       Float?       @map("free_slack")  // days
-  totalSlack      Float?       @map("total_slack")  // days
-  isCritical      Boolean      @default(false) @map("is_critical")
+  freeSlack        Float?          @map("free_slack") // days
+  totalSlack       Float?          @map("total_slack") // days
+  isCritical       Boolean         @default(false) @map("is_critical")
   // Calendar
-  calendarId      String?      @map("calendar_id")
-  tags            String[]     @default([])
+  calendarId       String?         @map("calendar_id")
+  tags             String[]        @default([])
 
-  track         Track?           @relation(fields: [trackId], references: [id], onDelete: SetNull)
-  scopeBlock    ScopeBlock?      @relation("TaskScopeBlock", fields: [scopeBlockId], references: [id], onDelete: SetNull)
-  createdBy     User             @relation("TaskCreator", fields: [createdById], references: [id])
-  assigneeTrack Track?           @relation("TaskAssigneeTrack", fields: [assigneeTrackId], references: [id], onDelete: SetNull)
-  assigneeUser  User?            @relation("TaskAssigneeUser", fields: [assigneeUserId], references: [id], onDelete: SetNull)
-  parentTask    Task?            @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: SetNull)
-  childTasks    Task[]           @relation("TaskHierarchy")
-  calendar      WorkCalendar?    @relation(fields: [calendarId], references: [id], onDelete: SetNull)
-  assignments   TaskAssignment[]
-  files         TaskFile[]
-  auditLogs     TaskAuditLog[]
-  checklist     TaskChecklist[]
-  adminNotes    AdminNote[]
-  taskUpdates   TaskUpdate[]
-  predecessors  TaskDependency[] @relation("DependencySuccessor")
-  successors    TaskDependency[] @relation("DependencyPredecessor")
+  track               Track?               @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  scopeBlock          ScopeBlock?          @relation("TaskScopeBlock", fields: [scopeBlockId], references: [id], onDelete: SetNull)
+  createdBy           User                 @relation("TaskCreator", fields: [createdById], references: [id])
+  assigneeTrack       Track?               @relation("TaskAssigneeTrack", fields: [assigneeTrackId], references: [id], onDelete: SetNull)
+  assigneeUser        User?                @relation("TaskAssigneeUser", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  parentTask          Task?                @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  childTasks          Task[]               @relation("TaskHierarchy")
+  calendar            WorkCalendar?        @relation(fields: [calendarId], references: [id], onDelete: SetNull)
+  assignments         TaskAssignment[]
+  files               TaskFile[]
+  auditLogs           TaskAuditLog[]
+  checklist           TaskChecklist[]
+  adminNotes          AdminNote[]
+  taskUpdates         TaskUpdate[]
+  predecessors        TaskDependency[]     @relation("DependencySuccessor")
+  successors          TaskDependency[]     @relation("DependencyPredecessor")
   resourceAssignments ResourceAssignment[]
 
   @@index([trackId])
@@ -851,34 +862,34 @@ model Task {
 // ─── GANTT: CONSTRAINT TYPES ───
 
 enum ConstraintType {
-  ASAP          // As Soon As Possible (default)
-  ALAP          // As Late As Possible
-  MSO           // Must Start On
-  MFO           // Must Finish On
-  SNET          // Start No Earlier Than
-  SNLT          // Start No Later Than
-  FNET          // Finish No Earlier Than
-  FNLT          // Finish No Later Than
+  ASAP // As Soon As Possible (default)
+  ALAP // As Late As Possible
+  MSO // Must Start On
+  MFO // Must Finish On
+  SNET // Start No Earlier Than
+  SNLT // Start No Later Than
+  FNET // Finish No Earlier Than
+  FNLT // Finish No Later Than
 }
 
 // ─── GANTT: DEPENDENCY TYPES ───
 
 enum DependencyType {
-  FS  // Finish-to-Start (default)
-  SS  // Start-to-Start
-  FF  // Finish-to-Finish
-  SF  // Start-to-Finish
+  FS // Finish-to-Start (default)
+  SS // Start-to-Start
+  FF // Finish-to-Finish
+  SF // Start-to-Finish
 }
 
 // ─── GANTT: TASK DEPENDENCIES ───
 
 model TaskDependency {
-  id              String         @id @default(cuid())
-  predecessorId   String         @map("predecessor_id")
-  successorId     String         @map("successor_id")
-  type            DependencyType @default(FS)
-  lag             Float          @default(0) // working days (+lead / -lag)
-  createdAt       DateTime       @default(now()) @map("created_at")
+  id            String         @id @default(cuid())
+  predecessorId String         @map("predecessor_id")
+  successorId   String         @map("successor_id")
+  type          DependencyType @default(FS)
+  lag           Float          @default(0) // working days (+lead / -lag)
+  createdAt     DateTime       @default(now()) @map("created_at")
 
   predecessor Task @relation("DependencyPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
   successor   Task @relation("DependencySuccessor", fields: [successorId], references: [id], onDelete: Cascade)
@@ -892,20 +903,20 @@ model TaskDependency {
 // ─── GANTT: WORK CALENDARS ───
 
 model WorkCalendar {
-  id          String   @id @default(cuid())
-  name        String
-  nameAr      String   @map("name_ar")
-  isDefault   Boolean  @default(false) @map("is_default")
+  id            String   @id @default(cuid())
+  name          String
+  nameAr        String   @map("name_ar")
+  isDefault     Boolean  @default(false) @map("is_default")
   // Working days: array of day numbers (0=Sun, 1=Mon, ... 6=Sat)
   // Saudi default: [0,1,2,3,4] = Sun-Thu
-  workDays    Int[]    @default([0, 1, 2, 3, 4]) @map("work_days")
-  workStartHour Int    @default(9) @map("work_start_hour")
-  workEndHour   Int    @default(17) @map("work_end_hour")
+  workDays      Int[]    @default([0, 1, 2, 3, 4]) @map("work_days")
+  workStartHour Int      @default(9) @map("work_start_hour")
+  workEndHour   Int      @default(17) @map("work_end_hour")
   // Holidays as JSON array of {date, name, nameAr}
-  holidays    Json     @default("[]")
-  timezone    String   @default("Asia/Riyadh")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  holidays      Json     @default("[]")
+  timezone      String   @default("Asia/Riyadh")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   tasks Task[]
 
@@ -915,12 +926,12 @@ model WorkCalendar {
 // ─── GANTT: RESOURCE ASSIGNMENTS ───
 
 model ResourceAssignment {
-  id          String   @id @default(cuid())
-  taskId      String   @map("task_id")
-  userId      String   @map("user_id")
-  units       Float    @default(100) // allocation percentage (100 = full-time)
-  costRate    Float?   @map("cost_rate")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id        String   @id @default(cuid())
+  taskId    String   @map("task_id")
+  userId    String   @map("user_id")
+  units     Float    @default(100) // allocation percentage (100 = full-time)
+  costRate  Float?   @map("cost_rate")
+  createdAt DateTime @default(now()) @map("created_at")
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -934,7 +945,7 @@ model ResourceAssignment {
 model TaskAuditLog {
   id          String   @id @default(cuid())
   taskId      String   @map("task_id")
-  action      String   // CREATED, UPDATED, STATUS_CHANGED, COMMENT_ADDED, REASSIGNED, DELETED
+  action      String // CREATED, UPDATED, STATUS_CHANGED, COMMENT_ADDED, REASSIGNED, DELETED
   beforeJson  Json?    @map("before_json")
   afterJson   Json?    @map("after_json")
   actorUserId String   @map("actor_user_id")
@@ -1020,7 +1031,7 @@ model AdminNote {
   taskId      String   @map("task_id")
   content     String   @db.Text
   authorId    String   @map("author_id")
-  editHistory Json?    @map("edit_history") @default("[]")
+  editHistory Json?    @default("[]") @map("edit_history")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -1107,32 +1118,32 @@ model Embedding {
 // ─── EXECUTIVE TASKS (المهام التنفيذية) ───
 
 enum ExecutiveTaskStatus {
-  new         // جديد
-  sent        // تم الارسال
+  new // جديد
+  sent // تم الارسال
   in_progress // قيد التنفيذ
-  editing     // قيد التعديل
-  edited      // تم التعديل
-  approved    // معتمد
-  completed   // مكتملة
+  editing // قيد التعديل
+  edited // تم التعديل
+  approved // معتمد
+  completed // مكتملة
 }
 
 model ExecutiveTask {
-  id          String                @id @default(cuid())
-  sheetName   String                @map("sheet_name")
-  name        String                @db.Text
-  status      ExecutiveTaskStatus   @default(in_progress)
-  track       String?
-  entity      String?
-  responsible String?
-  followUp    String?               @map("follow_up")
-  receiveDate DateTime?             @map("receive_date")
-  lastActionDate DateTime?          @map("last_action_date")
-  dueDate     DateTime?             @map("due_date")
-  deliveryDate DateTime?            @map("delivery_date")
-  notes       String?               @db.Text
-  sortOrder   Int                   @default(0) @map("sort_order")
-  createdAt   DateTime              @default(now()) @map("created_at")
-  updatedAt   DateTime              @updatedAt @map("updated_at")
+  id             String              @id @default(cuid())
+  sheetName      String              @map("sheet_name")
+  name           String              @db.Text
+  status         ExecutiveTaskStatus @default(in_progress)
+  track          String?
+  entity         String?
+  responsible    String?
+  followUp       String?             @map("follow_up")
+  receiveDate    DateTime?           @map("receive_date")
+  lastActionDate DateTime?           @map("last_action_date")
+  dueDate        DateTime?           @map("due_date")
+  deliveryDate   DateTime?           @map("delivery_date")
+  notes          String?             @db.Text
+  sortOrder      Int                 @default(0) @map("sort_order")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
 
   @@index([sheetName])
   @@index([status])
@@ -1142,22 +1153,22 @@ model ExecutiveTask {
 // ─── DISTRIBUTION: RAW DATA (Achievement source) ───
 
 model DistributionAchievement {
-  id                    String   @id @default(cuid())
-  gregorianDate         DateTime @map("gregorian_date")
-  hijriDate             String   @map("hijri_date")
-  companies             Int
-  parcels               Int      @default(0)
-  batch                 String   @default("")
-  totalCards            Int      @map("total_cards")
-  cardsPerHour          Int      @map("cards_per_hour")
-  duration              Int      @default(4)
-  specialists           Int      @default(4)
-  cardsReceivedFromFactory Boolean @default(true) @map("cards_received_from_factory")
-  distributionCenter    String?  @map("distribution_center") // makkah | madinah
-  notes                 String?  @db.Text
-  createdById           String   @map("created_by_id")
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
+  id                       String   @id @default(cuid())
+  gregorianDate            DateTime @map("gregorian_date")
+  hijriDate                String   @map("hijri_date")
+  companies                Int
+  parcels                  Int      @default(0)
+  batch                    String   @default("")
+  totalCards               Int      @map("total_cards")
+  cardsPerHour             Int      @map("cards_per_hour")
+  duration                 Int      @default(4)
+  specialists              Int      @default(4)
+  cardsReceivedFromFactory Boolean  @default(true) @map("cards_received_from_factory")
+  distributionCenter       String?  @map("distribution_center") // makkah | madinah
+  notes                    String?  @db.Text
+  createdById              String   @map("created_by_id")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
 
   createdBy User @relation("DistAchievementCreator", fields: [createdById], references: [id])
 
@@ -1168,30 +1179,30 @@ model DistributionAchievement {
 // ─── DISTRIBUTION: RAW DATA (Deviation source) ───
 
 model DistributionDeviation {
-  id                       String   @id @default(cuid())
-  gregorianDate            DateTime @map("gregorian_date")
-  hijriDate                String   @map("hijri_date")
+  id                  String   @id @default(cuid())
+  gregorianDate       DateTime @map("gregorian_date")
+  hijriDate           String   @map("hijri_date")
   // Section 1: Inputs (المدخلات)
-  companies                Int
-  platformValue            Int      @map("platform_value")
-  factoryValue             Int      @map("factory_value")
-  distributionValue        Int      @map("distribution_value")
+  companies           Int
+  platformValue       Int      @map("platform_value")
+  factoryValue        Int      @map("factory_value")
+  distributionValue   Int      @map("distribution_value")
   // Section 2A: Appointment (حجز موعد 3 Hours)
-  totalCompanies3h         Int      @default(0) @map("total_companies_3h")
-  attendedCompanies3h      Int      @default(0) @map("attended_companies_3h")
+  totalCompanies3h    Int      @default(0) @map("total_companies_3h")
+  attendedCompanies3h Int      @default(0) @map("attended_companies_3h")
   // Section 2B: Completion Certificate (شهادة الإنجاز)
-  completionPct            Int      @default(100) @map("completion_pct")
+  completionPct       Int      @default(100) @map("completion_pct")
   // Section 2C: Receiving (استلام)
-  totalReceiving           Int      @default(0) @map("total_receiving")
-  completedReceiving       Int      @default(0) @map("completed_receiving")
+  totalReceiving      Int      @default(0) @map("total_receiving")
+  completedReceiving  Int      @default(0) @map("completed_receiving")
   // Section 3: System Reports (بلاغات النظام)
-  reportsPlatform          Int      @default(0) @map("reports_platform")
-  reportsApple             Int      @default(0) @map("reports_apple")
-  reportsAndroid           Int      @default(0) @map("reports_android")
-  notes                    String?  @db.Text
-  createdById              String   @map("created_by_id")
-  createdAt                DateTime @default(now()) @map("created_at")
-  updatedAt                DateTime @updatedAt @map("updated_at")
+  reportsPlatform     Int      @default(0) @map("reports_platform")
+  reportsApple        Int      @default(0) @map("reports_apple")
+  reportsAndroid      Int      @default(0) @map("reports_android")
+  notes               String?  @db.Text
+  createdById         String   @map("created_by_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   createdBy User @relation("DistDeviationCreator", fields: [createdById], references: [id])
 
@@ -1202,18 +1213,18 @@ model DistributionDeviation {
 // ─── LEGACY (kept for migration safety) ───
 
 model DistributionEntry {
-  id                    String   @id @default(cuid())
-  gregorianDate         DateTime @map("gregorian_date")
-  hijriDate             String   @map("hijri_date")
-  companies             Int
-  batches               Int
-  cardsPerHour          Int      @map("cards_per_hour")
-  platformActual        Int      @map("platform_actual")
-  factoryActual         Int      @map("factory_actual")
-  distributionActual    Int      @map("distribution_actual")
-  createdById           String   @map("created_by_id")
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(cuid())
+  gregorianDate      DateTime @map("gregorian_date")
+  hijriDate          String   @map("hijri_date")
+  companies          Int
+  batches            Int
+  cardsPerHour       Int      @map("cards_per_hour")
+  platformActual     Int      @map("platform_actual")
+  factoryActual      Int      @map("factory_actual")
+  distributionActual Int      @map("distribution_actual")
+  createdById        String   @map("created_by_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   createdBy User @relation("DistributionEntryCreator", fields: [createdById], references: [id])
 
@@ -1225,14 +1236,14 @@ model DistributionEntry {
 // ─── ATTENDANCE INTEGRATION (ZKTeco BioTime) ───
 
 model AttendanceRawLog {
-  id            String   @id @default(cuid())
-  empCode       String   @map("emp_code")
-  empName       String   @default("") @map("emp_name")
-  punchTime     DateTime @map("punch_time")
-  punchState    String   @default("") @map("punch_state")
-  terminalSn    String   @default("") @map("terminal_sn")
-  sourceSyncId  String?  @map("source_sync_id")
-  createdAt     DateTime @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  empCode      String   @map("emp_code")
+  empName      String   @default("") @map("emp_name")
+  punchTime    DateTime @map("punch_time")
+  punchState   String   @default("") @map("punch_state")
+  terminalSn   String   @default("") @map("terminal_sn")
+  sourceSyncId String?  @map("source_sync_id")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   @@unique([empCode, punchTime])
   @@index([empCode])
@@ -1241,19 +1252,19 @@ model AttendanceRawLog {
 }
 
 model AttendanceDaily {
-  id              String   @id @default(cuid())
-  empCode         String   @map("emp_code")
-  empName         String   @default("") @map("emp_name")
-  attendanceDate  DateTime @map("attendance_date")
-  checkIn         DateTime? @map("check_in")
-  checkOut        DateTime? @map("check_out")
-  workMinutes     Int      @default(0) @map("work_minutes")
-  lateMinutes     Int      @default(0) @map("late_minutes")
-  status          String   @default("absent") // present, late, absent, incomplete
-  department      String   @default("")
-  trackId         String?  @map("track_id")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String    @id @default(cuid())
+  empCode        String    @map("emp_code")
+  empName        String    @default("") @map("emp_name")
+  attendanceDate DateTime  @map("attendance_date")
+  checkIn        DateTime? @map("check_in")
+  checkOut       DateTime? @map("check_out")
+  workMinutes    Int       @default(0) @map("work_minutes")
+  lateMinutes    Int       @default(0) @map("late_minutes")
+  status         String    @default("absent") // present, late, absent, incomplete
+  department     String    @default("")
+  trackId        String?   @map("track_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   @@unique([empCode, attendanceDate])
   @@index([attendanceDate])
@@ -1264,34 +1275,34 @@ model AttendanceDaily {
 }
 
 model AttendanceSyncLog {
-  id          String   @id @default(cuid())
-  syncType    String   @map("sync_type") // manual, scheduled
-  status      String   // success, partial, failed
-  recordsFetched Int   @default(0) @map("records_fetched")
-  recordsProcessed Int @default(0) @map("records_processed")
-  errorMessage String? @map("error_message") @db.Text
-  syncFrom    DateTime? @map("sync_from")
-  syncTo      DateTime? @map("sync_to")
-  durationMs  Int      @default(0) @map("duration_ms")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id               String    @id @default(cuid())
+  syncType         String    @map("sync_type") // manual, scheduled
+  status           String // success, partial, failed
+  recordsFetched   Int       @default(0) @map("records_fetched")
+  recordsProcessed Int       @default(0) @map("records_processed")
+  errorMessage     String?   @map("error_message") @db.Text
+  syncFrom         DateTime? @map("sync_from")
+  syncTo           DateTime? @map("sync_to")
+  durationMs       Int       @default(0) @map("duration_ms")
+  createdAt        DateTime  @default(now()) @map("created_at")
 
   @@index([createdAt])
   @@map("attendance_sync_logs")
 }
 
 model AttendanceConfig {
-  id            String @id @default("default")
-  baseUrl       String @default("http://127.0.0.1:1403") @map("base_url")
-  username      String @default("Admin")
-  password      String @default("Hussain123")
-  workStartTime String @default("09:00") @map("work_start_time")
-  graceMinutes  Int    @default(15) @map("grace_minutes")
-  syncInterval  Int    @default(30) @map("sync_interval")
-  employeesEndpoint    String @default("/api/v2/iclock/api/employees/") @map("employees_endpoint")
-  transactionsEndpoint String @default("/api/v2/iclock/api/transactions/") @map("transactions_endpoint")
-  lastSyncAt    DateTime? @map("last_sync_at")
-  lastSyncStatus String? @map("last_sync_status")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id                   String    @id @default("default")
+  baseUrl              String    @default("http://127.0.0.1:1403") @map("base_url")
+  username             String    @default("Admin")
+  password             String    @default("Hussain123")
+  workStartTime        String    @default("09:00") @map("work_start_time")
+  graceMinutes         Int       @default(15) @map("grace_minutes")
+  syncInterval         Int       @default(30) @map("sync_interval")
+  employeesEndpoint    String    @default("/api/v2/iclock/api/employees/") @map("employees_endpoint")
+  transactionsEndpoint String    @default("/api/v2/iclock/api/transactions/") @map("transactions_endpoint")
+  lastSyncAt           DateTime? @map("last_sync_at")
+  lastSyncStatus       String?   @map("last_sync_status")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
   @@map("attendance_config")
 }
@@ -1330,41 +1341,41 @@ enum InvoiceStatus {
 }
 
 model Custody {
-  id               String        @id @default(cuid())
-  code             String?       @unique // nullable for existing rows, backfill then enforce
-  name             String
-  description      String?       @db.Text
+  id              String        @id @default(cuid())
+  code            String?       @unique // nullable for existing rows, backfill then enforce
+  name            String
+  description     String?       @db.Text
   // Financial — nullable for safe migration, backfilled from totalAmount/remainingAmount
-  initialBalance   Float?        @map("initial_balance")
-  currentBalance   Float?        @map("current_balance")
+  initialBalance  Float?        @map("initial_balance")
+  currentBalance  Float?        @map("current_balance")
   // Legacy fields kept for backward compat during migration
-  totalAmount      Float         @default(0) @map("total_amount")
-  remainingAmount  Float         @default(0) @map("remaining_amount")
-  spentAmount      Float         @default(0) @map("spent_amount")
-  balanceAddedAt   DateTime?     @map("balance_added_at")
-  status           CustodyStatus @default(ACTIVE)
-  notes            String?       @db.Text
-  assignedToId     String?       @map("assigned_to_id")
-  closedById       String?       @map("closed_by_id")
-  closedAt         DateTime?     @map("closed_at")
-  closingNotes     String?       @map("closing_notes") @db.Text
-  closingBalance   Float?        @map("closing_balance")
+  totalAmount     Float         @default(0) @map("total_amount")
+  remainingAmount Float         @default(0) @map("remaining_amount")
+  spentAmount     Float         @default(0) @map("spent_amount")
+  balanceAddedAt  DateTime?     @map("balance_added_at")
+  status          CustodyStatus @default(ACTIVE)
+  notes           String?       @db.Text
+  assignedToId    String?       @map("assigned_to_id")
+  closedById      String?       @map("closed_by_id")
+  closedAt        DateTime?     @map("closed_at")
+  closingNotes    String?       @map("closing_notes") @db.Text
+  closingBalance  Float?        @map("closing_balance")
   // Legacy fields
-  category         String?
-  subCategory      String?       @map("sub_category")
-  trackId          String?       @map("track_id")
-  createdById      String        @map("created_by_id")
-  createdAt        DateTime      @default(now()) @map("created_at")
-  updatedAt        DateTime      @updatedAt @map("updated_at")
+  category        String?
+  subCategory     String?       @map("sub_category")
+  trackId         String?       @map("track_id")
+  createdById     String        @map("created_by_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
 
-  createdBy   User               @relation("CustodyCreator", fields: [createdById], references: [id])
-  assignedTo  User?              @relation("CustodyOwner", fields: [assignedToId], references: [id])
-  closedBy    User?              @relation("CustodyCloser", fields: [closedById], references: [id])
-  members     CustodyMember[]
-  invoices    CustodyInvoice[]
-  balanceTxs  CustodyBalanceTransaction[]
-  items       CustodyItem[]
-  auditLogs   CustodyAuditLog[]
+  createdBy  User                        @relation("CustodyCreator", fields: [createdById], references: [id])
+  assignedTo User?                       @relation("CustodyOwner", fields: [assignedToId], references: [id])
+  closedBy   User?                       @relation("CustodyCloser", fields: [closedById], references: [id])
+  members    CustodyMember[]
+  invoices   CustodyInvoice[]
+  balanceTxs CustodyBalanceTransaction[]
+  items      CustodyItem[]
+  auditLogs  CustodyAuditLog[]
 
   @@index([status])
   @@index([assignedToId])
@@ -1372,12 +1383,12 @@ model Custody {
 }
 
 model CustodyMember {
-  id         String   @id @default(cuid())
-  custodyId  String   @map("custody_id")
-  userId     String   @map("user_id")
-  roleType   String   @default("viewer") @map("role_type") // manager | custodian | executor | viewer
-  assignedById String? @map("assigned_by_id")
-  assignedAt DateTime @default(now()) @map("assigned_at")
+  id           String   @id @default(cuid())
+  custodyId    String   @map("custody_id")
+  userId       String   @map("user_id")
+  roleType     String   @default("viewer") @map("role_type") // manager | custodian | executor | viewer
+  assignedById String?  @map("assigned_by_id")
+  assignedAt   DateTime @default(now()) @map("assigned_at")
 
   custody    Custody @relation(fields: [custodyId], references: [id], onDelete: Cascade)
   user       User    @relation("CustodyMemberUser", fields: [userId], references: [id])
@@ -1389,17 +1400,17 @@ model CustodyMember {
 }
 
 model CustodyInvoice {
-  id            String        @id @default(cuid())
-  custodyId     String        @map("custody_id")
-  invoiceNumber String?       @map("invoice_number")
-  name          String
-  description   String?       @db.Text
-  amount        Float
-  invoiceDate   DateTime      @map("invoice_date")
-  status        InvoiceStatus @default(UPLOADED)
-  attachmentUrl String?       @map("attachment_url")
-  attachmentName String?      @map("attachment_name")
-  attachmentPath String?      @map("attachment_path")
+  id             String        @id @default(cuid())
+  custodyId      String        @map("custody_id")
+  invoiceNumber  String?       @map("invoice_number")
+  name           String
+  description    String?       @db.Text
+  amount         Float
+  invoiceDate    DateTime      @map("invoice_date")
+  status         InvoiceStatus @default(UPLOADED)
+  attachmentUrl  String?       @map("attachment_url")
+  attachmentName String?       @map("attachment_name")
+  attachmentPath String?       @map("attachment_path")
 
   // AI Invoice Analyzer (Claude Vision) — populated when the invoice is
   // created through /ai-analyze + /ai-confirm. All fields are optional so
@@ -1407,8 +1418,8 @@ model CustodyInvoice {
   aiExtracted     Boolean   @default(false) @map("ai_extracted")
   aiConfidence    Float?    @map("ai_confidence")
   aiCategory      String?   @map("ai_category")
-  aiRiskLevel     String?   @map("ai_risk_level")     // low | medium | high
-  aiRiskScore     Int?      @map("ai_risk_score")     // 0-100
+  aiRiskLevel     String?   @map("ai_risk_level") // low | medium | high
+  aiRiskScore     Int?      @map("ai_risk_score") // 0-100
   aiRiskFlags     String[]  @default([]) @map("ai_risk_flags")
   aiExtractionId  String?   @unique @map("ai_extraction_id")
   aiProcessedAt   DateTime? @map("ai_processed_at")
@@ -1416,12 +1427,12 @@ model CustodyInvoice {
   vendorName      String?   @map("vendor_name")
   aiRawResponse   Json?     @map("ai_raw_response")
 
-  createdById   String        @map("created_by_id")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  custody     Custody              @relation(fields: [custodyId], references: [id], onDelete: Cascade)
-  createdBy   User                 @relation("InvoiceCreator", fields: [createdById], references: [id])
+  custody     Custody             @relation(fields: [custodyId], references: [id], onDelete: Cascade)
+  createdBy   User                @relation("InvoiceCreator", fields: [createdById], references: [id])
   attachments InvoiceAttachment[]
 
   @@index([custodyId])
@@ -1438,11 +1449,11 @@ model AIExtractionLog {
   fileName       String   @map("file_name")
   fileSize       Int      @map("file_size")
   mimeType       String   @map("mime_type")
-  status         String   // pending | completed | failed
+  status         String // pending | completed | failed
   tokensUsed     Int?     @map("tokens_used")
   costInSar      Float?   @map("cost_in_sar")
   errorMessage   String?  @map("error_message") @db.Text
-  processingTime Int?     @map("processing_time")  // milliseconds
+  processingTime Int?     @map("processing_time") // milliseconds
   extractionId   String?  @unique @map("extraction_id") // links to CustodyInvoice.aiExtractionId
   createdAt      DateTime @default(now()) @map("created_at")
 
@@ -1494,7 +1505,7 @@ model CustodyBalanceTransaction {
 model CustodyAuditLog {
   id         String   @id @default(cuid())
   custodyId  String?  @map("custody_id")
-  action     String   // CREATE, UPDATE, DELETE, CLOSE, ADD_MEMBER, REMOVE_MEMBER, ADD_INVOICE, APPROVE_INVOICE, REJECT_INVOICE, UPLOAD
+  action     String // CREATE, UPDATE, DELETE, CLOSE, ADD_MEMBER, REMOVE_MEMBER, ADD_INVOICE, APPROVE_INVOICE, REJECT_INVOICE, UPLOAD
   entityType String   @map("entity_type") // CUSTODY, INVOICE, MEMBER
   entityId   String   @map("entity_id")
   oldValue   Json?    @map("old_value")
@@ -1523,9 +1534,9 @@ model CustodyItem {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
-  custody       Custody @relation(fields: [custodyId], references: [id], onDelete: Cascade)
-  responsibleUser User? @relation("CustodyItemResponsible", fields: [responsibleUserId], references: [id])
-  createdBy     User   @relation("CustodyItemCreator", fields: [createdById], references: [id])
+  custody         Custody @relation(fields: [custodyId], references: [id], onDelete: Cascade)
+  responsibleUser User?   @relation("CustodyItemResponsible", fields: [responsibleUserId], references: [id])
+  createdBy       User    @relation("CustodyItemCreator", fields: [createdById], references: [id])
 
   @@index([custodyId])
   @@index([status])
@@ -1533,15 +1544,15 @@ model CustodyItem {
 }
 
 model SupportRequest {
-  id            String   @id @default(cuid())
-  title         String
-  description   String?  @db.Text
-  responsibleName String? @map("responsible_name")
-  priority      String   @default("non_urgent") // urgent | non_urgent
-  status        String   @default("open") // open | in_progress | completed
-  createdById   String   @map("created_by_id")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id              String   @id @default(cuid())
+  title           String
+  description     String?  @db.Text
+  responsibleName String?  @map("responsible_name")
+  priority        String   @default("non_urgent") // urgent | non_urgent
+  status          String   @default("open") // open | in_progress | completed
+  createdById     String   @map("created_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   createdBy User @relation("SupportRequestCreator", fields: [createdById], references: [id])
 
@@ -1553,20 +1564,20 @@ model SupportRequest {
 // ─── CUSTODY FUND MANAGEMENT (v2) ───
 
 model CustodyFund {
-  id             String   @id @default(cuid())
-  custodyName    String   @map("custody_name")
-  totalAmount    Float    @map("total_amount")
-  currentBalance Float    @map("current_balance")
-  status         String   @default("active") // active | closed
+  id             String    @id @default(cuid())
+  custodyName    String    @map("custody_name")
+  totalAmount    Float     @map("total_amount")
+  currentBalance Float     @map("current_balance")
+  status         String    @default("active") // active | closed
   closedAt       DateTime? @map("closed_at")
-  closedById     String?  @map("closed_by_id")
-  closingNote    String?  @map("closing_note") @db.Text
-  createdById    String   @map("created_by_id")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  closedById     String?   @map("closed_by_id")
+  closingNote    String?   @map("closing_note") @db.Text
+  createdById    String    @map("created_by_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  createdBy    User                   @relation("CustodyFundCreator", fields: [createdById], references: [id])
-  closedBy     User?                  @relation("CustodyFundCloser", fields: [closedById], references: [id])
+  createdBy    User                     @relation("CustodyFundCreator", fields: [createdById], references: [id])
+  closedBy     User?                    @relation("CustodyFundCloser", fields: [closedById], references: [id])
   transactions CustodyFundTransaction[]
   members      CustodyFundMember[]
   invoices     CustodyFundInvoice[]
@@ -1603,9 +1614,9 @@ model CustodyFundMember {
   addedById       String?  @map("added_by_id")
   addedAt         DateTime @default(now()) @map("added_at")
 
-  custodyFund CustodyFund @relation(fields: [custodyFundId], references: [id], onDelete: Cascade)
-  user        User        @relation("CustodyFundMemberUser", fields: [userId], references: [id])
-  addedBy     User?       @relation("CustodyFundMemberAdder", fields: [addedById], references: [id])
+  custodyFund CustodyFund          @relation(fields: [custodyFundId], references: [id], onDelete: Cascade)
+  user        User                 @relation("CustodyFundMemberUser", fields: [userId], references: [id])
+  addedBy     User?                @relation("CustodyFundMemberAdder", fields: [addedById], references: [id])
   invoices    CustodyFundInvoice[]
 
   @@unique([custodyFundId, userId])
@@ -1614,22 +1625,22 @@ model CustodyFundMember {
 }
 
 model CustodyFundInvoice {
-  id                    String   @id @default(cuid())
-  custodyFundId         String   @map("custody_fund_id")
-  custodyMemberId       String?  @map("custody_member_id")
-  invoiceName           String   @map("invoice_name")
-  amount                Float
-  invoiceDate           DateTime @map("invoice_date")
-  attachmentUrl         String?  @map("attachment_url")
-  attachmentOriginalName String? @map("attachment_original_name")
+  id                     String   @id @default(cuid())
+  custodyFundId          String   @map("custody_fund_id")
+  custodyMemberId        String?  @map("custody_member_id")
+  invoiceName            String   @map("invoice_name")
+  amount                 Float
+  invoiceDate            DateTime @map("invoice_date")
+  attachmentUrl          String?  @map("attachment_url")
+  attachmentOriginalName String?  @map("attachment_original_name")
   // Persistent attachment (DB-backed) — populated by AI Invoice Analyzer so
   // the file survives Railway's ephemeral filesystem. Manual uploads keep
   // using attachmentUrl and are unaffected.
-  attachmentData        Bytes?   @map("attachment_data")
-  attachmentMimeType    String?  @map("attachment_mime_type")
-  attachmentSizeBytes   Int?     @map("attachment_size_bytes")
-  status                String   @default("pending") // pending | approved | rejected
-  notes                 String?  @db.Text
+  attachmentData         Bytes?   @map("attachment_data")
+  attachmentMimeType     String?  @map("attachment_mime_type")
+  attachmentSizeBytes    Int?     @map("attachment_size_bytes")
+  status                 String   @default("pending") // pending | approved | rejected
+  notes                  String?  @db.Text
 
   // AI Invoice Analyzer (Claude Vision) — populated when the invoice is
   // created through the /ai-invoice flow. All fields optional so manual
@@ -1637,8 +1648,8 @@ model CustodyFundInvoice {
   aiExtracted     Boolean   @default(false) @map("ai_extracted")
   aiConfidence    Float?    @map("ai_confidence")
   aiCategory      String?   @map("ai_category")
-  aiRiskLevel     String?   @map("ai_risk_level")     // low | medium | high
-  aiRiskScore     Int?      @map("ai_risk_score")     // 0-100
+  aiRiskLevel     String?   @map("ai_risk_level") // low | medium | high
+  aiRiskScore     Int?      @map("ai_risk_score") // 0-100
   aiRiskFlags     String[]  @default([]) @map("ai_risk_flags")
   aiExtractionId  String?   @unique @map("ai_extraction_id")
   aiProcessedAt   DateTime? @map("ai_processed_at")
@@ -1646,8 +1657,8 @@ model CustodyFundInvoice {
   vendorName      String?   @map("vendor_name")
   aiRawResponse   Json?     @map("ai_raw_response")
 
-  createdById           String   @map("created_by_id")
-  createdAt             DateTime @default(now()) @map("created_at")
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   custodyFund   CustodyFund        @relation(fields: [custodyFundId], references: [id], onDelete: Cascade)
   custodyMember CustodyFundMember? @relation(fields: [custodyMemberId], references: [id])
@@ -1674,21 +1685,21 @@ model CustodyFundAlert {
 // ─── AI REPORTS INTELLIGENCE CENTER (مركز ذكاء التقارير) ───
 
 model IntelligenceSession {
-  id               String   @id @default(cuid())
-  createdById      String   @map("created_by_id")
-  filters          Json
-  outputMode       String   @map("output_mode")
-  customInstructions String? @map("custom_instructions") @db.Text
-  sourceReportIds  String[] @map("source_report_ids")
-  generatedContent Json?    @map("generated_content")
-  editedContent    Json?    @map("edited_content")
-  modelUsed        String?  @map("model_used")
-  sourceReportCount Int     @default(0) @map("source_report_count")
-  status           String   @default("draft")
-  errorMessage     String?  @map("error_message") @db.Text
-  templateId       String?  @map("template_id")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(cuid())
+  createdById        String   @map("created_by_id")
+  filters            Json
+  outputMode         String   @map("output_mode")
+  customInstructions String?  @map("custom_instructions") @db.Text
+  sourceReportIds    String[] @map("source_report_ids")
+  generatedContent   Json?    @map("generated_content")
+  editedContent      Json?    @map("edited_content")
+  modelUsed          String?  @map("model_used")
+  sourceReportCount  Int      @default(0) @map("source_report_count")
+  status             String   @default("draft")
+  errorMessage       String?  @map("error_message") @db.Text
+  templateId         String?  @map("template_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   createdBy User                  @relation("IntelligenceSessionCreator", fields: [createdById], references: [id])
   template  IntelligenceTemplate? @relation(fields: [templateId], references: [id])
@@ -1709,7 +1720,7 @@ model IntelligenceTemplate {
   storageProvider String   @default("DB_CHUNKED") @map("storage_provider")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  uploadedBy User                         @relation("IntelligenceTemplateUploader", fields: [uploadedById], references: [id])
+  uploadedBy User                        @relation("IntelligenceTemplateUploader", fields: [uploadedById], references: [id])
   chunks     IntelligenceTemplateChunk[]
   sessions   IntelligenceSession[]
 
@@ -1736,24 +1747,24 @@ model IntelligenceTemplateChunk {
 // preDeploy today.
 
 model AIAuditLog {
-  id            String          @id @default(cuid())
-  userId        String          @map("user_id")
-  sessionId     String          @map("session_id")
-  userQuery     String          @db.Text @map("user_query")
-  queryType     String          @default("text") @map("query_type") // text | voice
-  toolName      String?         @map("tool_name")
-  toolInput     Json?           @map("tool_input")
-  toolOutput    Json?           @map("tool_output")
-  reasoning     String?         @db.Text
-  modelUsed     String          @map("model_used")
+  id            String         @id @default(cuid())
+  userId        String         @map("user_id")
+  sessionId     String         @map("session_id")
+  userQuery     String         @map("user_query") @db.Text
+  queryType     String         @default("text") @map("query_type") // text | voice
+  toolName      String?        @map("tool_name")
+  toolInput     Json?          @map("tool_input")
+  toolOutput    Json?          @map("tool_output")
+  reasoning     String?        @db.Text
+  modelUsed     String         @map("model_used")
   status        AIActionStatus
-  errorMessage  String?         @db.Text @map("error_message")
-  executionMs   Int             @map("execution_ms")
-  isDestructive Boolean         @default(false) @map("is_destructive")
-  wasConfirmed  Boolean         @default(false) @map("was_confirmed")
-  ipAddress     String?         @map("ip_address")
-  userAgent     String?         @map("user_agent")
-  createdAt     DateTime        @default(now()) @map("created_at")
+  errorMessage  String?        @map("error_message") @db.Text
+  executionMs   Int            @map("execution_ms")
+  isDestructive Boolean        @default(false) @map("is_destructive")
+  wasConfirmed  Boolean        @default(false) @map("was_confirmed")
+  ipAddress     String?        @map("ip_address")
+  userAgent     String?        @map("user_agent")
+  createdAt     DateTime       @default(now()) @map("created_at")
 
   user User @relation("AIAuditLogUser", fields: [userId], references: [id])
 
@@ -1774,9 +1785,9 @@ enum AIActionStatus {
 model AIKnowledgeDocument {
   id         String   @id @default(cuid())
   title      String
-  source     String   // sop | regulation | internal_doc
-  category   String   // distribution | custody | general
-  rawContent String   @db.Text @map("raw_content")
+  source     String // sop | regulation | internal_doc
+  category   String // distribution | custody | general
+  rawContent String   @map("raw_content") @db.Text
   language   String   @default("ar")
   isActive   Boolean  @default(true) @map("is_active")
   uploadedBy String   @map("uploaded_by")
@@ -1791,7 +1802,7 @@ model AIQuickAction {
   id             String   @id @default(cuid())
   labelAr        String   @map("label_ar")
   labelEn        String?  @map("label_en")
-  promptTemplate String   @db.Text @map("prompt_template")
+  promptTemplate String   @map("prompt_template") @db.Text
   category       String
   icon           String?
   requiredRole   String?  @map("required_role")
@@ -1861,15 +1872,15 @@ enum PdfAttendanceCenter {
 }
 
 model PdfAttendanceEmployee {
-  id                String       @id @default(cuid())
-  employeeNumber    String?      @unique @map("employee_number")
-  fullName          String       @map("full_name")
-  normalizedName    String       @map("normalized_name")
+  id                String               @id @default(cuid())
+  employeeNumber    String?              @unique @map("employee_number")
+  fullName          String               @map("full_name")
+  normalizedName    String               @map("normalized_name")
   track             String
-  trackDetail       String?      @map("track_detail")
-  phoneNumber       String?      @map("phone_number")
-  scheduledCheckIn  String?      @map("scheduled_check_in") // "07:00"
-  scheduledCheckOut String?      @map("scheduled_check_out") // "19:00"
+  trackDetail       String?              @map("track_detail")
+  phoneNumber       String?              @map("phone_number")
+  scheduledCheckIn  String?              @map("scheduled_check_in") // "07:00"
+  scheduledCheckOut String?              @map("scheduled_check_out") // "19:00"
   shiftType         PdfShiftType         @default(morning) @map("shift_type")
   worksByCharter    Boolean              @default(false) @map("works_by_charter")
   isActive          Boolean              @default(true) @map("is_active")
@@ -1914,11 +1925,53 @@ model PdfAttendanceUpload {
   records   PdfAttendanceRecord[]
   summaries PdfDailyAttendanceSummary[]
   downloads PdfAttendanceFileDownload[]
+  analysis  PdfAttendanceAiAnalysis?
 
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([reportDate])
   @@map("pdf_attendance_uploads")
+}
+
+/// Persisted Claude analysis for a single attendance upload. 1:1 with the
+/// upload so a fresh "إعادة تحليل" overwrites the row in place — version /
+/// previousVersionId let us trace edits without a full audit table.
+model PdfAttendanceAiAnalysis {
+  id       String              @id @default(cuid())
+  uploadId String              @unique @map("upload_id")
+  upload   PdfAttendanceUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+  executiveSummary String @map("executive_summary") @db.Text
+  keyInsights      Json   @map("key_insights")
+
+  attendanceRate   Float @map("attendance_rate")
+  punctualityRate  Float @map("punctuality_rate")
+  averageWorkHours Float @map("average_work_hours")
+  totalLateMinutes Int   @map("total_late_minutes")
+
+  trackAnalysis   Json @map("track_analysis")
+  absencePatterns Json @map("absence_patterns")
+  topPerformers   Json @map("top_performers")
+  needsAttention  Json @map("needs_attention")
+  recommendations Json
+  riskFlags       Json @map("risk_flags")
+
+  aiModel          String @default("claude-sonnet-4-5") @map("ai_model")
+  processingTimeMs Int    @map("processing_time_ms")
+  inputTokens      Int?   @map("input_tokens")
+  outputTokens     Int?   @map("output_tokens")
+
+  analyzedAt        DateTime @default(now()) @map("analyzed_at")
+  analyzedById      String   @map("analyzed_by_id")
+  version           Int      @default(1)
+  previousVersionId String?  @map("previous_version_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([uploadId])
+  @@index([analyzedAt])
+  @@map("pdf_attendance_ai_analyses")
 }
 
 /// Audit trail — one row per file download. Used to answer "who pulled this
@@ -1987,4 +2040,95 @@ model PdfDailyAttendanceSummary {
   @@unique([uploadId, employeeId])
   @@index([reportDate])
   @@map("pdf_daily_attendance_summaries")
+}
+
+// ─── ABSENCE / BOOKLET MODULE ───
+// تسجيل الغياب الجماعي حسب المسار والكراسة. الكراسة (Booklet) هي تقسيم
+// فرعي للمسار (مكة، المدينة، فريق، إلخ). EmployeeAssignment يربط الموظفين
+// بكراسات معينة بنطاق زمني (موظف قد ينتقل من كراسة لأخرى).
+
+enum AbsenceType {
+  ABSENT // غياب
+  LATE // تأخر
+  EARLY_LEAVE // انصراف مبكر
+  EXCUSED // غياب بعذر
+  SICK_LEAVE // إجازة مرضية
+  ANNUAL_LEAVE // إجازة سنوية
+}
+
+enum AbsenceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Booklet {
+  id          String   @id @default(cuid())
+  trackId     String   @map("track_id")
+  code        String
+  nameAr      String   @map("name_ar")
+  nameEn      String?  @map("name_en")
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  track       Track                @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  assignments EmployeeAssignment[]
+  absences    Absence[]
+
+  @@unique([trackId, code])
+  @@index([trackId, isActive])
+  @@map("booklets")
+}
+
+model EmployeeAssignment {
+  id         String    @id @default(cuid())
+  employeeId String    @map("employee_id")
+  trackId    String    @map("track_id")
+  bookletId  String    @map("booklet_id")
+  startDate  DateTime  @map("start_date") @db.Date
+  endDate    DateTime? @map("end_date") @db.Date
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  booklet  Booklet  @relation(fields: [bookletId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, trackId, bookletId, startDate])
+  @@index([trackId, bookletId, isActive])
+  @@index([employeeId])
+  @@map("employee_assignments")
+}
+
+model Absence {
+  id            String        @id @default(cuid())
+  employeeId    String        @map("employee_id")
+  trackId       String        @map("track_id")
+  bookletId     String        @map("booklet_id")
+  absenceDate   DateTime      @map("absence_date") @db.Date
+  type          AbsenceType
+  status        AbsenceStatus @default(PENDING)
+  reason        String?
+  attachmentUrl String?       @map("attachment_url")
+  hours         Decimal?      @db.Decimal(4, 2)
+  recordedById  String        @map("recorded_by_id")
+  approvedById  String?       @map("approved_by_id")
+  approvedAt    DateTime?     @map("approved_at")
+  notes         String?       @db.Text
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  track      Track    @relation(fields: [trackId], references: [id])
+  booklet    Booklet  @relation(fields: [bookletId], references: [id])
+  recordedBy User     @relation("AbsenceRecorder", fields: [recordedById], references: [id])
+  approvedBy User?    @relation("AbsenceApprover", fields: [approvedById], references: [id])
+
+  @@unique([employeeId, absenceDate, type])
+  @@index([trackId, bookletId, absenceDate])
+  @@index([employeeId, absenceDate])
+  @@map("absences")
 }

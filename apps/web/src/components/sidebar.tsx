@@ -32,6 +32,7 @@ import {
   Receipt,
   Fingerprint,
   Files,
+  UserX,
 } from 'lucide-react';
 import NotificationBell from '@/components/notifications/notification-bell';
 
@@ -57,6 +58,7 @@ const NAV_ITEMS = [
   { href: '/support-services', label: 'خدمات المساندة', icon: Receipt, roles: ['admin', 'pm'] },
   { href: '/attendance', label: 'الحضور والانصراف', icon: Fingerprint, roles: ['admin'] },
   { href: '/attendance/uploads', label: 'سجل ملفات الحضور', icon: Files, roles: ['admin'] },
+  { href: '/attendance/bulk-absence', label: 'تسجيل غياب جماعي', icon: UserX, roles: ['admin', 'pm', 'hr', 'track_lead'] },
   { href: '/users', label: 'المستخدمين', icon: Users, roles: ['admin'] },
   { href: '/system-export', label: 'النظام والنسخ', icon: Database, roles: ['admin'] },
 ];

@@ -13,6 +13,10 @@ import {
   UpdateTrackKPIDto,
   CreatePenaltyDto,
   UpdatePenaltyDto,
+  CreateBookletDto,
+  UpdateBookletDto,
+  CreateEmployeeAssignmentDto,
+  BulkAssignEmployeesDto,
 } from './tracks.dto';
 
 @Injectable()
@@ -315,5 +319,146 @@ export class TracksService {
   async restorePenalty(id: string) {
     await this.prisma.penalty.update({ where: { id }, data: { isDeleted: false } });
     return { message: 'تم استعادة الغرامة' };
+  }
+
+  // ─── BOOKLETS ───
+
+  async listBooklets(trackId: string) {
+    const track = await this.prisma.track.findUnique({ where: { id: trackId } });
+    if (!track) throw new NotFoundException('المسار غير موجود');
+    return this.prisma.booklet.findMany({
+      where: { trackId, isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  async getBooklet(id: string) {
+    const booklet = await this.prisma.booklet.findUnique({
+      where: { id },
+      include: { track: true },
+    });
+    if (!booklet) throw new NotFoundException('الكراسة غير موجودة');
+    return booklet;
+  }
+
+  async createBooklet(dto: CreateBookletDto) {
+    const track = await this.prisma.track.findUnique({ where: { id: dto.trackId } });
+    if (!track) throw new NotFoundException('المسار غير موجود');
+    return this.prisma.booklet.create({ data: dto as any });
+  }
+
+  async updateBooklet(id: string, dto: UpdateBookletDto) {
+    const existing = await this.prisma.booklet.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('الكراسة غير موجودة');
+    return this.prisma.booklet.update({ where: { id }, data: dto as any });
+  }
+
+  async deleteBooklet(id: string) {
+    const existing = await this.prisma.booklet.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('الكراسة غير موجودة');
+    // Soft delete: just mark inactive — preserves historical absences
+    await this.prisma.booklet.update({ where: { id }, data: { isActive: false } });
+    return { message: 'تم حذف الكراسة' };
+  }
+
+  // ─── EMPLOYEE ASSIGNMENTS (Track + Booklet) ───
+
+  async listAssignments(trackId: string, bookletId: string) {
+    return this.prisma.employeeAssignment.findMany({
+      where: { trackId, bookletId, isActive: true },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            fullName: true,
+            fullNameAr: true,
+            position: true,
+            positionAr: true,
+            email: true,
+            department: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: { employee: { fullNameAr: 'asc' } },
+    });
+  }
+
+  async createAssignment(dto: CreateEmployeeAssignmentDto) {
+    const [employee, track, booklet] = await Promise.all([
+      this.prisma.employee.findUnique({ where: { id: dto.employeeId } }),
+      this.prisma.track.findUnique({ where: { id: dto.trackId } }),
+      this.prisma.booklet.findUnique({ where: { id: dto.bookletId } }),
+    ]);
+    if (!employee) throw new NotFoundException('الموظف غير موجود');
+    if (!track) throw new NotFoundException('المسار غير موجود');
+    if (!booklet) throw new NotFoundException('الكراسة غير موجودة');
+    if (booklet.trackId !== dto.trackId) {
+      throw new NotFoundException('الكراسة لا تنتمي لهذا المسار');
+    }
+
+    const startDate = dto.startDate ? new Date(dto.startDate) : new Date();
+    return this.prisma.employeeAssignment.upsert({
+      where: {
+        employeeId_trackId_bookletId_startDate: {
+          employeeId: dto.employeeId,
+          trackId: dto.trackId,
+          bookletId: dto.bookletId,
+          startDate,
+        },
+      },
+      create: {
+        employeeId: dto.employeeId,
+        trackId: dto.trackId,
+        bookletId: dto.bookletId,
+        startDate,
+        endDate: dto.endDate ? new Date(dto.endDate) : null,
+        isActive: true,
+      },
+      update: {
+        endDate: dto.endDate ? new Date(dto.endDate) : null,
+        isActive: true,
+      },
+    });
+  }
+
+  async bulkAssign(dto: BulkAssignEmployeesDto) {
+    const booklet = await this.prisma.booklet.findUnique({ where: { id: dto.bookletId } });
+    if (!booklet) throw new NotFoundException('الكراسة غير موجودة');
+    if (booklet.trackId !== dto.trackId) {
+      throw new NotFoundException('الكراسة لا تنتمي لهذا المسار');
+    }
+    const startDate = dto.startDate ? new Date(dto.startDate) : new Date();
+
+    const results = await this.prisma.$transaction(
+      dto.employeeIds.map((employeeId) =>
+        this.prisma.employeeAssignment.upsert({
+          where: {
+            employeeId_trackId_bookletId_startDate: {
+              employeeId,
+              trackId: dto.trackId,
+              bookletId: dto.bookletId,
+              startDate,
+            },
+          },
+          create: {
+            employeeId,
+            trackId: dto.trackId,
+            bookletId: dto.bookletId,
+            startDate,
+            isActive: true,
+          },
+          update: { isActive: true },
+        }),
+      ),
+    );
+    return { count: results.length, assignments: results };
+  }
+
+  async deleteAssignment(id: string) {
+    const existing = await this.prisma.employeeAssignment.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('التعيين غير موجود');
+    await this.prisma.employeeAssignment.update({ where: { id }, data: { isActive: false } });
+    return { message: 'تم إلغاء تعيين الموظف' };
   }
 }

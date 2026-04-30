@@ -363,3 +363,92 @@ export class UpdatePenaltyDto {
   @IsBoolean()
   isResolved?: boolean;
 }
+
+// ─── BOOKLETS ───
+
+export class CreateBookletDto {
+  @IsString()
+  trackId: string;
+
+  @IsString()
+  @MinLength(1)
+  code: string;
+
+  @IsString()
+  @MinLength(1)
+  nameAr: string;
+
+  @IsOptional()
+  @IsString()
+  nameEn?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsInt()
+  sortOrder?: number;
+}
+
+export class UpdateBookletDto {
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  nameAr?: string;
+
+  @IsOptional()
+  @IsString()
+  nameEn?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  sortOrder?: number;
+}
+
+// ─── EMPLOYEE ASSIGNMENTS (Track + Booklet) ───
+
+export class CreateEmployeeAssignmentDto {
+  @IsString()
+  employeeId: string;
+
+  @IsString()
+  trackId: string;
+
+  @IsString()
+  bookletId: string;
+
+  @IsOptional()
+  @IsString()
+  startDate?: string; // YYYY-MM-DD; defaults to today
+
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+}
+
+export class BulkAssignEmployeesDto {
+  @IsString()
+  trackId: string;
+
+  @IsString()
+  bookletId: string;
+
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @IsString({ each: true })
+  employeeIds: string[];
+}

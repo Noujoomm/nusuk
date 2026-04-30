@@ -1,7 +1,9 @@
 import {
+  Body,
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Param,
   Query,
@@ -25,6 +27,9 @@ import { ExcelSeederService } from './services/excel-seeder.service';
 import { PdfUploadService } from './services/pdf-upload.service';
 import { LetterGeneratorService } from './services/letter-generator.service';
 import { AttendanceExportService, ExportScope } from './services/attendance-export.service';
+import { AbsenceService } from './services/absence.service';
+import { AttendanceAnalysisService } from './services/attendance-analysis.service';
+import { BulkAbsenceDto, GetEmployeesByTrackBookletDto } from './dto/absence.dto';
 import { fixMulterFilename } from '../common/fix-filename';
 import { setFileResponseHeaders } from '../common/utils/file-response.util';
 
@@ -48,7 +53,96 @@ export class AttendanceController {
     private uploads: PdfUploadService,
     private letters: LetterGeneratorService,
     private exporter: AttendanceExportService,
+    private absences: AbsenceService,
+    private analysis: AttendanceAnalysisService,
   ) {}
+
+  // ─── AI ANALYSIS (cached in DB, refresh on demand) ───
+
+  @Get('uploads/:id/analysis')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async getAnalysis(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.analysis.getOrCreateAnalysis(id, user.id, false);
+  }
+
+  @Post('uploads/:id/analysis/refresh')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async refreshAnalysis(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.analysis.getOrCreateAnalysis(id, user.id, true);
+  }
+
+  @Delete('uploads/:id/analysis')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async deleteAnalysis(@Param('id') id: string) {
+    return this.analysis.deleteAnalysis(id);
+  }
+
+  @Get('uploads/:id/analysis/exists')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async hasAnalysis(@Param('id') id: string) {
+    const exists = await this.analysis.hasAnalysis(id);
+    return { exists };
+  }
+
+  /** Bulk existence check for the uploads list page (avoids N requests). */
+  @Post('uploads/analysis/exists-many')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async hasAnalysisMany(@Body() body: { ids: string[] }) {
+    const ids = Array.isArray(body?.ids) ? body.ids.filter((x) => typeof x === 'string').slice(0, 200) : [];
+    return this.analysis.hasAnalysisMany(ids);
+  }
+
+  // ─── BULK ABSENCE BY TRACK + BOOKLET ───
+
+  @Get('employees-by-track-booklet')
+  async getEmployeesByTrackBooklet(@Query() query: GetEmployeesByTrackBookletDto) {
+    return this.absences.getEmployeesByTrackAndBooklet(query);
+  }
+
+  @Post('absences/bulk')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'hr', 'track_lead')
+  async createBulkAbsence(@Body() dto: BulkAbsenceDto, @CurrentUser() user: { id: string }) {
+    return this.absences.createBulkAbsence(user.id, dto);
+  }
+
+  @Get('absences/report')
+  async getAbsenceReport(
+    @Query('trackId') trackId: string,
+    @Query('bookletId') bookletId: string,
+    @Query('date') date: string,
+  ) {
+    if (!trackId || !bookletId || !date) {
+      throw new BadRequestException('trackId و bookletId و date مطلوبة');
+    }
+    return this.absences.getAbsenceReport(trackId, bookletId, date);
+  }
+
+  @Patch('absences/:id/approve')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'hr')
+  async approveAbsence(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.absences.approve(id, user.id);
+  }
+
+  @Patch('absences/:id/reject')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'hr')
+  async rejectAbsence(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.absences.reject(id, user.id);
+  }
+
+  @Delete('absences/:id')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'pm', 'hr')
+  async deleteAbsence(@Param('id') id: string) {
+    return this.absences.deleteAbsence(id);
+  }
 
   @Post('employees/seed')
   @UseGuards(RolesGuard)
