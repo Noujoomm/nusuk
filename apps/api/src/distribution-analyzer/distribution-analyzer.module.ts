@@ -2,6 +2,9 @@ import { Module } from '@nestjs/common';
 import { DistributionAnalyzerController } from './distribution-analyzer.controller';
 import { DistributionAnalyzerService } from './distribution-analyzer.service';
 import { DistributionTrackAccessGuard } from './guards/distribution-track-access.guard';
+import { DistributionVisionService } from './services/claude-vision.service';
+import { DistributionFileParserService } from './services/distribution-file-parser.service';
+import { DistributionComparisonService } from './services/distribution-comparison.service';
 
 /**
  * Distribution Smart Analyzer — Phase 1 (scaffold).
@@ -20,7 +23,13 @@ import { DistributionTrackAccessGuard } from './guards/distribution-track-access
  */
 @Module({
   controllers: [DistributionAnalyzerController],
-  providers: [DistributionAnalyzerService, DistributionTrackAccessGuard],
+  providers: [
+    DistributionAnalyzerService,
+    DistributionTrackAccessGuard,
+    DistributionVisionService,
+    DistributionFileParserService,
+    DistributionComparisonService,
+  ],
   exports: [DistributionAnalyzerService],
 })
 export class DistributionAnalyzerModule {}

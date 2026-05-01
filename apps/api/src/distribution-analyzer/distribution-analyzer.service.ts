@@ -1,9 +1,12 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, DistributionDiscrepancySeverity } from '@prisma/client';
 import { createHash } from 'crypto';
 import { PrismaService } from '../common/prisma.service';
 import { DistributionTrackAccessGuard } from './guards/distribution-track-access.guard';
 import { UploadFileDto } from './dto/upload-file.dto';
+import { DistributionFileParserService } from './services/distribution-file-parser.service';
+import { DistributionComparisonService } from './services/distribution-comparison.service';
+import type { ComparisonResult } from './interfaces/analyzer.types';
 
 /**
  * Phase 1 — owner of the analyzer session lifecycle. The heavy work
@@ -41,6 +44,8 @@ export class DistributionAnalyzerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accessGuard: DistributionTrackAccessGuard,
+    private readonly parser: DistributionFileParserService,
+    private readonly comparator: DistributionComparisonService,
   ) {}
 
   // ─── Upload — Phase 1 creates the row, Phase 2 wires the queue ───
@@ -150,13 +155,115 @@ export class DistributionAnalyzerService {
     return { deleted: true };
   }
 
-  // ─── Phase 2+ stubs (intentionally NotImplemented for now) ───
-  async runAnalysis(_sessionId: string, _userId: string): Promise<never> {
-    throw new BadRequestException(
-      'محرك التحليل قيد التجهيز — سيتم تفعيله في المرحلة التالية',
-    );
+  // ─── Run analysis (full pipeline) ─────────────────────────────────────
+  async runAnalysis(sessionId: string, userId: string) {
+    const session = await this.prisma.distributionAnalysisSession.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session) throw new NotFoundException('الجلسة غير موجودة');
+    if (session.userId !== userId) {
+      const owner = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+      if (!owner || (owner.role !== 'admin' && owner.role !== 'system_manager')) {
+        throw new ForbiddenException('ليس لديك صلاحية لتشغيل هذه الجلسة');
+      }
+    }
+    if (!session.fileBytes) {
+      throw new BadRequestException('الملف الأصلي غير محفوظ — أعد رفعه لتشغيل التحليل');
+    }
+
+    const startedAt = Date.now();
+    await this.prisma.distributionAnalysisSession.update({
+      where: { id: sessionId },
+      data: { status: 'PARSING', errorMessage: null },
+    });
+
+    try {
+      // 1) Parse / extract
+      await this.prisma.distributionAnalysisSession.update({
+        where: { id: sessionId },
+        data: { status: 'EXTRACTING' },
+      });
+      const buffer = Buffer.from(session.fileBytes);
+      const extracted = await this.parser.parse(buffer, session.fileType, session.fileName);
+      if (extracted.rows.length === 0) {
+        throw new BadRequestException(
+          'لم يتم استخراج أي صفوف من الملف. تأكد من أن الجدول يحتوي على بيانات وأن الأعمدة تطابق المخطط المتوقع.',
+        );
+      }
+
+      // 2) Compare against the platform window
+      await this.prisma.distributionAnalysisSession.update({
+        where: { id: sessionId },
+        data: { status: 'ANALYZING' },
+      });
+      const platform = await this.comparator.loadPlatformWindow(extracted, {
+        dateFrom: session.dateRangeStart,
+        dateTo: session.dateRangeEnd,
+        center: (session.centerFilter as 'makkah' | 'madinah' | 'all' | null) ?? 'all',
+      });
+      const comparison = this.comparator.compare(extracted, platform);
+
+      // 3) Persist headline numbers + JSON snapshots
+      const updated = await this.prisma.distributionAnalysisSession.update({
+        where: { id: sessionId },
+        data: {
+          status: 'COMPLETED',
+          extractedData: extracted as any,
+          platformData: platform as any,
+          comparisonResult: comparison as any,
+          matchPercentage: comparison.matchPercentage,
+          totalRows: comparison.totalRows,
+          matchedRows: comparison.matchedRows,
+          mismatchedRows: comparison.mismatchedRows,
+          aiModel: extracted.modelUsed ?? 'n/a',
+          aiInputTokens: extracted.inputTokens ?? null,
+          aiOutputTokens: extracted.outputTokens ?? null,
+          processingTimeMs: Date.now() - startedAt,
+          completedAt: new Date(),
+        },
+      });
+
+      // 4) Replace discrepancies (drop + insert keeps re-runs idempotent)
+      await this.prisma.distributionAnalysisDiscrepancy.deleteMany({ where: { sessionId } });
+      const discRows = comparison.rowComparisons
+        .filter((r) => r.type !== 'VALUE_MISMATCH' || r.severity !== 'LOW')
+        .slice(0, 500)
+        .map((r) => ({
+          sessionId,
+          rowIdentifier: r.rowIdentifier,
+          fieldName: r.fieldName ?? r.type,
+          uploadedValue: r.extractedValue == null ? null : String(r.extractedValue),
+          platformValue: r.platformValue == null ? null : String(r.platformValue),
+          difference: r.difference,
+          severity: r.severity as DistributionDiscrepancySeverity,
+        }));
+      if (discRows.length) {
+        await this.prisma.distributionAnalysisDiscrepancy.createMany({ data: discRows });
+      }
+
+      this.logger.log(
+        `Analysis ok session=${sessionId} match=${comparison.matchPercentage}% disc=${discRows.length} (${updated.processingTimeMs}ms)`,
+      );
+      return this.getSession(sessionId, userId, 'admin');
+    } catch (err: any) {
+      this.logger.error(`Analysis failed session=${sessionId}: ${err?.message}`);
+      await this.prisma.distributionAnalysisSession.update({
+        where: { id: sessionId },
+        data: {
+          status: 'FAILED',
+          errorMessage: String(err?.message ?? err).slice(0, 2000),
+          processingTimeMs: Date.now() - startedAt,
+        },
+      });
+      if (err instanceof BadRequestException || err instanceof ForbiddenException) throw err;
+      throw new BadRequestException(err?.message || 'فشل تشغيل التحليل');
+    }
   }
 
+  // ─── Export (Phase 5: DOCX/Excel) ─────────────────────────────────────
   async exportReport(_sessionId: string, _userId: string, _role: string): Promise<never> {
     throw new BadRequestException(
       'تصدير التقارير قيد التجهيز — سيتم تفعيله في المرحلة التالية',

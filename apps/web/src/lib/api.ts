@@ -179,6 +179,36 @@ export const achievementsApi = {
   delete: (id: string) => api.delete(`/progress/achievements/${id}`),
 };
 
+// ─── Distribution Smart Analyzer ───
+export const distributionAnalyzerApi = {
+  upload: (
+    file: File,
+    opts?: {
+      dateRangeStart?: string;
+      dateRangeEnd?: string;
+      centerFilter?: 'makkah' | 'madinah' | 'all';
+      analysisDepth?: 'BASIC' | 'COMPREHENSIVE';
+    },
+  ) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (opts?.dateRangeStart) fd.append('dateRangeStart', opts.dateRangeStart);
+    if (opts?.dateRangeEnd) fd.append('dateRangeEnd', opts.dateRangeEnd);
+    if (opts?.centerFilter) fd.append('centerFilter', opts.centerFilter);
+    if (opts?.analysisDepth) fd.append('analysisDepth', opts.analysisDepth);
+    return api.post('/distribution-analyzer/upload', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    });
+  },
+  analyze: (sessionId: string) =>
+    api.post(`/distribution-analyzer/sessions/${sessionId}/analyze`, null, { timeout: 180000 }),
+  get: (sessionId: string) => api.get(`/distribution-analyzer/sessions/${sessionId}`),
+  list: (params?: { page?: number; limit?: number; status?: string }) =>
+    api.get('/distribution-analyzer/sessions', { params }),
+  delete: (sessionId: string) => api.delete(`/distribution-analyzer/sessions/${sessionId}`),
+};
+
 // ─── Scope Blocks ───
 export const scopeBlocksApi = {
   byTrack: (trackId: string) => api.get(`/scope-blocks/track/${trackId}`),
