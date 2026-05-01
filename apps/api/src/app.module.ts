@@ -40,6 +40,7 @@ import { AgentModule } from './agent/agent.module';
 import { AIAgentModule } from './ai-agent/ai-agent.module';
 import { AIAnalyzerModule } from './support-services/ai-analyzer/ai-analyzer.module';
 import { AttendanceModule } from './attendance/attendance.module';
+import { DistributionAnalyzerModule } from './distribution-analyzer/distribution-analyzer.module';
 import { HealthController } from './health.controller';
 import { RootController } from './root.controller';
 
@@ -85,6 +86,7 @@ import { RootController } from './root.controller';
     AIAgentModule,
     AIAnalyzerModule,
     AttendanceModule,
+    DistributionAnalyzerModule,
   ],
   controllers: [HealthController, RootController],
   providers: [

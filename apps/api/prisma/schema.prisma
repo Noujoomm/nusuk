@@ -53,6 +53,7 @@ model User {
   distributionEntries DistributionEntry[]       @relation("DistributionEntryCreator")
   distAchievements    DistributionAchievement[] @relation("DistAchievementCreator")
   distDeviations      DistributionDeviation[]   @relation("DistDeviationCreator")
+  distAnalyses        DistributionAnalysisSession[] @relation("DistAnalysisCreator")
 
   // Phase 3: Updates & Import
   dailyUpdates           DailyUpdate[]           @relation("DailyUpdateAuthor")
@@ -165,6 +166,8 @@ model Track {
   booklets            Booklet[]
   employeeAssignments EmployeeAssignment[]
   absences            Absence[]
+
+  distAnalyses DistributionAnalysisSession[] @relation("DistAnalysisTrack")
 
   @@map("tracks")
 }
@@ -1208,6 +1211,103 @@ model DistributionDeviation {
 
   @@index([gregorianDate])
   @@map("distribution_deviations")
+}
+
+// ─── DISTRIBUTION SMART ANALYZER (Phase 1: schema scaffold) ───
+// Stores AI-driven comparison sessions: user uploads a file (Excel/CSV/PDF/image)
+// claiming a set of distribution rows, the analyzer extracts them (Claude Vision
+// for images, parsers for the rest), compares against DistributionAchievement,
+// and persists the verdict so reports can be re-issued without re-running the
+// model. File bytes live in Postgres (Railway has ephemeral disk).
+
+enum DistributionAnalysisStatus {
+  PENDING
+  PARSING
+  EXTRACTING
+  ANALYZING
+  COMPLETED
+  FAILED
+}
+
+enum DistributionDiscrepancySeverity {
+  CRITICAL // ≥ 20% فرق جوهري
+  HIGH // 10–20%
+  MEDIUM // 5–10%
+  LOW // < 5%
+}
+
+model DistributionAnalysisSession {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation("DistAnalysisCreator", fields: [userId], references: [id])
+
+  trackId String @map("track_id")
+  track   Track  @relation("DistAnalysisTrack", fields: [trackId], references: [id])
+
+  // Original-file persistence (mirrors PdfAttendanceUpload pattern).
+  fileName         String  @map("file_name")
+  originalFileName String  @map("original_file_name") // before encoding fix
+  fileType         String  @map("file_type") // MIME (e.g. application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)
+  fileSize         Int     @map("file_size")
+  fileBytes        Bytes?  @map("file_bytes")
+  fileChecksum     String? @map("file_checksum") // SHA-256
+
+  status DistributionAnalysisStatus @default(PENDING)
+
+  // Filters applied at upload-time, kept so re-runs/exports are reproducible.
+  dateRangeStart  DateTime? @map("date_range_start") @db.Date
+  dateRangeEnd    DateTime? @map("date_range_end") @db.Date
+  centerFilter    String?   @map("center_filter") // makkah | madinah | all
+  analysisDepth   String    @default("COMPREHENSIVE") @map("analysis_depth") // BASIC | COMPREHENSIVE
+
+  // Snapshots — keep both sides so the verdict survives later edits to source data.
+  extractedData    Json? @map("extracted_data")
+  platformData     Json? @map("platform_data")
+  comparisonResult Json? @map("comparison_result")
+
+  aiInsights        String? @map("ai_insights") @db.Text
+  aiRecommendations Json?   @map("ai_recommendations")
+
+  matchPercentage Float? @map("match_percentage")
+  totalRows       Int?   @map("total_rows")
+  matchedRows     Int?   @map("matched_rows")
+  mismatchedRows  Int?   @map("mismatched_rows")
+
+  aiModel          String @default("claude-sonnet-4-5") @map("ai_model")
+  aiInputTokens    Int?   @map("ai_input_tokens")
+  aiOutputTokens   Int?   @map("ai_output_tokens")
+  processingTimeMs Int?   @map("processing_time_ms")
+  errorMessage     String? @map("error_message") @db.Text
+
+  discrepancies DistributionAnalysisDiscrepancy[]
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  completedAt DateTime? @map("completed_at")
+
+  @@index([userId, createdAt])
+  @@index([trackId, status])
+  @@map("distribution_analysis_sessions")
+}
+
+model DistributionAnalysisDiscrepancy {
+  id        String                      @id @default(cuid())
+  sessionId String                      @map("session_id")
+  session   DistributionAnalysisSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  rowIdentifier   String                          @map("row_identifier") // gregorianDate or batch
+  fieldName       String                          @map("field_name") // cards | parcels | companies | batch
+  uploadedValue   String?                         @map("uploaded_value")
+  platformValue   String?                         @map("platform_value")
+  difference      Float?
+  severity        DistributionDiscrepancySeverity
+  aiExplanation   String?                         @map("ai_explanation") @db.Text
+  suggestedAction String?                         @map("suggested_action") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([sessionId, severity])
+  @@map("distribution_analysis_discrepancies")
 }
 
 // ─── LEGACY (kept for migration safety) ───
