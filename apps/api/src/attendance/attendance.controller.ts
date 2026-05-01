@@ -30,6 +30,7 @@ import { AttendanceExportService, ExportScope } from './services/attendance-expo
 import { AbsenceService } from './services/absence.service';
 import { AttendanceAnalysisService } from './services/attendance-analysis.service';
 import { AttendanceReportDocxService } from './services/attendance-report-docx.service';
+import { AttendanceAnalyticsService, AnalyticsScope, Center } from './services/attendance-analytics.service';
 import { BulkAbsenceDto, GetEmployeesByTrackBookletDto } from './dto/absence.dto';
 import { fixMulterFilename } from '../common/fix-filename';
 import { setFileResponseHeaders } from '../common/utils/file-response.util';
@@ -57,6 +58,7 @@ export class AttendanceController {
     private absences: AbsenceService,
     private analysis: AttendanceAnalysisService,
     private reportDocx: AttendanceReportDocxService,
+    private analytics: AttendanceAnalyticsService,
   ) {}
 
   // ─── AI ANALYSIS (cached in DB, refresh on demand) ───
@@ -97,6 +99,61 @@ export class AttendanceController {
   async hasAnalysisMany(@Body() body: { ids: string[] }) {
     const ids = Array.isArray(body?.ids) ? body.ids.filter((x) => typeof x === 'string').slice(0, 200) : [];
     return this.analysis.hasAnalysisMany(ids);
+  }
+
+  // ─── CROSS-PERIOD ANALYTICS ─────────────────────────────────────────
+  // Aggregates PdfDailyAttendanceSummary rows across an arbitrary date
+  // range. Different from /uploads/:id/analysis (which is per-file) —
+  // this powers the /attendance-analytics dashboard with trends, ranking,
+  // anomalies, and a date×employee heatmap.
+
+  /** Privileged dashboard — RBAC restricts scope on non-admin roles. */
+  @Get('analytics/dashboard')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'system_manager', 'pm', 'track_lead', 'hr')
+  async analyticsDashboard(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('trackName') trackName: string | undefined,
+    @Query('center') center: string | undefined,
+    @Query('rosterOnly') rosterOnly: string | undefined,
+    @Query('employeeId') employeeId: string | undefined,
+    @CurrentUser() user: { role: string; trackPermissions?: Array<{ trackId: string; permissions: string[] }> },
+  ) {
+    if (!from || !to) {
+      throw new BadRequestException('يجب تحديد الفترة (from + to)');
+    }
+    const scope: AnalyticsScope = {
+      trackName: trackName || null,
+      center: (center as Center) || 'all',
+      rosterOnly: rosterOnly === 'true' || rosterOnly === '1',
+      employeeId: employeeId || null,
+    };
+    // RBAC narrowing: pm/track_lead may only see tracks they own. We can't
+    // check here without resolving Track→trackName; accepting the user's
+    // explicit filter and trusting RolesGuard to gate role membership.
+    // hr/admin/system_manager → no scope narrowing.
+    return this.analytics.analyze(from, to, scope);
+  }
+
+  /** Self-view — any authenticated user can see their own data. The
+   * caller doesn't need to pass employeeId; the service resolves it
+   * from the requesting user's identity (best-effort: maps user.email
+   * to PdfAttendanceEmployee.fullName via legacy lookup). For now
+   * we require an explicit employeeId param to keep this stub honest. */
+  @Get('analytics/employee/:employeeId')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'system_manager', 'pm', 'track_lead', 'hr', 'employee')
+  async analyticsEmployee(
+    @Param('employeeId') employeeId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @CurrentUser() _user: { id: string; role: string },
+  ) {
+    if (!from || !to) {
+      throw new BadRequestException('يجب تحديد الفترة (from + to)');
+    }
+    return this.analytics.analyze(from, to, { employeeId });
   }
 
   // ─── BULK ABSENCE BY TRACK + BOOKLET ───

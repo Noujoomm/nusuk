@@ -1,0 +1,618 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  Award,
+  BarChart3,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  ShieldCheck,
+  TrendingDown,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  Legend,
+} from 'recharts';
+import toast from 'react-hot-toast';
+import { attendanceApi } from '@/lib/api';
+import { PeriodSelector, defaultThisMonth, type DateRange } from '@/components/attendance/period-selector';
+
+type Severity = 'high' | 'medium' | 'low';
+
+interface RankedEmployee {
+  employeeId: string;
+  name: string;
+  track: string;
+  city: string;
+  attendanceRate: number;
+  presentDays: number;
+  absentDays: number;
+  lateDays: number;
+  totalHours: number;
+  totalLateMinutes: number;
+  longestPresentStreak: number;
+  longestAbsentStreak: number;
+  reliabilityIndex: number;
+}
+
+interface Anomaly {
+  type: string;
+  severity: Severity;
+  employeeId: string;
+  name: string;
+  track: string;
+  detail: string;
+  count?: number;
+}
+
+interface AnalyticsResult {
+  period: { from: string; to: string; days: number };
+  scope: any;
+  kpis: {
+    totalEmployees: number;
+    totalDailyRecords: number;
+    presentDays: number;
+    absentDays: number;
+    incompleteDays: number;
+    onCallPresent: number;
+    attendanceRate: number;
+    punctualityRate: number;
+    averageWorkHours: number;
+    totalWorkHours: number;
+    totalLateMinutes: number;
+    reliabilityIndex: number;
+  };
+  trend: Array<{ date: string; present: number; absent: number; late: number; incomplete: number; totalHours: number }>;
+  byTrack: Array<{ track: string; employees: number; attendanceRate: number; totalHours: number; absentDays: number }>;
+  byCity: Array<{ city: string; employees: number; attendanceRate: number; totalHours: number }>;
+  byDayOfWeek: Array<{ day: string; dayIndex: number; present: number; absent: number; late: number; attendanceRate: number }>;
+  topPerformers: RankedEmployee[];
+  bottomPerformers: RankedEmployee[];
+  anomalies: Anomaly[];
+  heatmap: {
+    employees: Array<{ id: string; name: string; track: string }>;
+    dates: string[];
+    cells: number[][];
+  };
+}
+
+export default function AttendanceAnalyticsPage() {
+  const [range, setRange] = useState<DateRange>(defaultThisMonth());
+  const [center, setCenter] = useState<'makkah' | 'madinah' | 'all'>('all');
+  const [trackName, setTrackName] = useState<string>('');
+  const [rosterOnly, setRosterOnly] = useState(false);
+  const [data, setData] = useState<AnalyticsResult | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await attendanceApi.analyticsDashboard({
+        from: range.from,
+        to: range.to,
+        center,
+        trackName: trackName || undefined,
+        rosterOnly,
+      });
+      setData(res.data as AnalyticsResult);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message;
+      toast.error(typeof msg === 'string' ? msg : 'فشل تحميل التحليلات');
+    } finally {
+      setLoading(false);
+    }
+  }, [range.from, range.to, center, trackName, rosterOnly]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const trackOptions = useMemo(() => {
+    if (!data) return [];
+    return data.byTrack.map((t) => t.track);
+  }, [data]);
+
+  return (
+    <div dir="rtl" className="space-y-5">
+      <Header />
+
+      <PeriodSelector value={range} onChange={setRange} />
+
+      <FiltersBar
+        center={center}
+        onCenter={setCenter}
+        trackName={trackName}
+        onTrack={setTrackName}
+        rosterOnly={rosterOnly}
+        onRosterOnly={setRosterOnly}
+        trackOptions={trackOptions}
+      />
+
+      {loading && (
+        <div className="flex items-center justify-center py-16 text-slate-400">
+          <Loader2 className="ml-2 h-5 w-5 animate-spin" /> جارٍ التحميل…
+        </div>
+      )}
+
+      {!loading && data && data.kpis.totalDailyRecords === 0 && (
+        <EmptyState range={range} />
+      )}
+
+      {!loading && data && data.kpis.totalDailyRecords > 0 && (
+        <>
+          <KpiGrid k={data.kpis} />
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="lg:col-span-2"><TrendChart trend={data.trend} /></div>
+            <div className="space-y-4">
+              <DowChart byDayOfWeek={data.byDayOfWeek} />
+              <ByCityCard byCity={data.byCity} />
+            </div>
+          </div>
+          <RankingRow top={data.topPerformers} bottom={data.bottomPerformers} />
+          <AnomaliesPanel anomalies={data.anomalies} />
+          <ByTrackTable byTrack={data.byTrack} />
+          <Heatmap heatmap={data.heatmap} />
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Header ──────────────────────────────────────────────────────────────
+
+function Header() {
+  return (
+    <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 via-slate-900/40 to-transparent p-6 backdrop-blur-xl">
+      <div className="flex items-center gap-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10">
+          <BarChart3 className="h-6 w-6 text-emerald-400" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-white">تحليلات الحضور والانصراف</h1>
+          <p className="mt-1 text-sm text-slate-400">
+            تحليل شامل عبر الفترات: مؤشرات، اتجاهات، ترتيب الموظفين، وكشف الحالات الشاذة. البيانات
+            مأخوذة من سجلات PDF اليومية المرفوعة في صفحة الحضور.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FiltersBar({
+  center,
+  onCenter,
+  trackName,
+  onTrack,
+  rosterOnly,
+  onRosterOnly,
+  trackOptions,
+}: {
+  center: 'makkah' | 'madinah' | 'all';
+  onCenter: (c: 'makkah' | 'madinah' | 'all') => void;
+  trackName: string;
+  onTrack: (t: string) => void;
+  rosterOnly: boolean;
+  onRosterOnly: (b: boolean) => void;
+  trackOptions: string[];
+}) {
+  return (
+    <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
+      <label className="block">
+        <span className="mb-1 block text-[11px] text-slate-400">المدينة</span>
+        <select
+          value={center}
+          onChange={(e) => onCenter(e.target.value as any)}
+          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
+        >
+          <option value="all">الكل</option>
+          <option value="makkah">مكة المكرمة</option>
+          <option value="madinah">المدينة المنورة</option>
+        </select>
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-[11px] text-slate-400">المسار</span>
+        <select
+          value={trackName}
+          onChange={(e) => onTrack(e.target.value)}
+          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
+        >
+          <option value="">كل المسارات</option>
+          {trackOptions.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+        <input
+          type="checkbox"
+          checked={rosterOnly}
+          onChange={(e) => onRosterOnly(e.target.checked)}
+          className="h-4 w-4 rounded border-white/20 bg-slate-900"
+        />
+        <span>الموظفون ضمن الكراسة فقط</span>
+      </label>
+    </div>
+  );
+}
+
+function EmptyState({ range }: { range: DateRange }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-12 text-center">
+      <Calendar className="mx-auto mb-3 h-10 w-10 text-slate-500" />
+      <p className="text-sm text-slate-300">لا توجد سجلات حضور في الفترة المحددة ({range.from} → {range.to}).</p>
+      <p className="mt-1 text-xs text-slate-500">
+        تأكد من رفع ملفات PDF اليومية في صفحة الحضور والانصراف، أو اختر فترة أوسع.
+      </p>
+    </div>
+  );
+}
+
+// ─── KPI grid ────────────────────────────────────────────────────────────
+
+function KpiGrid({ k }: { k: AnalyticsResult['kpis'] }) {
+  const items = [
+    { label: 'الموظفون', value: String(k.totalEmployees), icon: Users, color: 'emerald' as const },
+    { label: 'نسبة الحضور', value: `${k.attendanceRate.toFixed(1)}%`, icon: CheckCircle2, color: 'emerald' as const, bar: k.attendanceRate },
+    { label: 'نسبة الانضباط', value: `${k.punctualityRate.toFixed(1)}%`, icon: Clock, color: 'blue' as const, bar: k.punctualityRate },
+    { label: 'إجمالي الساعات', value: `${k.totalWorkHours.toFixed(1)}`, icon: BarChart3, color: 'purple' as const },
+    { label: 'متوسط ساعات اليوم', value: `${k.averageWorkHours.toFixed(1)}`, icon: TrendingUp, color: 'purple' as const },
+    { label: 'دقائق التأخير', value: String(k.totalLateMinutes), icon: TrendingDown, color: 'amber' as const },
+    { label: 'أيام الغياب', value: String(k.absentDays), icon: AlertTriangle, color: 'red' as const },
+    { label: 'مؤشر الموثوقية', value: `${k.reliabilityIndex}`, icon: ShieldCheck, color: 'emerald' as const, bar: k.reliabilityIndex },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {items.map((it) => (
+        <div
+          key={it.label}
+          className={`rounded-xl border p-4 ${COLOR_CLASSES[it.color]}`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] opacity-80">{it.label}</span>
+            <it.icon className="h-4 w-4 opacity-60" />
+          </div>
+          <div className="mt-1 text-2xl font-bold tabular-nums text-white">{it.value}</div>
+          {it.bar != null && (
+            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-black/30">
+              <div className="h-full bg-current" style={{ width: `${Math.min(100, it.bar)}%` }} />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const COLOR_CLASSES: Record<'emerald' | 'blue' | 'purple' | 'amber' | 'red', string> = {
+  emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+  blue: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
+  purple: 'border-purple-500/30 bg-purple-500/10 text-purple-300',
+  amber: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+  red: 'border-red-500/30 bg-red-500/10 text-red-300',
+};
+
+// ─── Trend chart ─────────────────────────────────────────────────────────
+
+function TrendChart({ trend }: { trend: AnalyticsResult['trend'] }) {
+  const data = trend.map((t) => ({ date: t.date.slice(5), حضور: t.present, غياب: t.absent, تأخير: t.late }));
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+      <div className="mb-2 flex items-center gap-2">
+        <TrendingUp className="h-4 w-4 text-emerald-400" />
+        <h3 className="text-sm font-bold text-white">الاتجاه اليومي</h3>
+      </div>
+      <div className="h-72 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+            <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" />
+            <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} />
+            <YAxis stroke="#94a3b8" fontSize={11} />
+            <Tooltip
+              contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
+              labelStyle={{ color: '#cbd5e1' }}
+            />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Line type="monotone" dataKey="حضور" stroke="#10b981" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="غياب" stroke="#ef4444" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="تأخير" stroke="#f59e0b" strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ─── Day-of-week bar ────────────────────────────────────────────────────
+
+function DowChart({ byDayOfWeek }: { byDayOfWeek: AnalyticsResult['byDayOfWeek'] }) {
+  const max = Math.max(1, ...byDayOfWeek.map((d) => d.present + d.absent + d.late));
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+      <h3 className="mb-3 text-sm font-bold text-white">حسب يوم الأسبوع</h3>
+      <div className="space-y-1.5">
+        {byDayOfWeek.map((d) => {
+          const total = d.present + d.absent + d.late;
+          if (total === 0) return null;
+          return (
+            <div key={d.dayIndex} className="flex items-center gap-2">
+              <div className="w-14 text-[11px] text-slate-300">{d.day}</div>
+              <div className="flex h-5 flex-1 overflow-hidden rounded bg-slate-900/40">
+                <div
+                  className="bg-emerald-500/70"
+                  style={{ width: `${(d.present / max) * 100}%` }}
+                  title={`حضور: ${d.present}`}
+                />
+                <div
+                  className="bg-amber-500/70"
+                  style={{ width: `${(d.late / max) * 100}%` }}
+                  title={`تأخير: ${d.late}`}
+                />
+                <div
+                  className="bg-red-500/70"
+                  style={{ width: `${(d.absent / max) * 100}%` }}
+                  title={`غياب: ${d.absent}`}
+                />
+              </div>
+              <div className="w-12 text-left text-[11px] tabular-nums text-slate-400">{d.attendanceRate}%</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ByCityCard({ byCity }: { byCity: AnalyticsResult['byCity'] }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+      <h3 className="mb-3 text-sm font-bold text-white">حسب المدينة</h3>
+      <div className="space-y-2">
+        {byCity.map((c) => (
+          <div key={c.city} className="flex items-center justify-between rounded-lg bg-slate-900/40 p-2">
+            <span className="text-xs text-white">{c.city}</span>
+            <div className="flex items-center gap-3 text-[11px] text-slate-300">
+              <span>{c.employees} موظف</span>
+              <span className="text-emerald-300">{c.attendanceRate}%</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Ranking ────────────────────────────────────────────────────────────
+
+function RankingRow({ top, bottom }: { top: RankedEmployee[]; bottom: RankedEmployee[] }) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <RankBlock title="الأكثر التزاماً" icon={Award} variant="success" rows={top} />
+      <RankBlock title="يحتاجون متابعة" icon={AlertTriangle} variant="warning" rows={bottom} />
+    </div>
+  );
+}
+
+function RankBlock({
+  title,
+  icon: Icon,
+  variant,
+  rows,
+}: {
+  title: string;
+  icon: any;
+  variant: 'success' | 'warning';
+  rows: RankedEmployee[];
+}) {
+  const cls = variant === 'success'
+    ? 'border-emerald-500/20 bg-emerald-500/[0.04]'
+    : 'border-amber-500/20 bg-amber-500/[0.04]';
+  return (
+    <div className={`rounded-2xl border ${cls} p-4`}>
+      <div className="mb-3 flex items-center gap-2">
+        <Icon className="h-4 w-4 text-white opacity-80" />
+        <h3 className="text-sm font-bold text-white">{title}</h3>
+      </div>
+      {rows.length === 0 ? (
+        <p className="py-4 text-center text-xs text-slate-500">لا بيانات.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {rows.map((r, i) => (
+            <div key={r.employeeId} className="flex items-center justify-between rounded-md bg-slate-950/40 px-3 py-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-[11px] text-slate-500 tabular-nums">#{i + 1}</span>
+                <div className="min-w-0">
+                  <div className="truncate text-sm text-white">{r.name}</div>
+                  <div className="truncate text-[10px] text-slate-400">
+                    {r.track} • {r.city}
+                  </div>
+                </div>
+              </div>
+              <div className="text-left">
+                <div className="text-sm font-bold tabular-nums text-white">{r.attendanceRate}%</div>
+                <div className="text-[10px] text-slate-400 tabular-nums">موثوقية {r.reliabilityIndex}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Anomalies ──────────────────────────────────────────────────────────
+
+function AnomaliesPanel({ anomalies }: { anomalies: Anomaly[] }) {
+  if (anomalies.length === 0) {
+    return (
+      <div className="flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-emerald-300">
+        <CheckCircle2 className="h-5 w-5" />
+        لا توجد حالات شاذة في الفترة المحددة.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+      <div className="mb-3 flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-amber-300" />
+        <h3 className="text-sm font-bold text-white">الحالات الشاذة</h3>
+        <span className="text-[11px] text-slate-400">({anomalies.length})</span>
+      </div>
+      <div className="space-y-1.5">
+        {anomalies.slice(0, 30).map((a, i) => (
+          <div key={i} className="flex items-center justify-between rounded-md border border-white/5 bg-slate-950/40 px-3 py-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${
+                a.severity === 'high' ? 'bg-red-500/15 text-red-300' :
+                a.severity === 'medium' ? 'bg-amber-500/15 text-amber-300' :
+                'bg-blue-500/15 text-blue-300'
+              }`}>
+                {a.severity === 'high' ? 'عالٍ' : a.severity === 'medium' ? 'متوسط' : 'منخفض'}
+              </span>
+              <div className="min-w-0">
+                <div className="truncate text-sm text-white">{a.name}</div>
+                <div className="truncate text-[11px] text-slate-400">{a.track} • {a.detail}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Tracks table ───────────────────────────────────────────────────────
+
+function ByTrackTable({ byTrack }: { byTrack: AnalyticsResult['byTrack'] }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+      <h3 className="mb-3 text-sm font-bold text-white">حسب المسار</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-right text-xs">
+          <thead className="text-[11px] text-slate-400">
+            <tr>
+              <th className="px-2 py-2 font-normal">المسار</th>
+              <th className="px-2 py-2 font-normal">الموظفون</th>
+              <th className="px-2 py-2 font-normal">نسبة الحضور</th>
+              <th className="px-2 py-2 font-normal">إجمالي الساعات</th>
+              <th className="px-2 py-2 font-normal">أيام الغياب</th>
+            </tr>
+          </thead>
+          <tbody>
+            {byTrack.map((t, i) => (
+              <tr key={i} className="border-t border-white/5">
+                <td className="px-2 py-2 text-slate-200">{t.track}</td>
+                <td className="px-2 py-2 tabular-nums text-white">{t.employees}</td>
+                <td className="px-2 py-2 tabular-nums text-white">{t.attendanceRate}%</td>
+                <td className="px-2 py-2 tabular-nums text-white">{t.totalHours.toFixed(1)}</td>
+                <td className="px-2 py-2 tabular-nums text-amber-300">{t.absentDays}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Heatmap ────────────────────────────────────────────────────────────
+
+function Heatmap({ heatmap }: { heatmap: AnalyticsResult['heatmap'] }) {
+  if (heatmap.employees.length === 0) return null;
+  // Status code → color, must match service codes:
+  // 0 no data, 1 present, 2 on-call present, 3 incomplete, 4 check-only,
+  // 5 absent, 6 on-call no-visit, 7 other
+  const colorOf = (c: number) => {
+    switch (c) {
+      case 1: return 'bg-emerald-500/80';
+      case 2: return 'bg-emerald-400/60';
+      case 3: return 'bg-amber-500/60';
+      case 4: return 'bg-amber-500/40';
+      case 5: return 'bg-red-500/80';
+      case 6: return 'bg-slate-500/40';
+      case 7: return 'bg-blue-500/40';
+      default: return 'bg-slate-800/60';
+    }
+  };
+  const tipOf = (c: number) => {
+    switch (c) {
+      case 1: return 'حاضر';
+      case 2: return 'On Call — حاضر';
+      case 3: return 'دوام أقل من 8 ساعات';
+      case 4: return 'دخول/خروج فقط';
+      case 5: return 'غائب';
+      case 6: return 'On Call — لم يحضر';
+      case 7: return 'حالة أخرى';
+      default: return 'لا بيانات';
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+      <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="text-sm font-bold text-white">خريطة الحضور (موظف × يوم)</h3>
+        <div className="flex flex-wrap gap-2 text-[10px]">
+          <Legend2 cls="bg-emerald-500/80" label="حاضر" />
+          <Legend2 cls="bg-emerald-400/60" label="On Call حاضر" />
+          <Legend2 cls="bg-amber-500/60" label="ناقص ساعات" />
+          <Legend2 cls="bg-red-500/80" label="غائب" />
+          <Legend2 cls="bg-slate-800/60" label="لا بيانات" />
+        </div>
+      </div>
+      <div className="overflow-x-auto" dir="ltr">
+        <table className="text-[10px]" style={{ direction: 'ltr' }}>
+          <thead>
+            <tr>
+              <th className="sticky right-0 z-10 bg-slate-950/80 px-2 py-1 text-right text-slate-400" style={{ minWidth: 180 }}>
+                الموظف
+              </th>
+              {heatmap.dates.map((d) => (
+                <th key={d} className="px-0.5 py-1 text-slate-500">
+                  <span className="block rotate-[-60deg] origin-bottom-left whitespace-nowrap">{d.slice(5)}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {heatmap.employees.map((emp, r) => (
+              <tr key={emp.id}>
+                <td className="sticky right-0 z-10 bg-slate-950/80 px-2 py-1 text-right text-slate-200" dir="rtl" style={{ minWidth: 180 }}>
+                  <div className="truncate text-xs">{emp.name}</div>
+                  <div className="truncate text-[10px] text-slate-500">{emp.track}</div>
+                </td>
+                {heatmap.cells[r].map((c, i) => (
+                  <td key={i} className="p-0.5">
+                    <div className={`h-4 w-4 rounded ${colorOf(c)}`} title={`${heatmap.dates[i]} • ${tipOf(c)}`} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Legend2({ cls, label }: { cls: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-slate-400">
+      <span className={`inline-block h-3 w-3 rounded ${cls}`} />
+      {label}
+    </span>
+  );
+}

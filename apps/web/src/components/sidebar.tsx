@@ -60,6 +60,7 @@ const NAV_ITEMS = [
   { href: '/distribution-analyzer', label: 'محلل نسبة الإنجاز', icon: ScanSearch, roles: ['admin', 'system_manager', 'pm', 'track_lead', 'employee', 'hr'] },
   { href: '/attendance', label: 'الحضور والانصراف', icon: Fingerprint, roles: ['admin'] },
   { href: '/attendance/uploads', label: 'سجل ملفات الحضور', icon: Files, roles: ['admin'] },
+  { href: '/attendance-analytics', label: 'تحليلات الحضور', icon: BarChart3, roles: ['admin', 'system_manager', 'pm', 'track_lead', 'hr'] },
   { href: '/attendance/bulk-absence', label: 'تسجيل غياب جماعي', icon: UserX, roles: ['admin', 'pm', 'hr', 'track_lead'] },
   { href: '/users', label: 'المستخدمين', icon: Users, roles: ['admin'] },
   { href: '/system-export', label: 'النظام والنسخ', icon: Database, roles: ['admin'] },

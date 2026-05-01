@@ -800,4 +800,22 @@ export const attendanceApi = {
       responseType: 'blob',
       timeout: 120000,
     }),
+  // ─── Cross-period analytics ───
+  analyticsDashboard: (params: {
+    from: string;
+    to: string;
+    trackName?: string;
+    center?: 'makkah' | 'madinah' | 'all';
+    rosterOnly?: boolean;
+    employeeId?: string;
+  }) =>
+    api.get('/attendance/analytics/dashboard', {
+      params: {
+        ...params,
+        ...(params.rosterOnly ? { rosterOnly: 'true' } : {}),
+      },
+      timeout: 60000,
+    }),
+  analyticsEmployee: (employeeId: string, params: { from: string; to: string }) =>
+    api.get(`/attendance/analytics/employee/${employeeId}`, { params, timeout: 60000 }),
 };
