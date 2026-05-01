@@ -2012,6 +2012,14 @@ model PdfAttendanceUpload {
   status         String   @default("processed") // processed | failed
   errorMessage   String?  @map("error_message") @db.Text
 
+  /// Which center this PDF actually covers — inferred from the dominant
+  /// city of the matched employees. Used by the ingest/reanalyze loops
+  /// to skip the OPPOSITE city's employees when building daily summaries
+  /// (otherwise uploading a Makkah-only PDF would force-mark every Madinah
+  /// employee as absent for that day, and vice versa).
+  /// null = mixed / not enough signal — fall back to "summarise everyone".
+  coversCenter PdfAttendanceCenter? @map("covers_center")
+
   // ─── Original-file persistence ────────────────────────────────────
   // Stored as Bytes? in Postgres because Railway's filesystem is ephemeral
   // (every deploy / restart wipes /tmp and the working dir). The same

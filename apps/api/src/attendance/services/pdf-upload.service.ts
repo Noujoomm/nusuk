@@ -5,7 +5,7 @@ import { createHash } from 'crypto';
 import { cleanPdfText, extractReportDate, parsePunches, ParsedPunch } from '../utils/pdf-text-cleaner';
 import { matchEmployee, MatchCandidate } from '../utils/name-matcher';
 import { analyzeDay } from '../utils/analyzer';
-import { Prisma, PdfShiftType } from '@prisma/client';
+import { Prisma, PdfShiftType, PdfAttendanceCenter } from '@prisma/client';
 import { fixStoredFilename } from '../../common/fix-filename';
 
 @Injectable()
@@ -78,6 +78,7 @@ export class PdfUploadService {
         employeeNumber: true,
         aliases: true,
         shiftType: true,
+        center: true,
       },
     });
 
@@ -121,6 +122,14 @@ export class PdfUploadService {
     const matchedCount = enriched.filter((r) => r.isMatched).length;
     const unmatchedCount = enriched.length - matchedCount;
 
+    // Infer which center this PDF actually covers from the matched employees.
+    // Used below to skip the OPPOSITE city when building daily summaries —
+    // otherwise a Makkah-only PDF force-marks every Madinah employee absent.
+    const coversCenter = inferCoversCenter(
+      enriched.filter((r) => r.employeeId).map((r) => r.employeeId!),
+      employees,
+    );
+
     // ─── 3. Persist ────────────────────────────────────────────────────
     const upload = await this.prisma.$transaction(async (tx) => {
       const up = await tx.pdfAttendanceUpload.create({
@@ -140,6 +149,7 @@ export class PdfUploadService {
           unmatchedCount,
           rawText: rawText.slice(0, 50000), // cap to keep row size sane
           status: 'processed',
+          coversCenter,
         },
       });
 
@@ -176,6 +186,11 @@ export class PdfUploadService {
 
       const summaries: Prisma.PdfDailyAttendanceSummaryUncheckedCreateInput[] = [];
       for (const emp of employees) {
+        // Skip employees from the OPPOSITE city — this PDF didn't cover them,
+        // so we shouldn't synthesise an "absent" record for them. shared/null
+        // employees still get summaries because they could be in any PDF.
+        if (shouldSkipForCoverage(emp.center, coversCenter)) continue;
+
         const empRecords = recordsByEmployee.get(emp.id) ?? [];
         const analysis = analyzeDay(
           empRecords.map((r) => ({ recordTime: r.recordTime, punchType: r.punchType })),
@@ -196,6 +211,9 @@ export class PdfUploadService {
       if (summaries.length > 0) {
         await tx.pdfDailyAttendanceSummary.createMany({ data: summaries });
       }
+      this.logger.log(
+        `PDF coversCenter inferred=${coversCenter ?? 'mixed'} • summaries=${summaries.length}/${employees.length} (skipped ${employees.length - summaries.length} from opposite city)`,
+      );
 
       // Back-fill discovered employee numbers
       for (const [empId, num] of numbersToLearn) {
@@ -425,13 +443,13 @@ export class PdfUploadService {
   async reanalyze(uploadId: string) {
     const upload = await this.prisma.pdfAttendanceUpload.findUnique({
       where: { id: uploadId },
-      select: { id: true, reportDate: true },
+      select: { id: true, reportDate: true, coversCenter: true },
     });
     if (!upload) throw new NotFoundException('الرفعة غير موجودة');
 
     const employees = await this.prisma.pdfAttendanceEmployee.findMany({
       where: { isActive: true },
-      select: { id: true, shiftType: true },
+      select: { id: true, shiftType: true, center: true },
     });
 
     const records = await this.prisma.pdfAttendanceRecord.findMany({
@@ -447,6 +465,20 @@ export class PdfUploadService {
       recordsByEmployee.set(r.employeeId, list);
     }
 
+    // If the upload was created before coversCenter existed, infer it now from
+    // the matched records and persist it so future re-analyses are stable.
+    let coversCenter = upload.coversCenter;
+    if (coversCenter === null || coversCenter === undefined) {
+      const matchedIds = [...recordsByEmployee.keys()];
+      coversCenter = inferCoversCenter(matchedIds, employees);
+      if (coversCenter) {
+        await this.prisma.pdfAttendanceUpload.update({
+          where: { id: uploadId },
+          data: { coversCenter },
+        });
+      }
+    }
+
     let updated = 0;
     let created = 0;
 
@@ -456,7 +488,12 @@ export class PdfUploadService {
       await tx.pdfDailyAttendanceSummary.deleteMany({ where: { uploadId } });
 
       const data: Prisma.PdfDailyAttendanceSummaryUncheckedCreateInput[] = [];
+      let skipped = 0;
       for (const emp of employees) {
+        if (shouldSkipForCoverage(emp.center, coversCenter)) {
+          skipped += 1;
+          continue;
+        }
         const empRecords = recordsByEmployee.get(emp.id) ?? [];
         const analysis = analyzeDay(empRecords, emp.shiftType as PdfShiftType);
         data.push({
@@ -475,10 +512,12 @@ export class PdfUploadService {
         await tx.pdfDailyAttendanceSummary.createMany({ data });
         created = data.length;
       }
+      this.logger.log(
+        `Re-analyzed upload=${uploadId}: covers=${coversCenter ?? 'mixed'} written=${created} skipped(opposite-city)=${skipped}`,
+      );
     }, { timeout: 60000 });
 
-    this.logger.log(`Re-analyzed upload=${uploadId}: ${created} summaries written (${updated} updated)`);
-    return { uploadId, summariesWritten: created };
+    return { uploadId, summariesWritten: created, coversCenter };
   }
 
   /** Re-analyze every past upload — admin maintenance after analyzer changes. */
@@ -499,4 +538,52 @@ export class PdfUploadService {
     }
     return { totalUploads: uploads.length, results };
   }
+}
+
+// ─── Center-coverage helpers ─────────────────────────────────────────────
+
+/**
+ * Infer which physical center a PDF actually covers from the matched
+ * employees. Returns:
+ *   - 'makkah' / 'madinah' when ≥85% of city-tagged matched employees are
+ *     in that one city (and we have ≥3 city-tagged hits — below that the
+ *     signal is too weak)
+ *   - null otherwise (mixed file, or not enough signal — ingest falls back
+ *     to "summarise everyone", same as the legacy behaviour)
+ *
+ * Employees with `center: 'shared'` or null don't push the inference either
+ * way — they could be in any PDF — but they still get summaries below.
+ */
+function inferCoversCenter(
+  matchedEmployeeIds: string[],
+  employees: Array<{ id: string; center: PdfAttendanceCenter | null }>,
+): PdfAttendanceCenter | null {
+  const byId = new Map(employees.map((e) => [e.id, e.center] as const));
+  let makkah = 0;
+  let madinah = 0;
+  for (const id of matchedEmployeeIds) {
+    const c = byId.get(id);
+    if (c === 'makkah') makkah += 1;
+    else if (c === 'madinah') madinah += 1;
+  }
+  const cityTagged = makkah + madinah;
+  if (cityTagged < 3) return null; // not enough signal
+  const ratio = makkah / cityTagged;
+  if (ratio >= 0.85) return 'makkah';
+  if (ratio <= 0.15) return 'madinah';
+  return null; // mixed
+}
+
+/**
+ * Should we skip building a summary for `empCenter` given the upload's
+ * `coversCenter`? Returns true only when the upload clearly covers ONE
+ * city and the employee is in the OPPOSITE one.
+ */
+function shouldSkipForCoverage(
+  empCenter: PdfAttendanceCenter | null,
+  coversCenter: PdfAttendanceCenter | null,
+): boolean {
+  if (coversCenter === null) return false; // mixed/unknown — summarise all
+  if (empCenter === null || empCenter === 'shared') return false; // ambiguous — keep
+  return empCenter !== coversCenter;
 }
