@@ -235,6 +235,17 @@ export class AttendanceAnalyticsService {
       }),
     ]);
 
+    // Distinct tracks across the active roster — gives the FiltersBar a
+    // stable dropdown that doesn't shrink when the user narrows the city
+    // (the analytics result's byTrack only carries tracks that have data
+    // in the current scope, which is the wrong set for a filter selector).
+    const trackRows = await this.prisma.pdfAttendanceEmployee.findMany({
+      where: { isActive: true, track: { not: '' } },
+      distinct: ['track'],
+      select: { track: true },
+      orderBy: { track: 'asc' },
+    });
+
     return {
       employees: {
         total: employeesTotal,
@@ -254,6 +265,7 @@ export class AttendanceAnalyticsService {
         shared: sampleShared,
         unset: sampleUnset,
       },
+      tracks: trackRows.map((r) => r.track).filter(Boolean),
     };
   }
 

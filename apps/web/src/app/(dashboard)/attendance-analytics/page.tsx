@@ -168,7 +168,9 @@ export default function AttendanceAnalyticsPage() {
     <div dir="rtl" className="space-y-5">
       <Header />
 
-      <CoveragePanel />
+      <CoveragePanel
+        onTracks={(t) => setAllTrackOptions((prev) => Array.from(new Set([...prev, ...t])))}
+      />
 
       <ScopePresets
         center={center}
@@ -430,9 +432,10 @@ interface CoverageData {
     shared: Array<{ fullName: string; track: string }>;
     unset: Array<{ fullName: string; track: string }>;
   };
+  tracks?: string[];
 }
 
-function CoveragePanel() {
+function CoveragePanel({ onTracks }: { onTracks?: (tracks: string[]) => void } = {}) {
   const [data, setData] = useState<CoverageData | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -443,6 +446,9 @@ function CoveragePanel() {
         const res = await attendanceApi.analyticsCoverage();
         if (!cancelled) {
           setData(res.data);
+          // Hand the master track list up so the FiltersBar dropdown is
+          // populated even before the first analyze() call returns.
+          if (Array.isArray(res.data.tracks) && onTracks) onTracks(res.data.tracks);
           // Auto-open when there's an obvious data-quality issue.
           if (res.data.employees.unset > 0 || (res.data.employees.madinah === 0 && res.data.employees.makkah === 0)) {
             setOpen(true);
