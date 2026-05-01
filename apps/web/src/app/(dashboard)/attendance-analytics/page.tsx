@@ -561,6 +561,38 @@ function Heatmap({ heatmap }: { heatmap: AnalyticsResult['heatmap'] }) {
     }
   };
 
+  // Pre-compute day number + weekday letter + month-change markers so the
+  // header is readable without rotation. We also build a row of merged
+  // month labels above so users can see "April / May" boundaries at a glance.
+  const WEEKDAY_LETTERS = ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س']; // أحد..سبت
+  const MONTH_NAMES = [
+    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+  ];
+  const cols = heatmap.dates.map((iso) => {
+    const d = new Date(iso + 'T00:00:00Z');
+    return {
+      iso,
+      day: d.getUTCDate(),
+      month: d.getUTCMonth(),
+      year: d.getUTCFullYear(),
+      weekday: d.getUTCDay(),
+      isWeekStart: d.getUTCDay() === 0, // الأحد
+    };
+  });
+  // Build merged month spans for the top header row.
+  const monthSpans: Array<{ key: string; label: string; count: number }> = [];
+  for (const c of cols) {
+    const k = `${c.year}-${c.month}`;
+    const last = monthSpans[monthSpans.length - 1];
+    if (last && last.key === k) {
+      last.count += 1;
+    } else {
+      monthSpans.push({ key: k, label: MONTH_NAMES[c.month], count: 1 });
+    }
+  }
+  const CELL = 22; // px — wide enough for "DD" without rotation
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
       <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
@@ -574,29 +606,74 @@ function Heatmap({ heatmap }: { heatmap: AnalyticsResult['heatmap'] }) {
         </div>
       </div>
       <div className="overflow-x-auto" dir="ltr">
-        <table className="text-[10px]" style={{ direction: 'ltr' }}>
+        <table className="border-separate border-spacing-0" style={{ direction: 'ltr' }}>
           <thead>
+            {/* Month banner row */}
             <tr>
-              <th className="sticky right-0 z-10 bg-slate-950/80 px-2 py-1 text-right text-slate-400" style={{ minWidth: 180 }}>
+              <th
+                className="sticky right-0 z-10 bg-slate-950/90 px-2 pb-1 pt-0.5"
+                style={{ minWidth: 200 }}
+              />
+              {monthSpans.map((m) => (
+                <th
+                  key={m.key}
+                  colSpan={m.count}
+                  className="border-b border-emerald-500/20 px-1 pb-1 pt-0.5 text-center text-[11px] font-semibold text-emerald-300"
+                >
+                  {m.label}
+                </th>
+              ))}
+            </tr>
+            {/* Day-of-month + weekday-letter row */}
+            <tr>
+              <th
+                className="sticky right-0 z-10 bg-slate-950/90 px-2 py-1 text-right text-[11px] text-slate-400"
+                style={{ minWidth: 200 }}
+              >
                 الموظف
               </th>
-              {heatmap.dates.map((d) => (
-                <th key={d} className="px-0.5 py-1 text-slate-500">
-                  <span className="block rotate-[-60deg] origin-bottom-left whitespace-nowrap">{d.slice(5)}</span>
+              {cols.map((c) => (
+                <th
+                  key={c.iso}
+                  className={`px-0 py-1 text-center align-bottom ${
+                    c.isWeekStart ? 'border-r border-white/10' : ''
+                  }`}
+                  style={{ width: CELL, minWidth: CELL }}
+                  title={c.iso}
+                >
+                  <div className="leading-none flex flex-col items-center gap-0.5">
+                    <span className="text-[11px] font-semibold tabular-nums text-slate-200">
+                      {c.day}
+                    </span>
+                    <span className="text-[8px] text-slate-500">{WEEKDAY_LETTERS[c.weekday]}</span>
+                  </div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {heatmap.employees.map((emp, r) => (
-              <tr key={emp.id}>
-                <td className="sticky right-0 z-10 bg-slate-950/80 px-2 py-1 text-right text-slate-200" dir="rtl" style={{ minWidth: 180 }}>
+              <tr key={emp.id} className="hover:bg-white/[0.02]">
+                <td
+                  className="sticky right-0 z-10 bg-slate-950/90 px-2 py-1 text-right text-slate-200"
+                  dir="rtl"
+                  style={{ minWidth: 200 }}
+                >
                   <div className="truncate text-xs">{emp.name}</div>
                   <div className="truncate text-[10px] text-slate-500">{emp.track}</div>
                 </td>
                 {heatmap.cells[r].map((c, i) => (
-                  <td key={i} className="p-0.5">
-                    <div className={`h-4 w-4 rounded ${colorOf(c)}`} title={`${heatmap.dates[i]} • ${tipOf(c)}`} />
+                  <td
+                    key={i}
+                    className={`p-0 ${cols[i].isWeekStart ? 'border-r border-white/10' : ''}`}
+                    style={{ width: CELL, minWidth: CELL }}
+                  >
+                    <div className="flex justify-center py-0.5">
+                      <div
+                        className={`h-4 w-4 rounded ${colorOf(c)}`}
+                        title={`${heatmap.dates[i]} • ${tipOf(c)}`}
+                      />
+                    </div>
                   </td>
                 ))}
               </tr>
@@ -604,6 +681,9 @@ function Heatmap({ heatmap }: { heatmap: AnalyticsResult['heatmap'] }) {
           </tbody>
         </table>
       </div>
+      <p className="mt-2 text-[10px] text-slate-500">
+        الأحرف تحت الأيام: ح=الأحد، ن=الاثنين، ث=الثلاثاء، ر=الأربعاء، خ=الخميس، ج=الجمعة، س=السبت.
+      </p>
     </div>
   );
 }
