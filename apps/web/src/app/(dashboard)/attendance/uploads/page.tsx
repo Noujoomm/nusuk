@@ -16,6 +16,8 @@ import {
   AlertTriangle,
   RefreshCw,
   Sparkles,
+  FileText,
+  FileSpreadsheet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/stores/auth';
@@ -116,6 +118,28 @@ export default function UploadsHistoryPage() {
       setBusyId(null);
     }
   }, [load]);
+
+  const handleDownloadReport = useCallback(async (u: UploadItem, kind: 'docx' | 'xlsx') => {
+    setBusyId(u.id);
+    const tid = toast.loading(kind === 'docx' ? 'تجهيز ملف Word…' : 'تجهيز ملف Excel…');
+    try {
+      const res = kind === 'docx'
+        ? await attendanceApi.exportDocx(u.id)
+        : await attendanceApi.exportXlsx(u.id, 'all');
+      const fallback = kind === 'docx' ? 'attendance-report.docx' : 'attendance-report.xlsx';
+      const filename = parseFilenameFromHeaders(res.headers, fallback);
+      const mime = kind === 'docx'
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      triggerBrowserDownload(res.data, filename, mime);
+      toast.success('تم التحميل ✓', { id: tid });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || `فشل تحميل ${kind === 'docx' ? 'Word' : 'Excel'}`;
+      toast.error(typeof msg === 'string' ? msg : 'فشل التحميل', { id: tid });
+    } finally {
+      setBusyId(null);
+    }
+  }, []);
 
   const handlePreview = useCallback((u: UploadItem) => {
     setPreviewItem(u);
@@ -274,6 +298,20 @@ export default function UploadsHistoryPage() {
                             hasAnalysis={!!hasAnalysis[u.id]}
                           />
                           <ActionButton
+                            onClick={() => handleDownloadReport(u, 'docx')}
+                            disabled={busyId === u.id}
+                            title="تحميل تقرير Word الشامل"
+                            Icon={FileText}
+                            tone="blue"
+                          />
+                          <ActionButton
+                            onClick={() => handleDownloadReport(u, 'xlsx')}
+                            disabled={busyId === u.id}
+                            title="تحميل تقرير Excel"
+                            Icon={FileSpreadsheet}
+                            tone="emerald"
+                          />
+                          <ActionButton
                             onClick={() => handlePreview(u)}
                             disabled={busyId === u.id}
                             title="معاينة في المتصفح"
@@ -420,23 +458,29 @@ function ActionButton({
   title,
   Icon,
   danger,
+  tone,
 }: {
   onClick: () => void;
   disabled?: boolean;
   title: string;
   Icon: any;
   danger?: boolean;
+  tone?: 'blue' | 'emerald';
 }) {
+  const toneCls =
+    tone === 'blue'
+      ? 'text-blue-300 hover:bg-blue-500/10 hover:border-blue-500/30'
+      : tone === 'emerald'
+      ? 'text-emerald-300 hover:bg-emerald-500/10 hover:border-emerald-500/30'
+      : danger
+      ? 'text-red-400 hover:bg-red-500/10 hover:border-red-500/20'
+      : 'text-gray-400 hover:bg-white/5 hover:text-gray-200';
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`p-1.5 rounded-md border border-transparent transition-colors disabled:opacity-30 ${
-        danger
-          ? 'text-red-400 hover:bg-red-500/10 hover:border-red-500/20'
-          : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
-      }`}
+      className={`p-1.5 rounded-md border border-transparent transition-colors disabled:opacity-30 ${toneCls}`}
     >
       {disabled ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Icon className="w-3.5 h-3.5" />}
     </button>

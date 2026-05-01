@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
-import { Plus, Trash2, Loader2, AlertTriangle, CheckCircle, TrendingUp, Target, X, Shield, Award } from 'lucide-react';
+import { Plus, Trash2, Loader2, AlertTriangle, CheckCircle, TrendingUp, Target, X, Shield, Award, Sparkles, ScanSearch } from 'lucide-react';
+import Link from 'next/link';
 import DatePairInput from '@/components/ui/date-pair-input';
 import toast from 'react-hot-toast';
 import { distAchievementApi } from '@/lib/api';
@@ -111,12 +112,44 @@ export default function AchievementSection() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-emerald-500/20"><TrendingUp className="w-5 h-5 text-emerald-400" /></div>
           <div><h2 className="text-base font-bold text-white">نسبة الإنجاز</h2><p className="text-[10px] text-gray-500">البيانات الخام فقط — النسب تُحسب تلقائياً</p></div>
         </div>
-        {canEdit && <button onClick={() => { setShowForm(!showForm); if (!showForm) scrollToEdit('#achievement-form'); }} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إدخال بيانات</button>}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href="/distribution-analyzer"
+            className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300 hover:bg-emerald-500/20"
+            title="ارفع صورة أو Excel للجدول وقارنه بالبيانات المسجلة"
+          >
+            <Sparkles className="w-4 h-4" />
+            تحليل ذكي للملف
+          </Link>
+          {canEdit && <button onClick={() => { setShowForm(!showForm); if (!showForm) scrollToEdit('#achievement-form'); }} className="btn-primary flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> إدخال بيانات</button>}
+        </div>
+      </div>
+
+      {/* Analyzer CTA — clarifies what the AI button does, prominent until users discover it */}
+      <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.06] via-transparent to-transparent p-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 shrink-0">
+            <ScanSearch className="w-5 h-5 text-emerald-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold text-white">المحلل الذكي بالذكاء الاصطناعي</h3>
+            <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+              ارفع صورة أو ملف Excel من جدول نسبة الإنجاز — الذكاء الاصطناعي يستخرج البيانات
+              ويقارنها مع المسجّل في المنصة، ويعرض الفروقات حسب التاريخ والمركز والشدة.
+            </p>
+          </div>
+          <Link
+            href="/distribution-analyzer"
+            className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-bold text-black hover:bg-emerald-400 shrink-0"
+          >
+            بدء التحليل
+          </Link>
+        </div>
       </div>
 
       {showForm && (
