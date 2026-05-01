@@ -65,28 +65,28 @@ export class AttendanceController {
 
   @Get('uploads/:id/analysis')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async getAnalysis(@Param('id') id: string, @CurrentUser() user: { id: string }) {
     return this.analysis.getOrCreateAnalysis(id, user.id, false);
   }
 
   @Post('uploads/:id/analysis/refresh')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async refreshAnalysis(@Param('id') id: string, @CurrentUser() user: { id: string }) {
     return this.analysis.getOrCreateAnalysis(id, user.id, true);
   }
 
   @Delete('uploads/:id/analysis')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async deleteAnalysis(@Param('id') id: string) {
     return this.analysis.deleteAnalysis(id);
   }
 
   @Get('uploads/:id/analysis/exists')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async hasAnalysis(@Param('id') id: string) {
     const exists = await this.analysis.hasAnalysis(id);
     return { exists };
@@ -95,7 +95,7 @@ export class AttendanceController {
   /** Bulk existence check for the uploads list page (avoids N requests). */
   @Post('uploads/analysis/exists-many')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async hasAnalysisMany(@Body() body: { ids: string[] }) {
     const ids = Array.isArray(body?.ids) ? body.ids.filter((x) => typeof x === 'string').slice(0, 200) : [];
     return this.analysis.hasAnalysisMany(ids);
@@ -110,7 +110,7 @@ export class AttendanceController {
   /** Privileged dashboard — RBAC restricts scope on non-admin roles. */
   @Get('analytics/dashboard')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'system_manager', 'pm', 'track_lead', 'hr')
+  @Roles('admin', 'system_manager')
   async analyticsDashboard(
     @Query('from') from: string,
     @Query('to') to: string,
@@ -143,7 +143,7 @@ export class AttendanceController {
    * we require an explicit employeeId param to keep this stub honest. */
   @Get('analytics/employee/:employeeId')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'system_manager', 'pm', 'track_lead', 'hr', 'employee')
+  @Roles('admin', 'system_manager')
   async analyticsEmployee(
     @Param('employeeId') employeeId: string,
     @Query('from') from: string,
@@ -205,7 +205,7 @@ export class AttendanceController {
 
   @Post('employees/seed')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -229,7 +229,7 @@ export class AttendanceController {
 
   @Post('uploads')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -254,7 +254,7 @@ export class AttendanceController {
 
   @Get('uploads')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async listUploads(
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -271,7 +271,7 @@ export class AttendanceController {
 
   @Get('uploads/:id/report')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async getReport(@Param('id') id: string) {
     return this.uploads.getDailyReport(id);
   }
@@ -282,7 +282,7 @@ export class AttendanceController {
    */
   @Get('uploads/:id/download')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async downloadFile(
     @Param('id') id: string,
     @CurrentUser() user: { id: string },
@@ -302,7 +302,7 @@ export class AttendanceController {
   /** Same bytes, but `Content-Disposition: inline` so the browser previews. */
   @Get('uploads/:id/preview')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async previewFile(
     @Param('id') id: string,
     @CurrentUser() user: { id: string },
@@ -320,7 +320,7 @@ export class AttendanceController {
 
   @Delete('uploads/:id')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async deleteUpload(@Param('id') id: string, @CurrentUser() user: { id: string }) {
     this.logger.log(`Deleting upload=${id} by user=${user.id}`);
     await this.uploads.deleteUpload(id);
@@ -329,7 +329,7 @@ export class AttendanceController {
 
   @Get('uploads/:id/downloads')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async getDownloadHistory(@Param('id') id: string) {
     return this.uploads.getDownloadHistory(id);
   }
@@ -340,7 +340,7 @@ export class AttendanceController {
    */
   @Post('uploads/:id/reanalyze')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async reanalyze(@Param('id') id: string, @CurrentUser() user: { id: string }) {
     this.logger.log(`Re-analyze upload=${id} by user=${user.id}`);
     return this.uploads.reanalyze(id);
@@ -349,7 +349,7 @@ export class AttendanceController {
   /** Re-analyze every past upload. One-shot maintenance for analyzer migrations. */
   @Post('admin/reanalyze-all')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async reanalyzeAll(@CurrentUser() user: { id: string }) {
     this.logger.log(`Re-analyze ALL uploads by user=${user.id}`);
     return this.uploads.reanalyzeAll();
@@ -358,7 +358,7 @@ export class AttendanceController {
   /** Official Arabic absence letter for one daily upload. */
   @Get('letters/daily/:uploadId')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async dailyLetter(
     @Param('uploadId') uploadId: string,
     @Query('recipientName') recipientName?: string,
@@ -372,7 +372,7 @@ export class AttendanceController {
    */
   @Get('letters/range')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async rangeLetter(
     @Query('from') from: string,
     @Query('to') to: string,
@@ -407,7 +407,7 @@ export class AttendanceController {
    */
   @Get('uploads/:id/export.docx')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async exportDocx(@Param('id') id: string, @Res() res: Response) {
     const { buffer, filename } = await this.reportDocx.generate(id);
     setFileResponseHeaders(
@@ -422,7 +422,7 @@ export class AttendanceController {
 
   @Get('uploads/:id/export.xlsx')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'system_manager')
   async exportXlsx(
     @Param('id') id: string,
     @Query('scope') scope: ExportScope = 'all',
