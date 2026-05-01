@@ -748,6 +748,10 @@ export const attendanceApi = {
   getReport: (uploadId: string) => api.get(`/attendance/uploads/${uploadId}/report`),
   reanalyze: (uploadId: string) => api.post(`/attendance/uploads/${uploadId}/reanalyze`, null, { timeout: 60000 }),
   reanalyzeAll: () => api.post('/attendance/admin/reanalyze-all', null, { timeout: 300000 }),
+  unmatchedGrouped: (uploadId: string) =>
+    api.get(`/attendance/uploads/${uploadId}/unmatched-grouped`),
+  resolveUnmatched: (items: any[]) =>
+    api.post('/attendance/unmatched/create-employees', { items }, { timeout: 120000 }),
   dailyLetter: (uploadId: string, recipientName?: string) =>
     api.get(`/attendance/letters/daily/${uploadId}`, { params: recipientName ? { recipientName } : {} }),
   rangeLetter: (params: { from: string; to: string; recipientName?: string; noteAboutLastDay?: boolean }) =>

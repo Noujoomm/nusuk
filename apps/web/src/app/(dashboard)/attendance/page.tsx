@@ -25,6 +25,7 @@ import {
   Eye,
   ChevronDown,
   MapPin,
+  UserPlus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
@@ -32,6 +33,7 @@ import { useAuth } from '@/stores/auth';
 import { attendanceApi } from '@/lib/api';
 import { parseFilenameFromHeaders, triggerBrowserDownload } from '@/lib/download';
 import { PreviewDialog } from '@/components/attendance/preview-dialog';
+import { UnmatchedDialog } from '@/components/attendance/unmatched-dialog';
 
 interface SeedResult {
   totalRowsRead: number;
@@ -165,6 +167,7 @@ export default function AttendancePage() {
   const [reportLoading, setReportLoading] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [unmatchedDialogOpen, setUnmatchedDialogOpen] = useState(false);
 
   const [recipient, setRecipient] = useState(DEFAULT_RECIPIENT);
   const [letter, setLetter] = useState<OfficialLetter | null>(null);
@@ -698,9 +701,18 @@ export default function AttendancePage() {
 
           {report.unmatched.length > 0 && (
             <div className="border-t border-white/10 p-5">
-              <div className="flex items-center gap-2 text-sm font-semibold text-amber-300 mb-3">
-                <HelpCircle className="w-4 h-4" />
-                {report.unmatched.length} سجل لم تتم مطابقته مع موظف مسجّل
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-amber-300">
+                  <HelpCircle className="w-4 h-4" />
+                  {report.unmatched.length} سجل لم تتم مطابقته مع موظف مسجّل
+                </div>
+                <button
+                  onClick={() => setUnmatchedDialogOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs text-amber-200 hover:bg-amber-500/25"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  إضافة الموظفين للكراسة
+                </button>
               </div>
               <div className="rounded-lg bg-white/[0.02] border border-white/5 max-h-64 overflow-y-auto text-xs">
                 <table className="w-full">
@@ -801,6 +813,16 @@ export default function AttendancePage() {
         reportDate={report?.upload.reportDate ?? null}
         onClose={() => setPreviewOpen(false)}
       />
+
+      {report?.upload.id && (
+        <UnmatchedDialog
+          uploadId={report.upload.id}
+          open={unmatchedDialogOpen}
+          onClose={() => setUnmatchedDialogOpen(false)}
+          onResolved={() => loadReport(report.upload.id)}
+          trackOptions={[...new Set(report.summaries.map((s) => s.employee.track).filter(Boolean))]}
+        />
+      )}
     </div>
   );
 }

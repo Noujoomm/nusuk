@@ -313,6 +313,198 @@ export class PdfUploadService {
   }
 
   /**
+   * Distinct unmatched names from a single upload — one row per
+   * (rawEmployeeNumber, rawName) pair, with the punch count + sample
+   * dates so the manual-link UI can show enough context for a triage
+   * decision without dumping every individual record.
+   */
+  async getUnmatchedGrouped(uploadId: string) {
+    const exists = await this.prisma.pdfAttendanceUpload.findUnique({
+      where: { id: uploadId },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException('الرفعة غير موجودة');
+
+    const rows = await this.prisma.pdfAttendanceRecord.findMany({
+      where: { uploadId, isMatched: false },
+      select: {
+        rawEmployeeNumber: true,
+        rawName: true,
+        rawDepartment: true,
+        recordTime: true,
+        recordDate: true,
+      },
+      orderBy: [{ rawEmployeeNumber: 'asc' }, { rawName: 'asc' }],
+    });
+
+    type Group = {
+      rawEmployeeNumber: string | null;
+      rawName: string;
+      rawDepartment: string | null;
+      count: number;
+      firstSeen: string;
+      lastSeen: string;
+    };
+    const map = new Map<string, Group>();
+    for (const r of rows) {
+      const key = `${r.rawEmployeeNumber ?? ''}|${r.rawName}`;
+      const cur = map.get(key);
+      const dateStr = r.recordDate.toISOString().slice(0, 10);
+      if (!cur) {
+        map.set(key, {
+          rawEmployeeNumber: r.rawEmployeeNumber,
+          rawName: r.rawName,
+          rawDepartment: r.rawDepartment,
+          count: 1,
+          firstSeen: dateStr,
+          lastSeen: dateStr,
+        });
+      } else {
+        cur.count += 1;
+        if (dateStr < cur.firstSeen) cur.firstSeen = dateStr;
+        if (dateStr > cur.lastSeen) cur.lastSeen = dateStr;
+      }
+    }
+    return [...map.values()];
+  }
+
+  /**
+   * Bulk-create master-roster entries from unmatched PDF rows, relink the
+   * raw records to them, and reanalyze every affected upload so the new
+   * summaries show up immediately. The relink is GLOBAL — same name in
+   * other uploads also gets matched, mirroring how matchEmployee would
+   * behave on a fresh ingest.
+   *
+   * `items[].rawName` is the key used to find unmatched records (exact
+   * string match against the PDF row). All other fields populate the
+   * new PdfAttendanceEmployee.
+   */
+  async createEmployeesFromUnmatched(items: Array<{
+    rawName: string;
+    rawEmployeeNumber?: string | null;
+    fullName?: string | null;
+    track: string;
+    trackDetail?: string | null;
+    center?: PdfAttendanceCenter | null;
+    shiftType?: PdfShiftType;
+    scheduledCheckIn?: string | null;
+    scheduledCheckOut?: string | null;
+    worksByCharter?: boolean;
+  }>) {
+    if (!Array.isArray(items) || items.length === 0) {
+      return { created: 0, recordsLinked: 0, uploadsReanalyzed: 0 };
+    }
+
+    const { normalizeArabic } = await import('../utils/arabic-normalizer');
+
+    let created = 0;
+    let recordsLinked = 0;
+    const affectedUploads = new Set<string>();
+
+    for (const it of items) {
+      const rawName = (it.rawName ?? '').trim();
+      if (!rawName) continue;
+      const fullName = (it.fullName ?? rawName).trim();
+      const normalizedName = normalizeArabic(fullName);
+      if (!normalizedName) continue;
+
+      // Honour the existing unique constraint: if employeeNumber is given and
+      // already used, link to that row instead of creating a duplicate. Same
+      // for an existing normalized name — fall back to update, not insert.
+      let employee = it.rawEmployeeNumber
+        ? await this.prisma.pdfAttendanceEmployee.findUnique({
+            where: { employeeNumber: it.rawEmployeeNumber },
+            select: { id: true, aliases: true },
+          })
+        : null;
+      if (!employee) {
+        employee = await this.prisma.pdfAttendanceEmployee.findFirst({
+          where: { normalizedName },
+          select: { id: true, aliases: true },
+        });
+      }
+
+      if (employee) {
+        // Reuse existing employee — add the rawName as an alias if new.
+        const aliases = new Set([...(employee.aliases ?? []), rawName]);
+        await this.prisma.pdfAttendanceEmployee.update({
+          where: { id: employee.id },
+          data: { aliases: [...aliases] },
+        });
+      } else {
+        const newRow = await this.prisma.pdfAttendanceEmployee.create({
+          data: {
+            fullName,
+            normalizedName,
+            track: it.track || 'غير محدد',
+            trackDetail: it.trackDetail ?? null,
+            employeeNumber: it.rawEmployeeNumber || null,
+            shiftType: it.shiftType ?? 'morning',
+            scheduledCheckIn: it.scheduledCheckIn ?? null,
+            scheduledCheckOut: it.scheduledCheckOut ?? null,
+            worksByCharter: it.worksByCharter ?? false,
+            center: it.center ?? null,
+            aliases: rawName !== fullName ? [rawName] : [],
+            isActive: true,
+          },
+          select: { id: true },
+        });
+        employee = { id: newRow.id, aliases: [] };
+        created += 1;
+      }
+
+      // Relink every matching unmatched record across uploads. Match by
+      // employeeNumber first (more reliable), then by exact rawName.
+      const linkWhere: Prisma.PdfAttendanceRecordWhereInput = {
+        isMatched: false,
+        OR: [
+          ...(it.rawEmployeeNumber ? [{ rawEmployeeNumber: it.rawEmployeeNumber }] : []),
+          { rawName },
+        ],
+      };
+      const toLink = await this.prisma.pdfAttendanceRecord.findMany({
+        where: linkWhere,
+        select: { id: true, uploadId: true },
+      });
+      if (toLink.length > 0) {
+        await this.prisma.pdfAttendanceRecord.updateMany({
+          where: { id: { in: toLink.map((r) => r.id) } },
+          data: {
+            isMatched: true,
+            employeeId: employee.id,
+            matchMethod: 'manual',
+            matchConfidence: 1,
+          },
+        });
+        recordsLinked += toLink.length;
+        for (const r of toLink) affectedUploads.add(r.uploadId);
+      }
+    }
+
+    // Roll up matched/unmatched counts and rebuild summaries for affected
+    // uploads. Done sequentially because reanalyze is heavy and we'd rather
+    // be safe than parallel here.
+    for (const uploadId of affectedUploads) {
+      const matched = await this.prisma.pdfAttendanceRecord.count({
+        where: { uploadId, isMatched: true },
+      });
+      const unmatched = await this.prisma.pdfAttendanceRecord.count({
+        where: { uploadId, isMatched: false },
+      });
+      await this.prisma.pdfAttendanceUpload.update({
+        where: { id: uploadId },
+        data: { matchedCount: matched, unmatchedCount: unmatched },
+      });
+      await this.reanalyze(uploadId);
+    }
+
+    this.logger.log(
+      `Unmatched resolved: created=${created} linkedRecords=${recordsLinked} uploadsReanalyzed=${affectedUploads.size}`,
+    );
+    return { created, recordsLinked, uploadsReanalyzed: affectedUploads.size };
+  }
+
+  /**
    * Paginated list of past uploads. Each row carries a per-track absence
    * breakdown so the history page can show "أين كانت الغيابات" at a glance
    * without loading the full daily report.

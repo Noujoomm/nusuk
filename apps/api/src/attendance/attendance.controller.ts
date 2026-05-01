@@ -294,6 +294,30 @@ export class AttendanceController {
     return this.uploads.getDailyReport(id);
   }
 
+  /** Distinct unmatched (rawName, rawEmployeeNumber) pairs from this upload —
+   *  one row per real person, with punch counts and date range. Drives the
+   *  "إدارة غير المطابقة" dialog. */
+  @Get('uploads/:id/unmatched-grouped')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'system_manager')
+  async unmatchedGrouped(@Param('id') id: string) {
+    return this.uploads.getUnmatchedGrouped(id);
+  }
+
+  /** Bulk-create master-roster entries from unmatched PDF rows + relink
+   *  records across uploads + reanalyze affected uploads in one shot. */
+  @Post('unmatched/create-employees')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'system_manager')
+  async resolveUnmatched(
+    @Body() body: { items: any[] },
+  ) {
+    if (!body || !Array.isArray(body.items)) {
+      throw new BadRequestException('يجب تمرير قائمة الموظفين');
+    }
+    return this.uploads.createEmployeesFromUnmatched(body.items);
+  }
+
   /**
    * Original PDF download. Returns the bytes with the original (Arabic)
    * filename. Records the download in the audit table.
