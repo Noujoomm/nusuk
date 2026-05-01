@@ -16,6 +16,22 @@ import type { PdfAttendanceStatus } from '@prisma/client';
  * text — the analyzer doesn't re-parse, it interprets.
  */
 
+type CityRow = {
+  city: 'مكة المكرمة' | 'المدينة المنورة' | 'مشترك';
+  employeeCount: number;
+  attendanceRate: number;
+  observation?: string;
+};
+
+type ScheduleComplianceJson = {
+  withinSchedule: number; // worksByCharter=true count
+  outsideSchedule: number; // worksByCharter=false count
+  complianceRate: number; // % of within-schedule employees marked present
+  punctualityWithinSchedule: number; // % of within-schedule arrivals on time vs scheduledCheckIn
+  deviations: Array<{ name: string; track?: string; issue: string; severity: 'low' | 'medium' | 'high' }>;
+  observation?: string;
+};
+
 type AnalysisJson = {
   executiveSummary: string;
   keyInsights: Array<{ title: string; value: string; trend: 'up' | 'down' | 'stable'; severity?: string }>;
@@ -29,6 +45,8 @@ type AnalysisJson = {
   needsAttention: Array<{ name: string; issue?: string; severity?: string }>;
   recommendations: Array<{ priority: 'high' | 'medium' | 'low'; title: string; description: string; actionItems?: string[] }>;
   riskFlags: Array<{ type: string; level: 'low' | 'medium' | 'high'; description: string; affectedCount: number }>;
+  byCity: CityRow[];
+  scheduleCompliance: ScheduleComplianceJson;
 };
 
 @Injectable()
@@ -89,7 +107,17 @@ export class AttendanceAnalysisService {
         summaries: {
           include: {
             employee: {
-              select: { id: true, fullName: true, track: true, trackDetail: true, shiftType: true, center: true },
+              select: {
+                id: true,
+                fullName: true,
+                track: true,
+                trackDetail: true,
+                shiftType: true,
+                center: true,
+                scheduledCheckIn: true,
+                scheduledCheckOut: true,
+                worksByCharter: true,
+              },
             },
           },
         },
@@ -123,6 +151,8 @@ export class AttendanceAnalysisService {
       needsAttention: ai.needsAttention as any,
       recommendations: ai.recommendations as any,
       riskFlags: ai.riskFlags as any,
+      byCity: ai.byCity as any,
+      scheduleCompliance: ai.scheduleCompliance as any,
       aiModel: model,
       processingTimeMs,
       inputTokens: ai.inputTokens,
@@ -185,8 +215,23 @@ export class AttendanceAnalysisService {
   "topPerformers": [{"name": string, "score": string, "reason": string}],
   "needsAttention": [{"name": string, "issue": string, "severity": "low"|"medium"|"high"}],
   "recommendations": [{"priority": "high"|"medium"|"low", "title": string, "description": string, "actionItems": [string]}],
-  "riskFlags": [{"type": string, "level": "low"|"medium"|"high", "description": string, "affectedCount": number}]
-}`;
+  "riskFlags": [{"type": string, "level": "low"|"medium"|"high", "description": string, "affectedCount": number}],
+  "byCity": [{"city": "مكة المكرمة"|"المدينة المنورة"|"مشترك", "employeeCount": number, "attendanceRate": number, "observation": string}],
+  "scheduleCompliance": {
+    "withinSchedule": number,
+    "outsideSchedule": number,
+    "complianceRate": number,
+    "punctualityWithinSchedule": number,
+    "deviations": [{"name": string, "track": string, "issue": string, "severity": "low"|"medium"|"high"}],
+    "observation": string
+  }
+}
+
+ملاحظات على الكراسة (booklet/charter):
+- "ضمن الكراسة" يعني worksByCharter=true: الموظف ملتزم بالجدول الرسمي وله وقت حضور وانصراف محددان.
+- "خارج الكراسة" يعني worksByCharter=false: لا يندرج تحت الجدول الرسمي (On Call، أونلاين، بدون وقت محدد، إلخ).
+- في deviations اذكر فقط الموظفين "ضمن الكراسة" الذين خرجوا فعلاً عن جدولهم (تأخر > 15 دقيقة، أو غياب، أو ساعات ناقصة).
+- byCity: استخدم العدّ الفعلي من computedStats.byCity ولا تخترع موظفين خارج القائمة.`;
 
     const userPayload = {
       file: { name: upload.fileName, reportDate: upload.reportDate.toISOString().slice(0, 10) },
@@ -216,6 +261,39 @@ ${JSON.stringify(userPayload, null, 2)}`;
       throw new Error('الذكاء الاصطناعي أعاد ردّاً غير قابل للقراءة. حاول مرة أخرى.');
     }
 
+    // For byCity / scheduleCompliance we trust the deterministic stats over the
+    // model — the model only contributes the prose `observation` / `deviations`.
+    // This matches the user's expectation that headcount numbers reflect the
+    // seeded charter, not what the LLM thinks it saw.
+    const byCityFromStats = stats.byCity.map((c) => {
+      const aiRow = arr(parsed.byCity).find((x: any) => x?.city === c.city);
+      return {
+        city: c.city,
+        employeeCount: c.employeeCount,
+        attendanceRate: c.attendanceRate,
+        observation: aiRow?.observation ? String(aiRow.observation).slice(0, 500) : undefined,
+      };
+    });
+
+    const sc = parsed.scheduleCompliance ?? {};
+    const scheduleCompliance: ScheduleComplianceJson = {
+      withinSchedule: stats.bookletCompliance.withinSchedule,
+      outsideSchedule: stats.bookletCompliance.outsideSchedule,
+      complianceRate: stats.bookletCompliance.complianceRate,
+      punctualityWithinSchedule: stats.bookletCompliance.punctualityWithinSchedule,
+      deviations: arr(sc.deviations).slice(0, 30).map((d: any) => {
+        const sev: 'low' | 'medium' | 'high' =
+          d?.severity === 'low' || d?.severity === 'high' ? d.severity : 'medium';
+        return {
+          name: String(d?.name ?? '').slice(0, 120),
+          track: d?.track ? String(d.track).slice(0, 80) : undefined,
+          issue: String(d?.issue ?? '').slice(0, 240),
+          severity: sev,
+        };
+      }),
+      observation: sc.observation ? String(sc.observation).slice(0, 500) : undefined,
+    };
+
     return {
       executiveSummary: String(parsed.executiveSummary ?? '').slice(0, 4000),
       keyInsights: arr(parsed.keyInsights),
@@ -229,6 +307,8 @@ ${JSON.stringify(userPayload, null, 2)}`;
       needsAttention: arr(parsed.needsAttention),
       recommendations: arr(parsed.recommendations),
       riskFlags: arr(parsed.riskFlags),
+      byCity: byCityFromStats,
+      scheduleCompliance,
       inputTokens: res.usage.input_tokens,
       outputTokens: res.usage.output_tokens,
     };
@@ -240,8 +320,25 @@ ${JSON.stringify(userPayload, null, 2)}`;
 type SummaryRow = {
   status: PdfAttendanceStatus;
   totalHours: number | null;
+  firstCheckIn: string | null;
   flags: string[];
-  employee: { id: string; fullName: string; track: string; trackDetail: string | null; shiftType: string; center: string | null };
+  employee: {
+    id: string;
+    fullName: string;
+    track: string;
+    trackDetail: string | null;
+    shiftType: string;
+    center: string | null;
+    scheduledCheckIn: string | null;
+    scheduledCheckOut: string | null;
+    worksByCharter: boolean;
+  };
+};
+
+const CITY_LABELS: Record<string, 'مكة المكرمة' | 'المدينة المنورة' | 'مشترك'> = {
+  makkah: 'مكة المكرمة',
+  madinah: 'المدينة المنورة',
+  shared: 'مشترك',
 };
 
 function computeStats(summaries: SummaryRow[]) {
@@ -267,18 +364,55 @@ function computeStats(summaries: SummaryRow[]) {
     if (s.status === 'incomplete_hours') byTrack[t].incomplete += 1;
   }
 
-  // Per-employee snapshots — only attach the fields the model actually needs to
-  // identify standout cases. Cap at 200 to stay well under context for typical
-  // single-day uploads (~80 employees).
-  const employees = summaries.slice(0, 200).map((s) => ({
-    name: s.employee.fullName,
-    track: s.employee.track,
-    shiftType: s.employee.shiftType,
-    center: s.employee.center,
-    status: s.status,
-    hours: s.totalHours,
-    flags: s.flags,
-  }));
+  // ─── By city (مكة / المدينة / مشترك) — derived from PdfAttendanceCenter ───
+  const byCity: Record<string, { total: number; present: number; absent: number }> = {};
+  for (const s of summaries) {
+    const c = s.employee.center || 'shared';
+    if (!byCity[c]) byCity[c] = { total: 0, present: 0, absent: 0 };
+    byCity[c].total += 1;
+    if (s.status === 'present' || s.status === 'on_call_present') byCity[c].present += 1;
+    if (s.status === 'absent') byCity[c].absent += 1;
+  }
+
+  // ─── Booklet/charter compliance ───
+  const within = summaries.filter((s) => s.employee.worksByCharter);
+  const outside = summaries.filter((s) => !s.employee.worksByCharter);
+  const withinPresent = within.filter((s) => s.status === 'present' || s.status === 'on_call_present').length;
+  const withinAbsent = within.filter((s) => s.status === 'absent').length;
+  const withinIncomplete = within.filter((s) => s.status === 'incomplete_hours').length;
+
+  // Punctuality vs scheduled check-in (within-schedule employees only).
+  let punctualWithin = 0;
+  let punctualWithinDenom = 0;
+  for (const s of within) {
+    if (!s.employee.scheduledCheckIn || !s.firstCheckIn) continue;
+    const lateMin = lateMinutes(s.firstCheckIn, s.employee.scheduledCheckIn);
+    if (lateMin === null) continue;
+    punctualWithinDenom += 1;
+    if (lateMin <= 15) punctualWithin += 1; // 15-min grace
+  }
+
+  // Per-employee snapshots for the model — capped at 200, includes booklet
+  // fields so the LLM can reason about deviations and call out specific names.
+  const employees = summaries.slice(0, 200).map((s) => {
+    const lateMin = s.employee.scheduledCheckIn && s.firstCheckIn
+      ? lateMinutes(s.firstCheckIn, s.employee.scheduledCheckIn)
+      : null;
+    return {
+      name: s.employee.fullName,
+      track: s.employee.track,
+      city: CITY_LABELS[s.employee.center || 'shared'] ?? 'مشترك',
+      shiftType: s.employee.shiftType,
+      worksByCharter: s.employee.worksByCharter,
+      scheduledCheckIn: s.employee.scheduledCheckIn,
+      scheduledCheckOut: s.employee.scheduledCheckOut,
+      firstCheckIn: s.firstCheckIn,
+      lateMinutes: lateMin,
+      status: s.status,
+      hours: s.totalHours,
+      flags: s.flags,
+    };
+  });
 
   return {
     total,
@@ -291,8 +425,44 @@ function computeStats(summaries: SummaryRow[]) {
     attendanceRate: total ? +((present / total) * 100).toFixed(2) : 0,
     averageWorkHours: +avgHours.toFixed(2),
     byTrack: Object.entries(byTrack).map(([trackName, v]) => ({ trackName, ...v })),
+    byCity: Object.entries(byCity).map(([c, v]) => ({
+      city: CITY_LABELS[c] ?? 'مشترك',
+      employeeCount: v.total,
+      present: v.present,
+      absent: v.absent,
+      attendanceRate: v.total ? +((v.present / v.total) * 100).toFixed(2) : 0,
+    })),
+    bookletCompliance: {
+      withinSchedule: within.length,
+      outsideSchedule: outside.length,
+      withinPresent,
+      withinAbsent,
+      withinIncomplete,
+      complianceRate: within.length ? +((withinPresent / within.length) * 100).toFixed(2) : 0,
+      punctualityWithinSchedule: punctualWithinDenom
+        ? +((punctualWithin / punctualWithinDenom) * 100).toFixed(2)
+        : 0,
+    },
     employees,
   };
+}
+
+// "07:00" or "07:00:00" → minutes since midnight, else null.
+function toMinutes(t: string | null): number | null {
+  if (!t) return null;
+  const m = t.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
+  return h * 60 + min;
+}
+
+function lateMinutes(actual: string | null, scheduled: string | null): number | null {
+  const a = toMinutes(actual);
+  const s = toMinutes(scheduled);
+  if (a === null || s === null) return null;
+  return Math.max(0, a - s);
 }
 
 function parseJsonStrict(raw: string): any | null {

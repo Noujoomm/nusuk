@@ -9,7 +9,9 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
+  MapPin,
   RefreshCw,
+  ShieldCheck,
   Sparkles,
   Target,
   TrendingDown,
@@ -60,6 +62,26 @@ interface RiskRow {
   description: string;
   affectedCount: number;
 }
+interface CityRow {
+  city: 'مكة المكرمة' | 'المدينة المنورة' | 'مشترك';
+  employeeCount: number;
+  attendanceRate: number;
+  observation?: string;
+}
+interface ScheduleDeviation {
+  name: string;
+  track?: string;
+  issue: string;
+  severity: 'low' | 'medium' | 'high';
+}
+interface ScheduleCompliance {
+  withinSchedule: number;
+  outsideSchedule: number;
+  complianceRate: number;
+  punctualityWithinSchedule: number;
+  deviations: ScheduleDeviation[];
+  observation?: string;
+}
 
 interface AnalysisData {
   id: string;
@@ -76,15 +98,19 @@ interface AnalysisData {
   needsAttention: AttentionRow[];
   recommendations: RecommendationRow[];
   riskFlags: RiskRow[];
+  byCity?: CityRow[] | null;
+  scheduleCompliance?: ScheduleCompliance | null;
   analyzedAt: string;
   version: number;
   isCached: boolean;
 }
 
-type Tab = 'insights' | 'tracks' | 'patterns' | 'people' | 'recommendations' | 'risks';
+type Tab = 'insights' | 'cities' | 'charter' | 'tracks' | 'patterns' | 'people' | 'recommendations' | 'risks';
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'insights',        label: 'رؤى رئيسية' },
+  { key: 'cities',          label: 'حسب المدينة' },
+  { key: 'charter',         label: 'الكراسة' },
   { key: 'tracks',          label: 'تحليل المسارات' },
   { key: 'patterns',        label: 'أنماط الغياب' },
   { key: 'people',          label: 'الموظفون' },
@@ -272,6 +298,8 @@ export function AnalysisDialog({ uploadId, fileName, open, onClose }: Props) {
 
               <div>
                 {tab === 'insights' && <InsightsTab insights={data.keyInsights} />}
+                {tab === 'cities' && <CitiesTab cities={data.byCity || []} />}
+                {tab === 'charter' && <CharterTab compliance={data.scheduleCompliance || null} />}
                 {tab === 'tracks' && <TracksTab tracks={data.trackAnalysis} />}
                 {tab === 'patterns' && <PatternsTab patterns={data.absencePatterns} />}
                 {tab === 'people' && (
@@ -481,6 +509,102 @@ function RisksTab({ risks }: { risks: RiskRow[] }) {
           <p className="text-[11px] text-slate-500 mt-1.5">عدد المتأثرين: <span className="text-slate-300">{r.affectedCount}</span></p>
         </div>
       ))}
+    </div>
+  );
+}
+
+function CitiesTab({ cities }: { cities: CityRow[] }) {
+  if (cities.length === 0) {
+    return (
+      <Empty message="لم يتم استيراد المدن — ارفع جدول الكراسة من صفحة الحضور لتحديث بيانات الموظفين." />
+    );
+  }
+  const colorByCity: Record<string, string> = {
+    'مكة المكرمة':    'border-emerald-500/30 from-emerald-500/15 text-emerald-300',
+    'المدينة المنورة': 'border-blue-500/30 from-blue-500/15 text-blue-300',
+    'مشترك':           'border-slate-500/30 from-slate-500/15 text-slate-300',
+  };
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {cities.map((c, i) => (
+          <div
+            key={i}
+            className={`rounded-xl border bg-gradient-to-br to-transparent p-4 ${
+              colorByCity[c.city] ?? 'border-slate-500/30 from-slate-500/15 text-slate-300'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <MapPin className="w-4 h-4 opacity-80" />
+              <span className="text-sm font-bold text-white">{c.city}</span>
+            </div>
+            <div className="text-2xl font-bold text-white tabular-nums">
+              {c.employeeCount}
+              <span className="text-xs text-slate-400 mr-1">موظف</span>
+            </div>
+            <div className="text-[11px] mt-1 opacity-90">
+              نسبة الحضور: <span className="font-semibold tabular-nums">{c.attendanceRate.toFixed(1)}%</span>
+            </div>
+            {c.observation && (
+              <p className="text-[11px] text-slate-300 mt-2 leading-relaxed">{c.observation}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CharterTab({ compliance }: { compliance: ScheduleCompliance | null }) {
+  if (!compliance) {
+    return (
+      <Empty message="بيانات الكراسة غير متوفرة. ارفع جدول الكراسة (xlsx) من صفحة الحضور أولاً." />
+    );
+  }
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Metric icon={<ShieldCheck className="w-4 h-4" />} label="ضمن الكراسة" value={`${compliance.withinSchedule}`} color="emerald" />
+        <Metric icon={<Users className="w-4 h-4" />} label="خارج الكراسة" value={`${compliance.outsideSchedule}`} color="blue" />
+        <Metric icon={<CheckCircle2 className="w-4 h-4" />} label="نسبة الالتزام" value={`${compliance.complianceRate.toFixed(1)}%`} color="purple" />
+        <Metric icon={<Clock className="w-4 h-4" />} label="الانضباط الزمني" value={`${compliance.punctualityWithinSchedule.toFixed(1)}%`} color="amber" />
+      </div>
+
+      {compliance.observation && (
+        <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 to-transparent p-4">
+          <h4 className="text-sm font-bold text-emerald-300 mb-1">ملاحظة عامة</h4>
+          <p className="text-xs text-slate-200 leading-relaxed">{compliance.observation}</p>
+        </div>
+      )}
+
+      <div>
+        <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-300" />
+          انحرافات عن الجدول الرسمي
+        </h4>
+        {compliance.deviations.length === 0 ? (
+          <Empty message="لا توجد انحرافات ملحوظة عن الكراسة في هذه الفترة." />
+        ) : (
+          <div className="space-y-2">
+            {compliance.deviations.map((d, i) => (
+              <div key={i} className="rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-3">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-semibold text-white truncate">{d.name}</span>
+                    {d.track && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-slate-300 border border-white/10 truncate">
+                        {d.track}
+                      </span>
+                    )}
+                  </div>
+                  <SeverityBadge level={d.severity} />
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">{d.issue}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1956,6 +1956,11 @@ model PdfAttendanceAiAnalysis {
   recommendations Json
   riskFlags       Json @map("risk_flags")
 
+  // ─── Roster-aware sections (added when the booklet/charter sheet is seeded) ──
+  // Both nullable so historical rows analyzed before this column remain valid.
+  byCity             Json? @map("by_city")             // [{city, employees, present, absent, attendanceRate}]
+  scheduleCompliance Json? @map("schedule_compliance") // {withinSchedule, outsideSchedule, complianceRate, deviations:[…]}
+
   aiModel          String @default("claude-sonnet-4-5") @map("ai_model")
   processingTimeMs Int    @map("processing_time_ms")
   inputTokens      Int?   @map("input_tokens")
