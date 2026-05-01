@@ -11,6 +11,7 @@ export class AnalyticsService {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const taskWhere = { isDeleted: false };
 
     // ──────────────────────────────────────
@@ -247,24 +248,26 @@ export class AnalyticsService {
       description_ar: string;
     }> = [];
 
-    // Top 3 tracks — weekly (last 7 days only): 70% reports + 30% daily interaction
-    const [reportsWeekByTrack, engagementWeekByTrack] = await this.prisma.withRetry(
+    // Top 3 tracks — daily (last 24 hours): 70% reports + 30% daily interaction.
+    // Same composite formula as before, just a tighter window so the ranking
+    // reflects "what's happening today" instead of a smoothed weekly view.
+    const [reportsDayByTrack, engagementDayByTrack] = await this.prisma.withRetry(
       () => Promise.all([
         this.prisma.report.groupBy({
           by: ['trackId'],
-          where: { createdAt: { gte: sevenDaysAgo } },
+          where: { createdAt: { gte: oneDayAgo } },
           _count: true,
         }),
         this.prisma.dailyUpdate.groupBy({
           by: ['trackId'],
-          where: { trackId: { not: null }, createdAt: { gte: sevenDaysAgo } },
+          where: { trackId: { not: null }, createdAt: { gte: oneDayAgo } },
           _count: true,
         }),
       ]),
-      'analytics.weeklyRanking',
+      'analytics.dailyRanking',
     );
-    const reportsMap = Object.fromEntries(reportsWeekByTrack.map((r) => [r.trackId, r._count]));
-    const engagementMap = Object.fromEntries(engagementWeekByTrack.map((u) => [u.trackId, u._count]));
+    const reportsMap = Object.fromEntries(reportsDayByTrack.map((r) => [r.trackId, r._count]));
+    const engagementMap = Object.fromEntries(engagementDayByTrack.map((u) => [u.trackId, u._count]));
 
     const maxReports = Math.max(1, ...Object.values(reportsMap) as number[]);
     const maxEngagement = Math.max(1, ...Object.values(engagementMap) as number[]);
@@ -285,8 +288,8 @@ export class AnalyticsService {
       insights.push({
         type: 'success',
         icon: 'trophy',
-        title_ar: 'أفضل ٣ مسارات أداءً (أسبوعي)',
-        description_ar: `${topList}\n٧٠٪ التقارير + ٣٠٪ التفاعل — آخر ٧ أيام`,
+        title_ar: 'أفضل ٣ مسارات أداءً (يومي)',
+        description_ar: `${topList}\n٧٠٪ التقارير + ٣٠٪ التفاعل — آخر ٢٤ ساعة`,
       });
     }
 
