@@ -136,6 +136,16 @@ export class AttendanceController {
     return this.analytics.analyze(from, to, scope);
   }
 
+  /** Diagnostic snapshot — exposes city tag distribution on both employees
+   *  and summaries so the UI can show "X موظف بدون مدينة محددة" and the
+   *  user can debug missing-data complaints. */
+  @Get('analytics/coverage')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'system_manager')
+  async analyticsCoverage() {
+    return this.analytics.coverage();
+  }
+
   /** Self-view — any authenticated user can see their own data. The
    * caller doesn't need to pass employeeId; the service resolves it
    * from the requesting user's identity (best-effort: maps user.email

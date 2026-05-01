@@ -818,4 +818,5 @@ export const attendanceApi = {
     }),
   analyticsEmployee: (employeeId: string, params: { from: string; to: string }) =>
     api.get(`/attendance/analytics/employee/${employeeId}`, { params, timeout: 60000 }),
+  analyticsCoverage: () => api.get('/attendance/analytics/coverage', { timeout: 30000 }),
 };

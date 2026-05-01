@@ -161,6 +161,102 @@ export class AttendanceAnalyticsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Diagnostic snapshot of the attendance dataset — answers the question
+   * "why don't I see my Madinah employees?" by exposing the city tag on
+   * each side of the join. Returned shape is flat so the UI can render
+   * it as a small banner without a chart library.
+   */
+  async coverage() {
+    const [
+      employeesTotal,
+      employeesMakkah,
+      employeesMadinah,
+      employeesShared,
+      employeesUnset,
+      uploads,
+      summariesTotal,
+      summariesByCenter,
+      sampleMakkah,
+      sampleMadinah,
+      sampleShared,
+      sampleUnset,
+    ] = await Promise.all([
+      this.prisma.pdfAttendanceEmployee.count({ where: { isActive: true } }),
+      this.prisma.pdfAttendanceEmployee.count({ where: { isActive: true, center: 'makkah' } }),
+      this.prisma.pdfAttendanceEmployee.count({ where: { isActive: true, center: 'madinah' } }),
+      this.prisma.pdfAttendanceEmployee.count({ where: { isActive: true, center: 'shared' } }),
+      this.prisma.pdfAttendanceEmployee.count({ where: { isActive: true, center: null } }),
+      this.prisma.pdfAttendanceUpload.count(),
+      this.prisma.pdfDailyAttendanceSummary.count(),
+      this.prisma.pdfDailyAttendanceSummary.groupBy({
+        by: ['employeeId'],
+        _count: true,
+      }).then(async (rows) => {
+        const ids = rows.map((r) => r.employeeId);
+        const emps = await this.prisma.pdfAttendanceEmployee.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, center: true },
+        });
+        const byId = new Map(emps.map((e) => [e.id, e.center]));
+        const acc = { makkah: 0, madinah: 0, shared: 0, unset: 0 };
+        for (const r of rows) {
+          const c = byId.get(r.employeeId);
+          if (c === 'makkah') acc.makkah += r._count;
+          else if (c === 'madinah') acc.madinah += r._count;
+          else if (c === 'shared') acc.shared += r._count;
+          else acc.unset += r._count;
+        }
+        return acc;
+      }),
+      this.prisma.pdfAttendanceEmployee.findMany({
+        where: { isActive: true, center: 'makkah' },
+        select: { fullName: true, track: true },
+        take: 5,
+        orderBy: { fullName: 'asc' },
+      }),
+      this.prisma.pdfAttendanceEmployee.findMany({
+        where: { isActive: true, center: 'madinah' },
+        select: { fullName: true, track: true },
+        take: 5,
+        orderBy: { fullName: 'asc' },
+      }),
+      this.prisma.pdfAttendanceEmployee.findMany({
+        where: { isActive: true, center: 'shared' },
+        select: { fullName: true, track: true },
+        take: 5,
+        orderBy: { fullName: 'asc' },
+      }),
+      this.prisma.pdfAttendanceEmployee.findMany({
+        where: { isActive: true, center: null },
+        select: { fullName: true, track: true },
+        take: 5,
+        orderBy: { fullName: 'asc' },
+      }),
+    ]);
+
+    return {
+      employees: {
+        total: employeesTotal,
+        makkah: employeesMakkah,
+        madinah: employeesMadinah,
+        shared: employeesShared,
+        unset: employeesUnset,
+      },
+      uploads,
+      summaries: {
+        total: summariesTotal,
+        ...summariesByCenter,
+      },
+      samples: {
+        makkah: sampleMakkah,
+        madinah: sampleMadinah,
+        shared: sampleShared,
+        unset: sampleUnset,
+      },
+    };
+  }
+
   async analyze(
     fromIso: string,
     toIso: string,

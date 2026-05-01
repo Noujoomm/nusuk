@@ -11,6 +11,7 @@ import {
   deriveCenter,
   deriveTrackDetail,
   mapHeaders,
+  parseCityCell,
   parseShiftType,
   parseTruthy,
 } from '../utils/excel-helpers';
@@ -159,6 +160,12 @@ export class ExcelSeederService {
       const trackRaw = cols.track != null ? cellString(row.getCell(cols.track)) : '';
       const track = (trackRaw || trackFromSheetName || 'غير محدد').trim();
 
+      // Per-row city column wins when present — lets the user mark Madinah
+      // employees in non-distribution sheets (where the sheet name carries
+      // no city). Falls back to the sheet-name heuristic otherwise.
+      const cityFromCell = cols.city != null ? parseCityCell(cellString(row.getCell(cols.city))) : null;
+      const center: CenterStr = cityFromCell ?? deriveCenter(trackFromSheetName, track);
+
       rows.push({
         fullName: rawName.trim(),
         normalizedName,
@@ -169,7 +176,7 @@ export class ExcelSeederService {
         scheduledCheckOut: cols.checkOut != null ? cellTime(row.getCell(cols.checkOut)) : null,
         shiftType: parseShiftType(cols.shift != null ? cellString(row.getCell(cols.shift)) : ''),
         worksByCharter: parseTruthy(cols.charter != null ? cellString(row.getCell(cols.charter)) : ''),
-        center: deriveCenter(trackFromSheetName, track),
+        center,
         source,
       });
     });

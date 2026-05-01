@@ -127,6 +127,8 @@ export default function AttendanceAnalyticsPage() {
     <div dir="rtl" className="space-y-5">
       <Header />
 
+      <CoveragePanel />
+
       <PeriodSelector value={range} onChange={setRange} />
 
       <FiltersBar
@@ -165,6 +167,203 @@ export default function AttendanceAnalyticsPage() {
           <Heatmap heatmap={data.heatmap} />
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Coverage diagnostic panel ──────────────────────────────────────────
+// Answers "why don't I see my Madinah/Makkah employees?" by showing the
+// city-tag distribution on both the master roster and the daily summaries.
+// Collapsed by default; opens automatically when there are unset employees.
+
+interface CoverageData {
+  employees: { total: number; makkah: number; madinah: number; shared: number; unset: number };
+  uploads: number;
+  summaries: { total: number; makkah: number; madinah: number; shared: number; unset: number };
+  samples: {
+    makkah: Array<{ fullName: string; track: string }>;
+    madinah: Array<{ fullName: string; track: string }>;
+    shared: Array<{ fullName: string; track: string }>;
+    unset: Array<{ fullName: string; track: string }>;
+  };
+}
+
+function CoveragePanel() {
+  const [data, setData] = useState<CoverageData | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await attendanceApi.analyticsCoverage();
+        if (!cancelled) {
+          setData(res.data);
+          // Auto-open when there's an obvious data-quality issue.
+          if (res.data.employees.unset > 0 || (res.data.employees.madinah === 0 && res.data.employees.makkah === 0)) {
+            setOpen(true);
+          }
+        }
+      } catch {
+        // Silent — coverage is optional and gated by role.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!data) return null;
+
+  const e = data.employees;
+  const s = data.summaries;
+  const hasIssue = e.unset > 0 || (e.madinah === 0 && e.makkah === 0);
+  const dominantShared = e.total > 0 && e.shared / e.total > 0.5;
+
+  return (
+    <div className={`rounded-2xl border p-4 backdrop-blur-xl ${
+      hasIssue || dominantShared
+        ? 'border-amber-500/30 bg-amber-500/[0.04]'
+        : 'border-white/10 bg-white/5'
+    }`}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between text-right"
+      >
+        <div className="flex items-center gap-2">
+          <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${
+            hasIssue || dominantShared ? 'bg-amber-500/15 text-amber-300' : 'bg-emerald-500/15 text-emerald-300'
+          }`}>
+            {hasIssue || dominantShared ? <AlertTriangle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+          </span>
+          <h3 className="text-sm font-bold text-white">تشخيص بيانات الحضور</h3>
+          <span className="text-[11px] text-slate-400">
+            {e.total} موظف • {data.uploads} رفعة • {s.total} سجل يومي
+          </span>
+        </div>
+        <span className="text-[11px] text-slate-400">{open ? '▲ إخفاء' : '▼ عرض'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-4 space-y-4">
+          {/* Employee breakdown by center */}
+          <div>
+            <h4 className="mb-2 text-xs font-bold text-slate-200">توزيع الموظفين حسب المدينة</h4>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <CovBox label="مكة المكرمة" value={e.makkah} total={e.total} color="emerald" />
+              <CovBox label="المدينة المنورة" value={e.madinah} total={e.total} color="blue" />
+              <CovBox label="مشترك" value={e.shared} total={e.total} color="purple" />
+              <CovBox label="غير محدد" value={e.unset} total={e.total} color={e.unset > 0 ? 'amber' : 'slate'} />
+            </div>
+          </div>
+
+          {/* Summary breakdown */}
+          <div>
+            <h4 className="mb-2 text-xs font-bold text-slate-200">السجلات اليومية حسب المدينة</h4>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <CovBox label="مكة المكرمة" value={s.makkah} total={s.total} color="emerald" />
+              <CovBox label="المدينة المنورة" value={s.madinah} total={s.total} color="blue" />
+              <CovBox label="مشترك" value={s.shared} total={s.total} color="purple" />
+              <CovBox label="غير محدد" value={s.unset} total={s.total} color={s.unset > 0 ? 'amber' : 'slate'} />
+            </div>
+          </div>
+
+          {/* Diagnosis message */}
+          {(hasIssue || dominantShared) && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
+              <p className="text-xs leading-relaxed text-amber-200">
+                {e.madinah === 0 && e.makkah === 0 && (
+                  <>
+                    <strong>لا يوجد أي موظف مرتبط بمدينة محددة في الكراسة.</strong> هذا يعني أن
+                    تبويب "حسب المدينة" والفلتر العلوي سيظهران الكل كـ"مشترك". الحلّ: أضف عمود
+                    "<span className="font-mono">المدينة</span>" في ملف الكراسة Excel (القيم: <em>مكة</em> /
+                    <em> المدينة</em>) ثم أعد رفعه من <span dir="ltr">/attendance</span>.
+                  </>
+                )}
+                {e.madinah === 0 && e.makkah > 0 && (
+                  <>
+                    <strong>لا يوجد موظفون مرتبطون بـ "المدينة المنورة"</strong> رغم وجود {e.makkah} موظف
+                    لمكة. الحلّ: أضف عمود "<span className="font-mono">المدينة</span>" في الـ sheet المعنية
+                    وضع قيمة "المدينة" للموظفين، ثم أعد رفع ملف الكراسة.
+                  </>
+                )}
+                {dominantShared && e.madinah > 0 && e.makkah > 0 && (
+                  <>
+                    <strong>{Math.round((e.shared / e.total) * 100)}% من الموظفين مصنّفون "مشترك"</strong>
+                    {' '}— غالباً موظفو التدريب/العلاقات/الإدارة المدرَجين في sheet عام بدون عمود "المدينة".
+                    أضف عمود <span className="font-mono">المدينة</span> لكل sheet واملأ القيم لتظهر بياناتهم
+                    في الفلاتر بشكل صحيح.
+                  </>
+                )}
+                {e.unset > 0 && (
+                  <>
+                    {' '}<strong>{e.unset} موظف</strong> بدون أي مدينة (null) — يفضّل تصنيفهم.
+                  </>
+                )}
+              </p>
+            </div>
+          )}
+
+          {/* Sample employees per center — helps verify with real names */}
+          <div>
+            <h4 className="mb-2 text-xs font-bold text-slate-200">عيّنات</h4>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <SampleList title="عيّنة مكة" items={data.samples.makkah} color="emerald" />
+              <SampleList title="عيّنة المدينة" items={data.samples.madinah} color="blue" />
+              <SampleList title="عيّنة مشترك" items={data.samples.shared} color="purple" />
+              {data.samples.unset.length > 0 && (
+                <SampleList title="عيّنة غير محدد" items={data.samples.unset} color="amber" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CovBox({
+  label,
+  value,
+  total,
+  color,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  color: 'emerald' | 'blue' | 'purple' | 'amber' | 'slate';
+}) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className={`rounded-lg border p-3 ${COLOR_CLASSES[color]}`}>
+      <div className="text-[11px] opacity-90">{label}</div>
+      <div className="text-xl font-bold tabular-nums text-white">{value}</div>
+      <div className="text-[10px] opacity-70">{pct}%</div>
+    </div>
+  );
+}
+
+function SampleList({
+  title,
+  items,
+  color,
+}: {
+  title: string;
+  items: Array<{ fullName: string; track: string }>;
+  color: 'emerald' | 'blue' | 'purple' | 'amber';
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className={`rounded-lg border p-3 ${COLOR_CLASSES[color]}`}>
+      <div className="mb-1 text-[11px] font-bold opacity-90">{title}</div>
+      <ul className="space-y-0.5 text-[11px] text-slate-200">
+        {items.map((it, i) => (
+          <li key={i} className="truncate">
+            <span>{it.fullName}</span>
+            <span className="text-slate-500"> · {it.track}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -298,12 +497,13 @@ function KpiGrid({ k }: { k: AnalyticsResult['kpis'] }) {
   );
 }
 
-const COLOR_CLASSES: Record<'emerald' | 'blue' | 'purple' | 'amber' | 'red', string> = {
+const COLOR_CLASSES: Record<'emerald' | 'blue' | 'purple' | 'amber' | 'red' | 'slate', string> = {
   emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
   blue: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
   purple: 'border-purple-500/30 bg-purple-500/10 text-purple-300',
   amber: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
   red: 'border-red-500/30 bg-red-500/10 text-red-300',
+  slate: 'border-slate-500/30 bg-slate-500/10 text-slate-300',
 };
 
 // ─── Trend chart ─────────────────────────────────────────────────────────

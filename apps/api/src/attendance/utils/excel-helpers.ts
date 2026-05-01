@@ -118,9 +118,24 @@ export type CenterStr = 'makkah' | 'madinah' | 'shared';
  */
 export function deriveCenter(...sources: Array<string | null | undefined>): CenterStr {
   const haystack = sources.filter(Boolean).join(' ');
-  if (/مكة|مكه/.test(haystack)) return 'makkah';
-  if (/المدينة|المدينه/.test(haystack)) return 'madinah';
+  if (/مكة|مكه|makkah|mecca/i.test(haystack)) return 'makkah';
+  if (/المدينة|المدينه|madinah|medina/i.test(haystack)) return 'madinah';
   return 'shared';
+}
+
+/**
+ * Parse a city cell value to one of the canonical center codes. Used when
+ * the user adds a "المدينة" column per row to override the sheet-name
+ * heuristic. Returns null when the cell is empty so the caller can fall
+ * back to deriveCenter.
+ */
+export function parseCityCell(raw: string | null | undefined): CenterStr | null {
+  const s = String(raw ?? '').trim().toLowerCase();
+  if (!s) return null;
+  if (/مكة|مكه|makkah|mecca/.test(s)) return 'makkah';
+  if (/المدينة|المدينه|madinah|medina/.test(s)) return 'madinah';
+  if (/مشترك|shared|both/.test(s)) return 'shared';
+  return null;
 }
 
 /**
@@ -140,6 +155,10 @@ export const HEADER_ALIASES = {
   checkOut: ['وقت الانصراف', 'وقت الانصارف'],
   shift: ['فترة الدوام'],
   charter: ['العمل حسب الكراسة', 'العمل حسب الكراسه'],
+  // Optional. Lets the user pin a city per employee directly in any sheet —
+  // overrides the sheet-name heuristic. Crucial for non-distribution tracks
+  // where the sheet name doesn't carry "المدينة"/"مكة".
+  city: ['المدينة', 'المركز', 'الموقع', 'المدينه'],
 } as const;
 
 export type HeaderKey = keyof typeof HEADER_ALIASES;
