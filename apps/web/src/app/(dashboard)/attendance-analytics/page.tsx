@@ -92,36 +92,77 @@ export default function AttendanceAnalyticsPage() {
   const [center, setCenter] = useState<'makkah' | 'madinah' | 'all'>('all');
   const [trackName, setTrackName] = useState<string>('');
   const [rosterOnly, setRosterOnly] = useState(false);
-  const [data, setData] = useState<AnalyticsResult | null>(null);
+
+  // Three independent datasets — one per section. The page stays in sync
+  // with the filter bar by only fetching the sections that the current
+  // scope actually shows: "all" → 3 calls in parallel; single-city → 1.
+  // No double-counting: each PdfDailyAttendanceSummary belongs to exactly
+  // one employee with exactly one center, so the same row never lands in
+  // both the Makkah and Madinah datasets.
+  const [combinedData, setCombinedData] = useState<AnalyticsResult | null>(null);
+  const [makkahData, setMakkahData] = useState<AnalyticsResult | null>(null);
+  const [madinahData, setMadinahData] = useState<AnalyticsResult | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Keep accumulated tracks across loads — otherwise picking "Madinah" once
+  // shrinks the dropdown to just Madinah's tracks and the user can't navigate
+  // back to "Distribution Mecca" without first widening the city.
+  const [allTrackOptions, setAllTrackOptions] = useState<string[]>([]);
+
+  const showCombined = center === 'all';
+  const showMakkah = center === 'all' || center === 'makkah';
+  const showMadinah = center === 'all' || center === 'madinah';
 
   const load = useCallback(async () => {
     setLoading(true);
+    const base = { from: range.from, to: range.to, rosterOnly };
+    const track = trackName || undefined;
     try {
-      const res = await attendanceApi.analyticsDashboard({
-        from: range.from,
-        to: range.to,
-        center,
-        trackName: trackName || undefined,
-        rosterOnly,
-      });
-      setData(res.data as AnalyticsResult);
+      const [combinedRes, makkahRes, madinahRes] = await Promise.all([
+        showCombined
+          ? attendanceApi.analyticsDashboard({ ...base, center: 'all', trackName: track })
+          : Promise.resolve(null),
+        showMakkah
+          ? attendanceApi.analyticsDashboard({ ...base, center: 'makkah', trackName: track })
+          : Promise.resolve(null),
+        showMadinah
+          ? attendanceApi.analyticsDashboard({ ...base, center: 'madinah', trackName: track })
+          : Promise.resolve(null),
+      ]);
+
+      const combined = (combinedRes?.data ?? null) as AnalyticsResult | null;
+      const makkah = (makkahRes?.data ?? null) as AnalyticsResult | null;
+      const madinah = (madinahRes?.data ?? null) as AnalyticsResult | null;
+
+      setCombinedData(combined);
+      setMakkahData(makkah);
+      setMadinahData(madinah);
+
+      // Refresh accumulated track list from whatever we got back.
+      const acc = new Set<string>(allTrackOptions);
+      for (const d of [combined, makkah, madinah]) {
+        if (!d) continue;
+        for (const t of d.byTrack) if (t.track) acc.add(t.track);
+      }
+      setAllTrackOptions([...acc]);
     } catch (err: any) {
       const msg = err?.response?.data?.message;
       toast.error(typeof msg === 'string' ? msg : 'فشل تحميل التحليلات');
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range.from, range.to, center, trackName, rosterOnly]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const trackOptions = useMemo(() => {
-    if (!data) return [];
-    return data.byTrack.map((t) => t.track);
-  }, [data]);
+  // Choose what to display empty-state vs sections vs loading.
+  const anySectionHasData =
+    (showCombined && combinedData && combinedData.kpis.totalDailyRecords > 0) ||
+    (showMakkah && makkahData && makkahData.kpis.totalDailyRecords > 0) ||
+    (showMadinah && madinahData && madinahData.kpis.totalDailyRecords > 0);
 
   return (
     <div dir="rtl" className="space-y-5">
@@ -132,7 +173,7 @@ export default function AttendanceAnalyticsPage() {
       <ScopePresets
         center={center}
         trackName={trackName}
-        trackOptions={trackOptions}
+        trackOptions={allTrackOptions}
         onApply={(p) => {
           setCenter(p.center);
           setTrackName(p.trackName ?? '');
@@ -148,7 +189,7 @@ export default function AttendanceAnalyticsPage() {
         onTrack={setTrackName}
         rosterOnly={rosterOnly}
         onRosterOnly={setRosterOnly}
-        trackOptions={trackOptions}
+        trackOptions={allTrackOptions}
       />
 
       {loading && (
@@ -157,18 +198,104 @@ export default function AttendanceAnalyticsPage() {
         </div>
       )}
 
-      {!loading && data && data.kpis.totalDailyRecords === 0 && (
-        <EmptyState range={range} />
-      )}
+      {!loading && !anySectionHasData && <EmptyState range={range} />}
 
-      {!loading && data && data.kpis.totalDailyRecords > 0 && (
+      {!loading && anySectionHasData && (
+        <>
+          {showCombined && combinedData && (
+            <Section
+              title="التحليل الإجمالي (مكة + المدينة)"
+              icon="🌐"
+              accent="emerald"
+              data={combinedData}
+              showByCity
+            />
+          )}
+          {showMakkah && makkahData && (
+            <Section
+              title="تحليل الحضور في مكة المكرمة"
+              icon="🕋"
+              accent="emerald"
+              data={makkahData}
+              subtitle="جميع المسارات في مركز مكة"
+            />
+          )}
+          {showMadinah && madinahData && (
+            <Section
+              title="تحليل الحضور في المدينة المنورة"
+              icon="🏛️"
+              accent="blue"
+              data={madinahData}
+              subtitle="مسار التوزيع — مركز المدينة"
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── One section (per-city or combined) ────────────────────────────────
+// Wraps every existing widget so each city gets the same chart set with
+// its own data slice. ByCityCard is intentionally hidden in single-city
+// sections — there's no city breakdown to show — but still visible in
+// the combined "all platform" section.
+
+function Section({
+  title,
+  icon,
+  accent,
+  data,
+  subtitle,
+  showByCity,
+}: {
+  title: string;
+  icon: string;
+  accent: 'emerald' | 'blue' | 'amber';
+  data: AnalyticsResult;
+  subtitle?: string;
+  showByCity?: boolean;
+}) {
+  const accentCls = {
+    emerald: 'border-emerald-500/30 bg-emerald-500/[0.05]',
+    blue: 'border-blue-500/30 bg-blue-500/[0.05]',
+    amber: 'border-amber-500/30 bg-amber-500/[0.05]',
+  }[accent];
+  const empty = data.kpis.totalDailyRecords === 0;
+
+  return (
+    <section className={`space-y-4 rounded-2xl border ${accentCls} p-5`}>
+      <div className="flex items-center gap-3 border-b border-white/5 pb-3">
+        <div className="text-2xl">{icon}</div>
+        <div className="flex-1">
+          <h2 className="text-lg font-bold text-white">{title}</h2>
+          {(subtitle || !empty) && (
+            <p className="mt-0.5 text-[11px] text-slate-400">
+              {subtitle && <span>{subtitle}</span>}
+              {subtitle && !empty && <span className="px-1">•</span>}
+              {!empty && (
+                <span>
+                  {data.kpis.totalEmployees} موظف · {data.kpis.totalDailyRecords} سجل يومي ·
+                  معدل الحضور {data.kpis.attendanceRate}%
+                </span>
+              )}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {empty ? (
+        <p className="py-8 text-center text-sm text-slate-500">
+          لا توجد سجلات لهذا النطاق في الفترة المحددة.
+        </p>
+      ) : (
         <>
           <KpiGrid k={data.kpis} />
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="lg:col-span-2"><TrendChart trend={data.trend} /></div>
             <div className="space-y-4">
               <DowChart byDayOfWeek={data.byDayOfWeek} />
-              <ByCityCard byCity={data.byCity} />
+              {showByCity && <ByCityCard byCity={data.byCity} />}
             </div>
           </div>
           <RankingRow top={data.topPerformers} bottom={data.bottomPerformers} />
@@ -177,7 +304,7 @@ export default function AttendanceAnalyticsPage() {
           <Heatmap heatmap={data.heatmap} />
         </>
       )}
-    </div>
+    </section>
   );
 }
 
