@@ -795,4 +795,9 @@ export const attendanceApi = {
       responseType: 'blob',
       timeout: 60000,
     }),
+  exportDocx: (uploadId: string) =>
+    api.get(`/attendance/uploads/${uploadId}/export.docx`, {
+      responseType: 'blob',
+      timeout: 120000,
+    }),
 };

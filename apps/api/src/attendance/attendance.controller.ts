@@ -29,6 +29,7 @@ import { LetterGeneratorService } from './services/letter-generator.service';
 import { AttendanceExportService, ExportScope } from './services/attendance-export.service';
 import { AbsenceService } from './services/absence.service';
 import { AttendanceAnalysisService } from './services/attendance-analysis.service';
+import { AttendanceReportDocxService } from './services/attendance-report-docx.service';
 import { BulkAbsenceDto, GetEmployeesByTrackBookletDto } from './dto/absence.dto';
 import { fixMulterFilename } from '../common/fix-filename';
 import { setFileResponseHeaders } from '../common/utils/file-response.util';
@@ -55,6 +56,7 @@ export class AttendanceController {
     private exporter: AttendanceExportService,
     private absences: AbsenceService,
     private analysis: AttendanceAnalysisService,
+    private reportDocx: AttendanceReportDocxService,
   ) {}
 
   // ─── AI ANALYSIS (cached in DB, refresh on demand) ───
@@ -341,6 +343,26 @@ export class AttendanceController {
    *  - scope=track → فقط الموظفون في `filter` (اسم المسار)
    *  - scope=center→ فقط المركز المحدد (makkah | madinah | shared)
    */
+  /**
+   * Comprehensive Word report — one DOCX per upload with cover, KPIs,
+   * per-track / per-city / charter sections, and a section per employee
+   * showing their daily timeline.
+   */
+  @Get('uploads/:id/export.docx')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async exportDocx(@Param('id') id: string, @Res() res: Response) {
+    const { buffer, filename } = await this.reportDocx.generate(id);
+    setFileResponseHeaders(
+      res,
+      filename,
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      buffer.length,
+      'attachment',
+    );
+    return res.send(buffer);
+  }
+
   @Get('uploads/:id/export.xlsx')
   @UseGuards(RolesGuard)
   @Roles('admin')

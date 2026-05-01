@@ -6,6 +6,7 @@ import { LetterGeneratorService } from './services/letter-generator.service';
 import { AttendanceExportService } from './services/attendance-export.service';
 import { AbsenceService } from './services/absence.service';
 import { AttendanceAnalysisService } from './services/attendance-analysis.service';
+import { AttendanceReportDocxService } from './services/attendance-report-docx.service';
 
 @Module({
   controllers: [AttendanceController],
@@ -16,6 +17,7 @@ import { AttendanceAnalysisService } from './services/attendance-analysis.servic
     AttendanceExportService,
     AbsenceService,
     AttendanceAnalysisService,
+    AttendanceReportDocxService,
   ],
   exports: [
     ExcelSeederService,
@@ -24,6 +26,7 @@ import { AttendanceAnalysisService } from './services/attendance-analysis.servic
     AttendanceExportService,
     AbsenceService,
     AttendanceAnalysisService,
+    AttendanceReportDocxService,
   ],
 })
 export class AttendanceModule {}

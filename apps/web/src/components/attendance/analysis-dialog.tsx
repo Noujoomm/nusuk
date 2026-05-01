@@ -8,6 +8,9 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  Download,
+  FileSpreadsheet,
+  FileText,
   Loader2,
   MapPin,
   RefreshCw,
@@ -21,6 +24,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { attendanceApi } from '@/lib/api';
+import { parseFilenameFromHeaders, triggerBrowserDownload } from '@/lib/download';
 
 interface KeyInsight {
   title: string;
@@ -105,7 +109,7 @@ interface AnalysisData {
   isCached: boolean;
 }
 
-type Tab = 'insights' | 'cities' | 'charter' | 'tracks' | 'patterns' | 'people' | 'recommendations' | 'risks';
+type Tab = 'insights' | 'cities' | 'charter' | 'tracks' | 'patterns' | 'people' | 'recommendations' | 'risks' | 'reports';
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'insights',        label: 'رؤى رئيسية' },
@@ -116,6 +120,7 @@ const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'people',          label: 'الموظفون' },
   { key: 'recommendations', label: 'التوصيات' },
   { key: 'risks',           label: 'المخاطر' },
+  { key: 'reports',         label: 'التقارير' },
 ];
 
 interface Props {
@@ -310,6 +315,7 @@ export function AnalysisDialog({ uploadId, fileName, open, onClose }: Props) {
                 )}
                 {tab === 'recommendations' && <RecommendationsTab recs={data.recommendations} />}
                 {tab === 'risks' && <RisksTab risks={data.riskFlags} />}
+                {tab === 'reports' && uploadId && <ReportsTab uploadId={uploadId} fileName={fileName} />}
               </div>
             </div>
           )}
@@ -605,6 +611,73 @@ function CharterTab({ compliance }: { compliance: ScheduleCompliance | null }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ReportsTab({ uploadId, fileName }: { uploadId: string; fileName?: string }) {
+  const [busy, setBusy] = useState<'docx' | 'xlsx' | null>(null);
+
+  const download = async (kind: 'docx' | 'xlsx') => {
+    setBusy(kind);
+    const tid = toast.loading(kind === 'docx' ? 'تجهيز ملف Word…' : 'تجهيز ملف Excel…');
+    try {
+      const res = kind === 'docx'
+        ? await attendanceApi.exportDocx(uploadId)
+        : await attendanceApi.exportXlsx(uploadId, 'all');
+      const filename = parseFilenameFromHeaders(
+        res.headers,
+        kind === 'docx' ? 'attendance-report.docx' : 'attendance-report.xlsx',
+      );
+      const mime = kind === 'docx'
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      triggerBrowserDownload(res.data, filename, mime);
+      toast.success('تم التحميل ✓', { id: tid });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || `فشل تحميل ${kind === 'docx' ? 'Word' : 'Excel'}`;
+      toast.error(typeof msg === 'string' ? msg : 'فشل التحميل', { id: tid });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 to-transparent p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-emerald-300 mb-1">
+          <Download className="w-4 h-4" />
+          تحميل التقرير الشامل
+        </h3>
+        <p className="text-xs text-slate-300 leading-relaxed">
+          يحتوي التقرير على: غلاف، ملخص KPIs، تحليل حسب المسار والمدينة، الالتزام بالكراسة، وصفحة لكل
+          موظف بسجله اليومي الكامل.
+        </p>
+        {fileName && <p className="mt-1 text-[11px] text-slate-500">المصدر: {fileName}</p>}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <button
+          onClick={() => download('docx')}
+          disabled={busy !== null}
+          className="flex items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/15 px-5 py-4 text-sm font-bold text-blue-300 hover:bg-blue-500/25 disabled:opacity-50"
+        >
+          {busy === 'docx' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+          تحميل Word (DOCX)
+        </button>
+        <button
+          onClick={() => download('xlsx')}
+          disabled={busy !== null}
+          className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-5 py-4 text-sm font-bold text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-50"
+        >
+          {busy === 'xlsx' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+          تحميل Excel (XLSX)
+        </button>
+      </div>
+
+      <p className="text-[11px] text-slate-500 leading-relaxed">
+        تصدير PDF قيد التجهيز — استخدم Word مؤقتاً (قابل للحفظ كـ PDF من داخل Word).
+      </p>
     </div>
   );
 }
