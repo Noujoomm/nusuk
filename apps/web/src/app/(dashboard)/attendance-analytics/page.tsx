@@ -129,6 +129,16 @@ export default function AttendanceAnalyticsPage() {
 
       <CoveragePanel />
 
+      <ScopePresets
+        center={center}
+        trackName={trackName}
+        trackOptions={trackOptions}
+        onApply={(p) => {
+          setCenter(p.center);
+          setTrackName(p.trackName ?? '');
+        }}
+      />
+
       <PeriodSelector value={range} onChange={setRange} />
 
       <FiltersBar
@@ -167,6 +177,113 @@ export default function AttendanceAnalyticsPage() {
           <Heatmap heatmap={data.heatmap} />
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Scope presets (quick "view" buttons) ──────────────────────────────
+// Two questions cover ~90% of how users navigate this page: "show me
+// Makkah's attendance" and "show me Madinah's attendance". The presets
+// flip the city + track filters together so the user doesn't have to
+// click into the dropdowns. trackOptions comes from the live data, so
+// we can pick the actual Distribution track name verbatim (avoids exact-
+// match mismatches like trailing spaces in "التوزيع (المدينة المنورة )").
+
+function ScopePresets({
+  center,
+  trackName,
+  trackOptions,
+  onApply,
+}: {
+  center: 'makkah' | 'madinah' | 'all';
+  trackName: string;
+  trackOptions: string[];
+  onApply: (p: { center: 'makkah' | 'madinah' | 'all'; trackName?: string }) => void;
+}) {
+  // Find a Distribution track name from the live data (handles "التوزيع",
+  // "مسار التوزيع", "التوزيع (المدينة المنورة)", …). When the city is
+  // already in the track name we prefer it over the bare "التوزيع" label.
+  const findDistribution = (city?: 'makkah' | 'madinah') => {
+    const mkRe = /مكة|مكه/;
+    const mdRe = /المدينة|المدينه/;
+    if (city === 'makkah') {
+      const cityMatch = trackOptions.find((t) => /توزيع/.test(t) && mkRe.test(t));
+      if (cityMatch) return cityMatch;
+    } else if (city === 'madinah') {
+      const cityMatch = trackOptions.find((t) => /توزيع/.test(t) && mdRe.test(t));
+      if (cityMatch) return cityMatch;
+    }
+    return trackOptions.find((t) => /توزيع/.test(t)) ?? '';
+  };
+
+  const presets: Array<{
+    key: string;
+    label: string;
+    icon: string;
+    cls: string;
+    matches: () => boolean;
+    apply: () => void;
+  }> = [
+    {
+      key: 'all',
+      label: 'كل المنصة',
+      icon: '🌐',
+      cls: 'border-white/20 bg-white/[0.04] text-slate-200',
+      matches: () => center === 'all' && !trackName,
+      apply: () => onApply({ center: 'all', trackName: '' }),
+    },
+    {
+      key: 'mk-all',
+      label: 'مكة — كل المسارات',
+      icon: '🕋',
+      cls: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+      matches: () => center === 'makkah' && !trackName,
+      apply: () => onApply({ center: 'makkah', trackName: '' }),
+    },
+    {
+      key: 'md-all',
+      label: 'المدينة — كل المسارات',
+      icon: '🕌',
+      cls: 'border-blue-500/30 bg-blue-500/10 text-blue-200',
+      matches: () => center === 'madinah' && !trackName,
+      apply: () => onApply({ center: 'madinah', trackName: '' }),
+    },
+    {
+      key: 'mk-dist',
+      label: 'توزيع مكة',
+      icon: '📦',
+      cls: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
+      matches: () => center === 'makkah' && /توزيع/.test(trackName),
+      apply: () => onApply({ center: 'makkah', trackName: findDistribution('makkah') }),
+    },
+    {
+      key: 'md-dist',
+      label: 'توزيع المدينة',
+      icon: '📦',
+      cls: 'border-blue-500/40 bg-blue-500/15 text-blue-200',
+      matches: () => center === 'madinah' && /توزيع/.test(trackName),
+      apply: () => onApply({ center: 'madinah', trackName: findDistribution('madinah') }),
+    },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[11px] text-slate-400 ml-1">عرض سريع:</span>
+      {presets.map((p) => {
+        const active = p.matches();
+        return (
+          <button
+            key={p.key}
+            onClick={p.apply}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+              active ? p.cls : 'border-white/10 bg-white/[0.02] text-slate-400 hover:bg-white/5'
+            }`}
+          >
+            <span>{p.icon}</span>
+            <span>{p.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -39,6 +39,7 @@ interface UploadItem {
   uploadedBy: string | null;
   createdAt: string;
   absencesByTrack: Record<string, number>;
+  coversCenter: 'makkah' | 'madinah' | null;
   _count: { downloads: number };
 }
 
@@ -60,6 +61,7 @@ export default function UploadsHistoryPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
+  const [centerFilter, setCenterFilter] = useState<'all' | 'makkah' | 'madinah' | 'mixed'>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<UploadItem | null>(null);
   const [previewItem, setPreviewItem] = useState<UploadItem | null>(null);
@@ -76,6 +78,7 @@ export default function UploadsHistoryPage() {
         to: to || undefined,
         page,
         limit: 30,
+        center: centerFilter,
       });
       setData(data);
       // Bulk-check which uploads already have a saved analysis so the
@@ -96,7 +99,7 @@ export default function UploadsHistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, page]);
+  }, [from, to, page, centerFilter]);
 
   useEffect(() => {
     if (isAdmin) load();
@@ -193,6 +196,29 @@ export default function UploadsHistoryPage() {
         </Link>
       </div>
 
+      {/* City tabs */}
+      <div className="flex flex-wrap gap-1.5">
+        {([
+          { k: 'all', label: 'كل الرفعات', cls: 'border-white/15 bg-white/5 text-slate-200' },
+          { k: 'makkah', label: 'مكة المكرمة', cls: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' },
+          { k: 'madinah', label: 'المدينة المنورة', cls: 'border-blue-500/30 bg-blue-500/10 text-blue-200' },
+          { k: 'mixed', label: 'مختلطة', cls: 'border-purple-500/30 bg-purple-500/10 text-purple-200' },
+        ] as const).map((t) => {
+          const active = centerFilter === t.k;
+          return (
+            <button
+              key={t.k}
+              onClick={() => { setPage(1); setCenterFilter(t.k); }}
+              className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                active ? t.cls : 'border-white/10 bg-white/[0.02] text-slate-400 hover:bg-white/5'
+              }`}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Filters */}
       <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
         <div className="relative md:col-span-2">
@@ -252,7 +278,12 @@ export default function UploadsHistoryPage() {
                   const tracks = Object.entries(u.absencesByTrack);
                   return (
                     <tr key={u.id} className="hover:bg-white/[0.02]">
-                      <td className="px-4 py-3 tabular-nums text-gray-200">{u.reportDate.slice(0, 10)}</td>
+                      <td className="px-4 py-3 tabular-nums text-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span>{u.reportDate.slice(0, 10)}</span>
+                          <CenterBadge center={u.coversCenter} />
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-gray-300 max-w-md break-all">
                         <Link href={`/attendance?upload=${u.id}`} className="hover:text-brand-300">
                           {u.fileName}
@@ -484,6 +515,31 @@ function ActionButton({
     >
       {disabled ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Icon className="w-3.5 h-3.5" />}
     </button>
+  );
+}
+
+function CenterBadge({ center }: { center: 'makkah' | 'madinah' | null }) {
+  if (center === 'makkah') {
+    return (
+      <span className="inline-flex items-center rounded-md border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-200">
+        مكة
+      </span>
+    );
+  }
+  if (center === 'madinah') {
+    return (
+      <span className="inline-flex items-center rounded-md border border-blue-500/30 bg-blue-500/15 px-1.5 py-0.5 text-[10px] text-blue-200">
+        المدينة
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center rounded-md border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-200"
+      title="الرفعة لم تُصنَّف لمدينة محددة — استُخدم الاستنتاج التلقائي"
+    >
+      مختلطة
+    </span>
   );
 }
 

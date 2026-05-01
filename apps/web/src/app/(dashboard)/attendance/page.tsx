@@ -156,7 +156,9 @@ export default function AttendancePage() {
   const [seedResult, setSeedResult] = useState<SeedResult | null>(null);
 
   const [pdfUploading, setPdfUploading] = useState(false);
-  const [pdfDragging, setPdfDragging] = useState(false);
+  const [pdfDraggingMakkah, setPdfDraggingMakkah] = useState(false);
+  const [pdfDraggingMadinah, setPdfDraggingMadinah] = useState(false);
+  const [pdfDraggingAuto, setPdfDraggingAuto] = useState(false);
   const [pdfResult, setPdfResult] = useState<UploadResult | null>(null);
 
   const [report, setReport] = useState<DailyReport | null>(null);
@@ -210,7 +212,7 @@ export default function AttendancePage() {
     }
   }, []);
 
-  const handlePdfFile = useCallback(async (file: File) => {
+  const handlePdfFile = useCallback(async (file: File, centerOverride?: 'makkah' | 'madinah') => {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       toast.error('يجب أن يكون الملف بصيغة PDF');
       return;
@@ -222,9 +224,10 @@ export default function AttendancePage() {
     setPdfUploading(true);
     setPdfResult(null);
     setReport(null);
-    const tid = toast.loading('جاري قراءة وتحليل الملف…');
+    const cityLabel = centerOverride === 'makkah' ? 'مكة' : centerOverride === 'madinah' ? 'المدينة' : 'تلقائي';
+    const tid = toast.loading(`جاري قراءة وتحليل الملف (${cityLabel})…`);
     try {
-      const { data } = await attendanceApi.uploadPdf(file);
+      const { data } = await attendanceApi.uploadPdf(file, centerOverride);
       setPdfResult(data);
       toast.success(
         `تم تحليل ${data.totalRecords} سجل (${data.matchedCount} مطابق، ${data.unmatchedCount} غير مطابق)`,
@@ -446,20 +449,65 @@ export default function AttendancePage() {
           <div>
             <h2 className="text-lg font-semibold">تقرير PDF اليومي للحضور</h2>
             <p className="text-sm text-gray-400 mt-0.5">
-              ارفع ملف PDF اليومي للبصمة لتحليل الحضور والانصراف وإصدار الملخص.
+              ارفع كل مدينة في مكانها — هذا يضمن أن موظفي المدينة الأخرى لا يُسجَّلون "غائبين"
+              بالخطأ في يوم خصصته لمدينة واحدة. الخيار التلقائي يستنتج المدينة من أسماء الموظفين
+              في الملف.
             </p>
           </div>
         </div>
 
-        <DropZone
-          accept=".pdf"
-          isDragging={pdfDragging}
-          isUploading={pdfUploading}
-          setDragging={setPdfDragging}
-          onFile={handlePdfFile}
-          hint="يدعم .pdf — حتى 10MB"
-          inputId="pdf-file"
-        />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Makkah */}
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03] p-3">
+            <div className="mb-2 flex items-center gap-2 text-sm font-bold text-emerald-300">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/15 text-[11px]">🕋</span>
+              <span>حضور مكة المكرمة</span>
+            </div>
+            <DropZone
+              accept=".pdf"
+              isDragging={pdfDraggingMakkah}
+              isUploading={pdfUploading}
+              setDragging={setPdfDraggingMakkah}
+              onFile={(f) => handlePdfFile(f, 'makkah')}
+              hint=".pdf — يُسجَّل تحت تصنيف مكة"
+              inputId="pdf-file-makkah"
+            />
+          </div>
+
+          {/* Madinah */}
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.03] p-3">
+            <div className="mb-2 flex items-center gap-2 text-sm font-bold text-blue-300">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-blue-500/15 text-[11px]">🕌</span>
+              <span>حضور المدينة المنورة</span>
+            </div>
+            <DropZone
+              accept=".pdf"
+              isDragging={pdfDraggingMadinah}
+              isUploading={pdfUploading}
+              setDragging={setPdfDraggingMadinah}
+              onFile={(f) => handlePdfFile(f, 'madinah')}
+              hint=".pdf — يُسجَّل تحت تصنيف المدينة"
+              inputId="pdf-file-madinah"
+            />
+          </div>
+        </div>
+
+        <details className="mt-3 group">
+          <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-200">
+            رفع تلقائي (لا تعرف المدينة؟ النظام يستنتجها من الأسماء)
+          </summary>
+          <div className="mt-2">
+            <DropZone
+              accept=".pdf"
+              isDragging={pdfDraggingAuto}
+              isUploading={pdfUploading}
+              setDragging={setPdfDraggingAuto}
+              onFile={(f) => handlePdfFile(f)}
+              hint=".pdf — يُستنتج التصنيف من المدينة الغالبة للموظفين"
+              inputId="pdf-file-auto"
+            />
+          </div>
+        </details>
 
         {pdfResult && (
           <div className="mt-5 rounded-xl bg-white/[0.04] border border-white/10 p-4">

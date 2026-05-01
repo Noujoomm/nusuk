@@ -28,6 +28,12 @@ export class PdfUploadService {
     fileSize: number,
     buffer: Buffer,
     uploadedBy: string | null,
+    /**
+     * If the caller picked a city explicitly (e.g. "this PDF is for مكة"),
+     * we trust them over the auto-inferred dominant city. Falsy values fall
+     * back to inferCoversCenter() against the matched employees.
+     */
+    centerOverride: PdfAttendanceCenter | null = null,
   ) {
     // ─── 1. Parse PDF ─────────────────────────────────────────────────
     let rawText = '';
@@ -122,13 +128,16 @@ export class PdfUploadService {
     const matchedCount = enriched.filter((r) => r.isMatched).length;
     const unmatchedCount = enriched.length - matchedCount;
 
-    // Infer which center this PDF actually covers from the matched employees.
-    // Used below to skip the OPPOSITE city when building daily summaries —
-    // otherwise a Makkah-only PDF force-marks every Madinah employee absent.
-    const coversCenter = inferCoversCenter(
-      enriched.filter((r) => r.employeeId).map((r) => r.employeeId!),
-      employees,
-    );
+    // Trust the explicit override when the caller picked one; otherwise infer
+    // from the matched employees' centers. Either way, the resulting value is
+    // what we persist on the upload row and use to skip the opposite city
+    // below when building daily summaries.
+    const coversCenter: PdfAttendanceCenter | null =
+      centerOverride ??
+      inferCoversCenter(
+        enriched.filter((r) => r.employeeId).map((r) => r.employeeId!),
+        employees,
+      );
 
     // ─── 3. Persist ────────────────────────────────────────────────────
     const upload = await this.prisma.$transaction(async (tx) => {
@@ -313,6 +322,7 @@ export class PdfUploadService {
     to?: string;
     page?: number;
     limit?: number;
+    center?: 'makkah' | 'madinah' | 'mixed' | 'all';
   }) {
     const page = Math.max(1, query.page ?? 1);
     const limit = Math.min(100, Math.max(1, query.limit ?? 30));
@@ -322,6 +332,11 @@ export class PdfUploadService {
       where.reportDate = {};
       if (query.from) where.reportDate.gte = new Date(`${query.from}T00:00:00.000Z`);
       if (query.to) where.reportDate.lte = new Date(`${query.to}T00:00:00.000Z`);
+    }
+    if (query.center === 'makkah' || query.center === 'madinah') {
+      where.coversCenter = query.center;
+    } else if (query.center === 'mixed') {
+      where.coversCenter = null;
     }
 
     const [items, total] = await Promise.all([
@@ -342,6 +357,7 @@ export class PdfUploadService {
           fileChecksum: true,
           uploadedBy: true,
           createdAt: true,
+          coversCenter: true,
           _count: { select: { downloads: true } },
         },
       }),

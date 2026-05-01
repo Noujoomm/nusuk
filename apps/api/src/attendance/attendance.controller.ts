@@ -252,14 +252,19 @@ export class AttendanceController {
   )
   async uploadDailyPdf(
     @UploadedFile() file: Express.Multer.File,
+    @Body('centerOverride') centerOverride: string | undefined,
     @CurrentUser() user: { id: string },
   ) {
     if (!file) {
       throw new BadRequestException('يرجى رفع ملف PDF بحجم لا يتجاوز 10MB');
     }
     fixMulterFilename(file);
-    this.logger.log(`PDF upload by user=${user.id} file="${file.originalname}" size=${file.size}B`);
-    return this.uploads.ingest(file.originalname, file.size, file.buffer, user.id);
+    const override =
+      centerOverride === 'makkah' || centerOverride === 'madinah' ? centerOverride : null;
+    this.logger.log(
+      `PDF upload by user=${user.id} file="${file.originalname}" size=${file.size}B center=${override ?? 'auto'}`,
+    );
+    return this.uploads.ingest(file.originalname, file.size, file.buffer, user.id, override);
   }
 
   @Get('uploads')
@@ -270,12 +275,15 @@ export class AttendanceController {
     @Query('to') to?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('center') center?: string,
   ) {
+    const c = center === 'makkah' || center === 'madinah' || center === 'mixed' || center === 'all' ? center : undefined;
     return this.uploads.listUploads({
       from,
       to,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      center: c,
     });
   }
 

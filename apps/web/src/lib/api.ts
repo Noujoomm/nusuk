@@ -738,9 +738,10 @@ export const attendanceApi = {
     form.append('file', file);
     return api.post('/attendance/employees/seed', form, { timeout: 120000 });
   },
-  uploadPdf: (file: File) => {
+  uploadPdf: (file: File, centerOverride?: 'makkah' | 'madinah') => {
     const form = new FormData();
     form.append('file', file);
+    if (centerOverride) form.append('centerOverride', centerOverride);
     return api.post('/attendance/uploads', form, { timeout: 120000 });
   },
   listUploads: () => api.get('/attendance/uploads'),
@@ -759,8 +760,13 @@ export const attendanceApi = {
       },
     }),
   // ─── File storage ───
-  listUploadsPaged: (params?: { from?: string; to?: string; page?: number; limit?: number }) =>
-    api.get('/attendance/uploads', { params }),
+  listUploadsPaged: (params?: {
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+    center?: 'makkah' | 'madinah' | 'mixed' | 'all';
+  }) => api.get('/attendance/uploads', { params }),
   // ─── AI analysis (cached in DB) ───
   getAnalysis: (uploadId: string) =>
     api.get(`/attendance/uploads/${uploadId}/analysis`, { timeout: 120000 }),
