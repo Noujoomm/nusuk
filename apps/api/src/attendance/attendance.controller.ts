@@ -213,6 +213,17 @@ export class AttendanceController {
     return this.absences.deleteAbsence(id);
   }
 
+  /** Backfill the `center` column for legacy employees whose row was
+   *  written before deriveCenter() existed. Reads each employee's track
+   *  string and infers the city from "(مكة المكرمة)" / "(المدينة المنورة)"
+   *  markers. Idempotent — safe to hit multiple times. */
+  @Post('employees/backfill-center')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'system_manager')
+  async backfillCenter() {
+    return this.seeder.backfillCenters();
+  }
+
   @Post('employees/seed')
   @UseGuards(RolesGuard)
   @Roles('admin', 'system_manager')

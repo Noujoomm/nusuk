@@ -184,6 +184,54 @@ export class ExcelSeederService {
     return { rows, errors };
   }
 
+  /**
+   * Re-runs deriveCenter() over every active employee's track / trackDetail
+   * strings and writes back when a city is detected. Used to fix legacy rows
+   * whose `center` is `null` or `shared` but whose track string actually
+   * carries "(مكة المكرمة)" / "(المدينة المنورة)" — those would otherwise show
+   * up under "عيّنة غير محدد" in the analytics diagnostic panel.
+   *
+   * Idempotent: safe to call repeatedly. Never downgrades an explicitly-set
+   * makkah/madinah back to shared.
+   */
+  async backfillCenters(): Promise<{
+    scanned: number;
+    updated: number;
+    perCenter: { makkah: number; madinah: number };
+  }> {
+    const employees = await this.prisma.pdfAttendanceEmployee.findMany({
+      where: {
+        isActive: true,
+        OR: [{ center: null }, { center: 'shared' }],
+      },
+      select: { id: true, track: true, trackDetail: true, center: true },
+    });
+
+    let updated = 0;
+    let mk = 0;
+    let md = 0;
+    for (const emp of employees) {
+      const inferred = deriveCenter(emp.track, emp.trackDetail);
+      if (inferred === emp.center) continue; // no change
+      if (inferred === 'shared' && emp.center === null) {
+        // Going from null → shared is OK if track string really has no city.
+      }
+      if (inferred === 'shared' && emp.center === 'shared') continue;
+      await this.prisma.pdfAttendanceEmployee.update({
+        where: { id: emp.id },
+        data: { center: inferred },
+      });
+      updated += 1;
+      if (inferred === 'makkah') mk += 1;
+      if (inferred === 'madinah') md += 1;
+    }
+
+    this.logger.log(
+      `Center backfill: scanned=${employees.length} updated=${updated} (mk=${mk}, md=${md})`,
+    );
+    return { scanned: employees.length, updated, perCenter: { makkah: mk, madinah: md } };
+  }
+
   private merge(base: EmployeeDraft, override: EmployeeDraft): EmployeeDraft {
     // Subsheet wins on per-track fields; keep summary's name spelling if present.
     return {

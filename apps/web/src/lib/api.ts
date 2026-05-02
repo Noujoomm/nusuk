@@ -752,6 +752,8 @@ export const attendanceApi = {
     api.get(`/attendance/uploads/${uploadId}/unmatched-grouped`),
   resolveUnmatched: (items: any[]) =>
     api.post('/attendance/unmatched/create-employees', { items }, { timeout: 120000 }),
+  backfillCenter: () =>
+    api.post('/attendance/employees/backfill-center', null, { timeout: 60000 }),
   dailyLetter: (uploadId: string, recipientName?: string) =>
     api.get(`/attendance/letters/daily/${uploadId}`, { params: recipientName ? { recipientName } : {} }),
   rangeLetter: (params: { from: string; to: string; recipientName?: string; noteAboutLastDay?: boolean }) =>

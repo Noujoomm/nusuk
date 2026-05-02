@@ -518,54 +518,121 @@ function CoveragePanel({ onTracks }: { onTracks?: (tracks: string[]) => void } =
             </div>
           </div>
 
-          {/* Diagnosis message */}
+          {/* Diagnosis message + auto-fix */}
           {(hasIssue || dominantShared) && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
-              <p className="text-xs leading-relaxed text-amber-200">
-                {e.madinah === 0 && e.makkah === 0 && (
-                  <>
-                    <strong>لا يوجد أي موظف مرتبط بمدينة محددة في الكراسة.</strong> هذا يعني أن
-                    تبويب "حسب المدينة" والفلتر العلوي سيظهران الكل كـ"مشترك". الحلّ: أضف عمود
-                    "<span className="font-mono">المدينة</span>" في ملف الكراسة Excel (القيم: <em>مكة</em> /
-                    <em> المدينة</em>) ثم أعد رفعه من <span dir="ltr">/attendance</span>.
-                  </>
-                )}
-                {e.madinah === 0 && e.makkah > 0 && (
-                  <>
-                    <strong>لا يوجد موظفون مرتبطون بـ "المدينة المنورة"</strong> رغم وجود {e.makkah} موظف
-                    لمكة. الحلّ: أضف عمود "<span className="font-mono">المدينة</span>" في الـ sheet المعنية
-                    وضع قيمة "المدينة" للموظفين، ثم أعد رفع ملف الكراسة.
-                  </>
-                )}
-                {dominantShared && e.madinah > 0 && e.makkah > 0 && (
-                  <>
-                    <strong>{Math.round((e.shared / e.total) * 100)}% من الموظفين مصنّفون "مشترك"</strong>
-                    {' '}— غالباً موظفو التدريب/العلاقات/الإدارة المدرَجين في sheet عام بدون عمود "المدينة".
-                    أضف عمود <span className="font-mono">المدينة</span> لكل sheet واملأ القيم لتظهر بياناتهم
-                    في الفلاتر بشكل صحيح.
-                  </>
-                )}
-                {e.unset > 0 && (
-                  <>
-                    {' '}<strong>{e.unset} موظف</strong> بدون أي مدينة (null) — يفضّل تصنيفهم.
-                  </>
-                )}
-              </p>
-            </div>
+            <DiagnosisBanner e={e} />
           )}
 
-          {/* Sample employees per center — helps verify with real names */}
+          {/* Sample employees per center — helps verify with real names.
+              All four cards always render so the layout doesn't shift when
+              one bucket is empty; the empty state itself communicates the
+              data-quality issue. */}
           <div>
-            <h4 className="mb-2 text-xs font-bold text-slate-200">عيّنات</h4>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <SampleList title="عيّنة مكة" items={data.samples.makkah} color="emerald" />
-              <SampleList title="عيّنة المدينة" items={data.samples.madinah} color="blue" />
-              <SampleList title="عيّنة مشترك" items={data.samples.shared} color="purple" />
-              {data.samples.unset.length > 0 && (
-                <SampleList title="عيّنة غير محدد" items={data.samples.unset} color="amber" />
+            <div className="mb-2 flex items-center justify-between">
+              <h4 className="text-xs font-bold text-slate-200">عيّنات الموظفين حسب المدينة</h4>
+              <span className="text-[10px] text-slate-500">
+                إجمالي {e.total} موظف
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <SampleCard
+                title="عيّنة مكة المكرمة"
+                icon="🕋"
+                accent="amber"
+                count={e.makkah}
+                items={data.samples.makkah}
+              />
+              <SampleCard
+                title="عيّنة المدينة المنورة"
+                icon="🏛️"
+                accent="emerald"
+                count={e.madinah}
+                items={data.samples.madinah}
+              />
+              {(e.shared > 0 || e.unset > 0) && (
+                <SampleCard
+                  title={e.unset > 0 ? 'عيّنة غير محدد' : 'عيّنة مشترك'}
+                  icon={e.unset > 0 ? '⚠️' : 'ℹ️'}
+                  accent={e.unset > 0 ? 'orange' : 'slate'}
+                  count={e.unset > 0 ? e.unset : e.shared}
+                  items={e.unset > 0 ? data.samples.unset : data.samples.shared}
+                  warning={e.unset > 0}
+                />
               )}
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Banner that explains the city-coverage gap + offers a one-click backfill
+ *  for legacy rows whose `center` is null but whose track string clearly
+ *  identifies the city. */
+function DiagnosisBanner({ e }: { e: CoverageData['employees'] }) {
+  const [running, setRunning] = useState(false);
+  const dominantShared = e.total > 0 && e.shared / e.total > 0.5;
+  const canBackfill = e.unset > 0 || dominantShared;
+
+  const runBackfill = async () => {
+    setRunning(true);
+    const tid = toast.loading('جارٍ التصنيف التلقائي…');
+    try {
+      const res = await attendanceApi.backfillCenter();
+      const { scanned, updated, perCenter } = res.data;
+      toast.success(
+        `تم فحص ${scanned} موظف · تحديث ${updated} (مكة: ${perCenter.makkah}، المدينة: ${perCenter.madinah})`,
+        { id: tid, duration: 5000 },
+      );
+      // Hard reload so every panel/section refetches.
+      setTimeout(() => window.location.reload(), 800);
+    } catch {
+      toast.error('فشل التصنيف التلقائي', { id: tid });
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
+      <p className="text-xs leading-relaxed text-amber-200">
+        {e.madinah === 0 && e.makkah === 0 && (
+          <>
+            <strong>لا يوجد أي موظف مرتبط بمدينة محددة.</strong> الحل السريع: اضغط
+            "تصنيف تلقائي" أدناه — النظام سيقرأ نص المسار لكل موظف ويصنّفه إذا وُجدت
+            "(مكة المكرمة)" أو "(المدينة المنورة)".
+          </>
+        )}
+        {e.madinah === 0 && e.makkah > 0 && (
+          <>
+            <strong>لا يوجد موظفون مرتبطون بـ "المدينة المنورة"</strong> رغم وجود {e.makkah}{' '}
+            لمكة. أضف عمود <span className="font-mono">"المدينة"</span> للـ sheets في ملف الكراسة Excel
+            وأعد رفعه.
+          </>
+        )}
+        {dominantShared && e.madinah > 0 && e.makkah > 0 && (
+          <>
+            <strong>{Math.round((e.shared / e.total) * 100)}% من الموظفين "مشترك"</strong> — غالباً
+            موظفو التدريب/العلاقات/الإدارة. أضف عمود <span className="font-mono">"المدينة"</span> لكل
+            sheet أو اضغط "تصنيف تلقائي".
+          </>
+        )}
+        {e.unset > 0 && (
+          <>
+            {' '}<strong>{e.unset} موظف بدون مدينة محددة</strong> — اضغط "تصنيف تلقائي" لاستنتاج المدينة
+            من اسم المسار.
+          </>
+        )}
+      </p>
+      {canBackfill && (
+        <div className="mt-3">
+          <button
+            onClick={runBackfill}
+            disabled={running}
+            className="rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs font-bold text-amber-200 hover:bg-amber-500/25 disabled:opacity-50"
+          >
+            {running ? '⏳ جارٍ التصنيف…' : '🔧 تصنيف تلقائي للموظفين'}
+          </button>
         </div>
       )}
     </div>
@@ -593,30 +660,85 @@ function CovBox({
   );
 }
 
-function SampleList({
+/** Per-city sample card. Always renders — empty state communicates a
+ *  data-quality issue. Higher contrast than the legacy SampleList so the
+ *  card itself is visible even when the items list is short. */
+function SampleCard({
   title,
+  icon,
+  accent,
+  count,
   items,
-  color,
+  warning,
 }: {
   title: string;
+  icon: string;
+  accent: 'amber' | 'emerald' | 'orange' | 'slate';
+  count: number;
   items: Array<{ fullName: string; track: string }>;
-  color: 'emerald' | 'blue' | 'purple' | 'amber';
+  warning?: boolean;
 }) {
-  if (items.length === 0) return null;
+  const t = SAMPLE_ACCENTS[accent];
   return (
-    <div className={`rounded-lg border p-3 ${COLOR_CLASSES[color]}`}>
-      <div className="mb-1 text-[11px] font-bold opacity-90">{title}</div>
-      <ul className="space-y-0.5 text-[11px] text-slate-200">
-        {items.map((it, i) => (
-          <li key={i} className="truncate">
-            <span>{it.fullName}</span>
-            <span className="text-slate-500"> · {it.track}</span>
-          </li>
-        ))}
-      </ul>
+    <div
+      className={`relative overflow-hidden rounded-xl border ${t.border} bg-gradient-to-br ${t.bg} p-4 shadow-lg shadow-black/30`}
+    >
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h5 className={`flex items-center gap-2 text-sm font-bold ${t.title}`}>
+          <span className="text-base">{icon}</span>
+          <span>{title}</span>
+        </h5>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${t.pill}`}>
+          {count}
+        </span>
+      </div>
+      {items.length === 0 ? (
+        <p className="py-4 text-center text-[11px] text-slate-400">
+          {warning ? 'لا موظفون غير مصنّفين — ممتاز ✓' : 'لا توجد عيّنة'}
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {items.slice(0, 5).map((it, i) => (
+            <li
+              key={i}
+              className="rounded-md border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5"
+            >
+              <div className="truncate text-xs font-semibold text-white">{it.fullName}</div>
+              <div className="truncate text-[10px] text-slate-300">{it.track || '—'}</div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
+
+const SAMPLE_ACCENTS = {
+  amber: {
+    border: 'border-amber-500/30',
+    bg: 'from-amber-500/[0.10] to-amber-700/[0.04]',
+    title: 'text-amber-200',
+    pill: 'border border-amber-500/30 bg-amber-500/15 text-amber-100',
+  },
+  emerald: {
+    border: 'border-emerald-500/30',
+    bg: 'from-emerald-500/[0.10] to-emerald-700/[0.04]',
+    title: 'text-emerald-200',
+    pill: 'border border-emerald-500/30 bg-emerald-500/15 text-emerald-100',
+  },
+  orange: {
+    border: 'border-orange-500/40',
+    bg: 'from-orange-500/[0.12] to-red-700/[0.05]',
+    title: 'text-orange-200',
+    pill: 'border border-orange-500/30 bg-orange-500/15 text-orange-100',
+  },
+  slate: {
+    border: 'border-slate-500/30',
+    bg: 'from-slate-500/[0.08] to-slate-700/[0.04]',
+    title: 'text-slate-200',
+    pill: 'border border-slate-500/30 bg-slate-500/15 text-slate-200',
+  },
+} as const;
 
 // ─── Header ──────────────────────────────────────────────────────────────
 
