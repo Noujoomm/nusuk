@@ -201,6 +201,30 @@ export class AttendanceController {
     );
   }
 
+  /** Apply the same status to many cells in one atomic transaction.
+   *  Frontend uses this when the user drag-selects across the heatmap. */
+  @Patch('bulk-status')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'system_manager', 'pm', 'track_lead', 'hr')
+  async bulkUpdateStatus(
+    @Body()
+    body: {
+      cells: Array<{ employeeId: string; date: string }>;
+      status: AttendanceManualStatus;
+      reason?: string;
+    },
+    @CurrentUser() user: { id: string },
+  ) {
+    if (!body?.cells || !Array.isArray(body.cells) || body.cells.length === 0) {
+      throw new BadRequestException('cells array مطلوبة وغير فارغة');
+    }
+    const allowed: AttendanceManualStatus[] = ['PRESENT', 'LATE', 'ABSENT', 'EXCUSED_ABSENCE'];
+    if (!allowed.includes(body.status)) {
+      throw new BadRequestException('قيمة الحالة غير صالحة');
+    }
+    return this.overrides.bulkUpsert(body.cells, body.status, body.reason ?? null, user.id);
+  }
+
   @Delete('status/:employeeId/:date')
   @UseGuards(RolesGuard)
   @Roles('admin', 'system_manager', 'pm', 'track_lead', 'hr')

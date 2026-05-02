@@ -765,6 +765,11 @@ export const attendanceApi = {
     api.delete(`/attendance/status/${employeeId}/${date}`),
   statusHistory: (employeeId: string, date: string) =>
     api.get(`/attendance/status/${employeeId}/${date}/history`),
+  bulkUpdateStatus: (payload: {
+    cells: Array<{ employeeId: string; date: string }>;
+    status: 'PRESENT' | 'LATE' | 'ABSENT' | 'EXCUSED_ABSENCE';
+    reason?: string;
+  }) => api.patch('/attendance/bulk-status', payload, { timeout: 60000 }),
   dailyLetter: (uploadId: string, recipientName?: string) =>
     api.get(`/attendance/letters/daily/${uploadId}`, { params: recipientName ? { recipientName } : {} }),
   rangeLetter: (params: { from: string; to: string; recipientName?: string; noteAboutLastDay?: boolean }) =>

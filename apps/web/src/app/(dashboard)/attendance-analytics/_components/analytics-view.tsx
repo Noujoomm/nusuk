@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Award,
@@ -1197,13 +1197,31 @@ function Heatmap({
   canEdit: boolean;
   onRefresh: () => void;
 }) {
-  // Manual-edit modal state — opened by clicking any cell when canEdit.
+  // Manual-edit modal state — opened by a plain click on a cell.
   const [editing, setEditing] = useState<{
     employeeId: string;
     employeeName: string;
     date: string;
     currentStatus: ManualStatus | null;
   } | null>(null);
+
+  // Multi-select state. Keys are `${employeeId}|${date}`. lastKey anchors
+  // shift-range selections. The drag rect is purely visual feedback — the
+  // intersection math runs once at mouseup against every cell's boundingRect.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [lastKey, setLastKey] = useState<string | null>(null);
+  const [dragRect, setDragRect] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [bulkReason, setBulkReason] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Ref instead of state because we read the "moved" flag inside the cell
+  // click handler that fires synchronously before React schedules a re-render.
+  const dragRef = useRef({ active: false, moved: false, startX: 0, startY: 0 });
 
   if (heatmap.employees.length === 0) return null;
   // Status code → color, must match service codes:
@@ -1278,6 +1296,202 @@ function Heatmap({
   }
   const CELL = 22; // px — wide enough for "DD" without rotation
 
+  // ─── multi-select helpers ──────────────────────────────────────────
+  const cellKey = (employeeId: string, date: string) => `${employeeId}|${date}`;
+  const dateIndex = useMemo(() => new Map(heatmap.dates.map((d, i) => [d, i])), [heatmap.dates]);
+  const employeeIndex = useMemo(
+    () => new Map(heatmap.employees.map((e, i) => [e.id, i])),
+    [heatmap.employees],
+  );
+
+  const handleCellClick = (e: React.MouseEvent, employeeId: string, date: string, code: number) => {
+    // Drag-just-finished suppresses click — the table-level mouseup ran a
+    // moment ago and React is now flushing this synthetic click.
+    if (dragRef.current.moved) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    const key = cellKey(employeeId, date);
+
+    if (e.metaKey || e.ctrlKey) {
+      e.preventDefault();
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+      setLastKey(key);
+      return;
+    }
+    if (e.shiftKey && lastKey) {
+      e.preventDefault();
+      const ar = employeeIndex.get(lastKey.split('|')[0]);
+      const ac = dateIndex.get(lastKey.split('|')[1]);
+      const br = employeeIndex.get(employeeId);
+      const bc = dateIndex.get(date);
+      if (ar == null || ac == null || br == null || bc == null) return;
+      const r1 = Math.min(ar, br), r2 = Math.max(ar, br);
+      const c1 = Math.min(ac, bc), c2 = Math.max(ac, bc);
+      const additions: string[] = [];
+      for (let r = r1; r <= r2; r++) {
+        for (let c = c1; c <= c2; c++) {
+          additions.push(cellKey(heatmap.employees[r].id, heatmap.dates[c]));
+        }
+      }
+      setSelected((prev) => new Set([...prev, ...additions]));
+      setLastKey(key);
+      return;
+    }
+
+    // Plain click — preserve the existing single-cell editor behaviour.
+    const empIdx = employeeIndex.get(employeeId)!;
+    setEditing({
+      employeeId,
+      employeeName: heatmap.employees[empIdx].name,
+      date,
+      currentStatus: codeToManual(code),
+    });
+    setLastKey(key);
+  };
+
+  const onTableMouseDown = (e: React.MouseEvent) => {
+    if (!canEdit) return;
+    if (e.button !== 0) return;
+    dragRef.current = { active: true, moved: false, startX: e.clientX, startY: e.clientY };
+  };
+  const onTableMouseMove = (e: React.MouseEvent) => {
+    if (!dragRef.current.active) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+    dragRef.current.moved = true;
+    const c = containerRef.current;
+    if (!c) return;
+    const rect = c.getBoundingClientRect();
+    setDragRect({
+      left: Math.min(dragRef.current.startX, e.clientX) - rect.left + c.scrollLeft,
+      top: Math.min(dragRef.current.startY, e.clientY) - rect.top + c.scrollTop,
+      width: Math.abs(dx),
+      height: Math.abs(dy),
+    });
+  };
+  const onTableMouseUp = () => {
+    if (!dragRef.current.active) return;
+    const c = containerRef.current;
+    if (dragRef.current.moved && c && dragRect) {
+      const cells = c.querySelectorAll<HTMLElement>('[data-cell-key]');
+      const containerRect = c.getBoundingClientRect();
+      const additions: string[] = [];
+      cells.forEach((el) => {
+        const r = el.getBoundingClientRect();
+        const rel = {
+          left: r.left - containerRect.left + c.scrollLeft,
+          top: r.top - containerRect.top + c.scrollTop,
+          right: r.right - containerRect.left + c.scrollLeft,
+          bottom: r.bottom - containerRect.top + c.scrollTop,
+        };
+        const intersects = !(
+          dragRect.left + dragRect.width < rel.left ||
+          dragRect.left > rel.right ||
+          dragRect.top + dragRect.height < rel.top ||
+          dragRect.top > rel.bottom
+        );
+        if (intersects) {
+          const k = el.getAttribute('data-cell-key');
+          if (k) additions.push(k);
+        }
+      });
+      if (additions.length > 0) setSelected((prev) => new Set([...prev, ...additions]));
+    }
+    dragRef.current.active = false;
+    setDragRect(null);
+    // Reset moved AFTER the upcoming click event fires so handleCellClick
+    // can detect it. requestAnimationFrame lands after the synthetic click.
+    requestAnimationFrame(() => {
+      dragRef.current.moved = false;
+    });
+  };
+
+  const clearSelection = useCallback(() => {
+    setSelected(new Set());
+    setLastKey(null);
+    setBulkReason('');
+  }, []);
+
+  const applyBulk = useCallback(
+    async (status: ManualStatus) => {
+      if (selected.size === 0) return;
+      const cells = Array.from(selected).map((k) => {
+        const [employeeId, date] = k.split('|');
+        return { employeeId, date };
+      });
+      setSubmitting(true);
+      const tid = toast.loading(`جارٍ تطبيق الحالة على ${cells.length} خلية…`);
+      try {
+        const res = await attendanceApi.bulkUpdateStatus({
+          cells,
+          status,
+          reason: bulkReason.trim() || undefined,
+        });
+        const { updated, created, skipped } = res.data;
+        toast.success(
+          `تم: ${updated + created} تعديل · ${skipped} بدون تغيير`,
+          { id: tid, duration: 4000 },
+        );
+        clearSelection();
+        onRefresh();
+      } catch (err: any) {
+        const msg = err?.response?.data?.message || 'فشل التطبيق الجماعي';
+        toast.error(typeof msg === 'string' ? msg : 'فشل التطبيق', { id: tid });
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [selected, bulkReason, clearSelection, onRefresh],
+  );
+
+  // Keyboard shortcuts active only while a selection exists.
+  useEffect(() => {
+    if (selected.size === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      const tgt = e.target as HTMLElement | null;
+      if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) {
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        clearSelection();
+        return;
+      }
+      const map: Record<string, ManualStatus> = {
+        '1': 'PRESENT',
+        '2': 'LATE',
+        '3': 'ABSENT',
+        '4': 'EXCUSED_ABSENCE',
+      };
+      if (map[e.key]) {
+        e.preventDefault();
+        applyBulk(map[e.key]);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected.size, applyBulk, clearSelection]);
+
+  // Selection summary for the floating bar.
+  const selectionSummary = useMemo(() => {
+    const emps = new Set<string>();
+    const dates = new Set<string>();
+    for (const k of selected) {
+      const [e, d] = k.split('|');
+      emps.add(e);
+      dates.add(d);
+    }
+    return { count: selected.size, employees: emps.size, days: dates.size };
+  }, [selected]);
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
       <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
@@ -1300,7 +1514,27 @@ function Heatmap({
           <Legend2 cls="bg-slate-800/60" label="لا بيانات" />
         </div>
       </div>
-      <div className="overflow-x-auto" dir="ltr">
+      <div
+        className="relative overflow-x-auto"
+        dir="ltr"
+        ref={containerRef}
+        onMouseDown={onTableMouseDown}
+        onMouseMove={onTableMouseMove}
+        onMouseUp={onTableMouseUp}
+        onMouseLeave={onTableMouseUp}
+        style={{ userSelect: dragRef.current.active ? 'none' : undefined }}
+      >
+        {dragRect && (
+          <div
+            className="pointer-events-none absolute z-20 rounded-md border-2 border-dashed border-cyan-400/80 bg-cyan-400/10"
+            style={{
+              left: dragRect.left,
+              top: dragRect.top,
+              width: dragRect.width,
+              height: dragRect.height,
+            }}
+          />
+        )}
         <table className="border-separate border-spacing-0" style={{ direction: 'ltr' }}>
           <thead>
             {/* Month banner row */}
@@ -1358,12 +1592,20 @@ function Heatmap({
                   <div className="truncate text-[10px] text-slate-500">{emp.track}</div>
                 </td>
                 {heatmap.cells[r].map((c, i) => {
-                  const cellTip = `${heatmap.dates[i]} • ${tipOf(c)}${
-                    canEdit ? ' (اضغط للتعديل)' : ''
+                  const employeeId = heatmap.employees[r].id;
+                  const date = heatmap.dates[i];
+                  const key = cellKey(employeeId, date);
+                  const isSel = selected.has(key);
+                  const cellTip = `${date} • ${tipOf(c)}${
+                    canEdit ? ' (اضغط للتعديل · Ctrl للتحديد المتعدد)' : ''
                   }`;
                   const cellInner = (
                     <div className="relative flex justify-center py-0.5">
-                      <div className={`h-4 w-4 rounded ${colorOf(c)}`} />
+                      <div
+                        className={`h-4 w-4 rounded transition-all ${colorOf(c)} ${
+                          isSel ? 'scale-110 ring-2 ring-cyan-400 ring-offset-1 ring-offset-slate-950' : ''
+                        }`}
+                      />
                       {isManualCode(c) && (
                         <span
                           className="absolute right-2.5 top-0 h-1.5 w-1.5 rounded-full bg-cyan-300 ring-1 ring-slate-900"
@@ -1381,14 +1623,8 @@ function Heatmap({
                       {canEdit ? (
                         <button
                           type="button"
-                          onClick={() =>
-                            setEditing({
-                              employeeId: heatmap.employees[r].id,
-                              employeeName: heatmap.employees[r].name,
-                              date: heatmap.dates[i],
-                              currentStatus: codeToManual(c),
-                            })
-                          }
+                          data-cell-key={key}
+                          onClick={(e) => handleCellClick(e, employeeId, date, c)}
                           className="block w-full cursor-pointer outline-none transition-transform hover:scale-110 focus:ring-2 focus:ring-emerald-400/50"
                           title={cellTip}
                         >
@@ -1424,6 +1660,111 @@ function Heatmap({
           }}
         />
       )}
+
+      {selected.size > 0 && (
+        <BulkActionBar
+          summary={selectionSummary}
+          submitting={submitting}
+          reason={bulkReason}
+          onReasonChange={setBulkReason}
+          onApply={applyBulk}
+          onClear={clearSelection}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Floating bulk-edit bar ────────────────────────────────────────────
+// Slides up from the bottom when there's an active selection. Plain
+// position:fixed + tailwind transition (no framer-motion in deps). Mirrors
+// the StatusCellEditor's 4 buttons but applies them to the whole selection
+// in one transactional API call.
+
+function BulkActionBar({
+  summary,
+  submitting,
+  reason,
+  onReasonChange,
+  onApply,
+  onClear,
+}: {
+  summary: { count: number; employees: number; days: number };
+  submitting: boolean;
+  reason: string;
+  onReasonChange: (v: string) => void;
+  onApply: (status: ManualStatus) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div
+      dir="rtl"
+      className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4"
+      style={{ animation: 'slideUp 200ms ease-out' }}
+    >
+      <div className="w-full max-w-3xl rounded-2xl border border-cyan-500/30 bg-slate-950/95 p-4 shadow-2xl shadow-black/60 backdrop-blur-2xl">
+        <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="flex items-center gap-1 text-cyan-300">
+              <span className="font-bold tabular-nums">{summary.count}</span>
+              <span className="text-slate-400">خلية</span>
+            </span>
+            <span className="text-slate-500">•</span>
+            <span className="flex items-center gap-1 text-slate-200">
+              <span className="font-bold tabular-nums">{summary.employees}</span>
+              <span className="text-slate-400">موظف</span>
+            </span>
+            <span className="text-slate-500">•</span>
+            <span className="flex items-center gap-1 text-slate-200">
+              <span className="font-bold tabular-nums">{summary.days}</span>
+              <span className="text-slate-400">يوم</span>
+            </span>
+          </div>
+          <button
+            onClick={onClear}
+            disabled={submitting}
+            className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/10 disabled:opacity-50"
+          >
+            إلغاء التحديد
+            <kbd className="rounded bg-white/10 px-1 py-0.5 text-[9px]">Esc</kbd>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          {(
+            [
+              { k: 'PRESENT', label: 'حاضر', cls: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200', kbd: '1' },
+              { k: 'LATE', label: 'متأخر', cls: 'border-amber-500/40 bg-amber-500/15 text-amber-200', kbd: '2' },
+              { k: 'ABSENT', label: 'غائب', cls: 'border-red-500/40 bg-red-500/15 text-red-200', kbd: '3' },
+              { k: 'EXCUSED_ABSENCE', label: 'غياب بعذر', cls: 'border-blue-500/40 bg-blue-500/15 text-blue-200', kbd: '4' },
+            ] as const
+          ).map((b) => (
+            <button
+              key={b.k}
+              onClick={() => onApply(b.k as ManualStatus)}
+              disabled={submitting}
+              className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm font-bold transition-colors disabled:opacity-50 ${b.cls}`}
+            >
+              <span>{b.label}</span>
+              <kbd className="rounded bg-black/30 px-1.5 py-0.5 text-[10px] font-mono">{b.kbd}</kbd>
+            </button>
+          ))}
+        </div>
+
+        <label className="mt-3 block">
+          <span className="mb-1 block text-[10px] text-slate-400">
+            سبب التعديل (اختياري) — يُطبَّق على كل الخلايا المختارة
+          </span>
+          <input
+            type="text"
+            value={reason}
+            onChange={(e) => onReasonChange(e.target.value)}
+            placeholder="مثال: إجازة جماعية، تدريب خارجي…"
+            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400/40 focus:outline-none"
+            disabled={submitting}
+          />
+        </label>
+      </div>
     </div>
   );
 }
