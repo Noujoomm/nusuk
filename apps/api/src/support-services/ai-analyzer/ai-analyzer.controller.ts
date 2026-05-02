@@ -8,10 +8,12 @@ import {
   Post,
   Res,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import * as fs from 'fs';
@@ -21,7 +23,10 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AIAnalyzerService } from './ai-analyzer.service';
+import { AIBatchInvoiceService } from './ai-batch-invoice.service';
 import { AIConfirmDto } from './dto/ai-confirm.dto';
+import { BatchSaveDto } from './dto/batch-save.dto';
+import { BatchRetryDto } from './dto/batch-retry.dto';
 import { setFileResponseHeaders } from '../../common/utils/file-response.util';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -47,7 +52,10 @@ const tempStorage = diskStorage({
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin', 'system_manager', 'pm', 'track_lead')
 export class AIAnalyzerController {
-  constructor(private readonly analyzer: AIAnalyzerService) {}
+  constructor(
+    private readonly analyzer: AIAnalyzerService,
+    private readonly batch: AIBatchInvoiceService,
+  ) {}
 
   @Post('analyze')
   @UseInterceptors(
@@ -73,6 +81,56 @@ export class AIAnalyzerController {
     return this.analyzer.confirm(fundId, user.id, dto);
   }
 
+  // ── Batch flow (1–10 invoices) ───────────────────────────────────────
+  // Routes nested under /batch/* so they can't collide with the single-
+  // invoice :extractionId DELETE.
+
+  @Post('batch/analyze')
+  @Throttle({ default: { limit: 5, ttl: 300_000 } })
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      storage: tempStorage,
+      limits: { fileSize: MAX_FILE_BYTES, files: 10 },
+    }),
+  )
+  async batchAnalyze(
+    @Param('fundId') fundId: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.batch.batchAnalyze(fundId, user.id, files);
+  }
+
+  @Post('batch/:batchId/retry')
+  @Throttle({ default: { limit: 10, ttl: 300_000 } })
+  async batchRetry(
+    @Param('fundId') fundId: string,
+    @Param('batchId') batchId: string,
+    @Body() dto: BatchRetryDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.batch.batchRetry(fundId, user.id, batchId, dto);
+  }
+
+  @Post('batch/save')
+  async batchSave(
+    @Param('fundId') _fundId: string,
+    @Body() dto: BatchSaveDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.batch.batchSave(user.id, dto);
+  }
+
+  @Delete('batch/:batchId')
+  async batchDiscard(
+    @Param('fundId') fundId: string,
+    @Param('batchId') batchId: string,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.batch.batchDiscard(fundId, user.id, batchId);
+  }
+
+  // Single-invoice cancel — kept last so the more specific batch routes win.
   @Delete(':extractionId')
   async cancel(
     @Param('fundId') fundId: string,

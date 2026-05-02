@@ -238,6 +238,13 @@ function FundDetail({ fund: f, allUsers, onBack, onRefresh }: { fund: any; allUs
             >
               <Sparkles className="w-4 h-4" /> تسجيل فاتورة بالذكاء الاصطناعي ✨
             </Link>
+            <Link
+              href={`/support-services/funds/${f.id}/ai-invoice-batch`}
+              className="text-sm flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-colors"
+              title="تحليل عدة فواتير دفعة واحدة بالذكاء الاصطناعي"
+            >
+              <Sparkles className="w-4 h-4" /> تسجيل فواتير متعددة ✨
+            </Link>
             <button onClick={() => setShowMemberForm(true)} className="btn-secondary text-sm flex items-center gap-1.5"><UserPlus className="w-4 h-4" /> إضافة شخص</button>
             <button onClick={() => setShowClose(true)} className="btn-danger text-sm flex items-center gap-1.5"><Lock className="w-4 h-4" /> إقفال العهدة</button>
             {isAdminUser && <button onClick={() => setShowEditFund(true)} className="btn-secondary text-sm flex items-center gap-1.5"><Receipt className="w-4 h-4" /> تعديل العهدة</button>}

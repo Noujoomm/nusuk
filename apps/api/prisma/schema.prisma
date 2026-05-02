@@ -40,19 +40,19 @@ model User {
   notificationPreference NotificationPreference?
 
   // Phase 2: Tasks & AI
-  createdTasks        Task[]                    @relation("TaskCreator")
-  assignedTasks       Task[]                    @relation("TaskAssigneeUser")
-  taskAssignments     TaskAssignment[]          @relation("TaskAssignee")
-  taskAssignedBy      TaskAssignment[]          @relation("TaskAssigner")
-  taskFiles           TaskFile[]                @relation("TaskFileUploader")
-  taskAuditLogs       TaskAuditLog[]            @relation("TaskAuditActor")
-  taskChecklistItems  TaskChecklist[]           @relation("TaskChecklistCreator")
-  adminNotes          AdminNote[]               @relation("AdminNoteAuthor")
-  taskUpdates         TaskUpdate[]              @relation("TaskUpdateAuthor")
-  aiReports           AIReport[]                @relation("AIReportAuthor")
-  distributionEntries DistributionEntry[]       @relation("DistributionEntryCreator")
-  distAchievements    DistributionAchievement[] @relation("DistAchievementCreator")
-  distDeviations      DistributionDeviation[]   @relation("DistDeviationCreator")
+  createdTasks        Task[]                        @relation("TaskCreator")
+  assignedTasks       Task[]                        @relation("TaskAssigneeUser")
+  taskAssignments     TaskAssignment[]              @relation("TaskAssignee")
+  taskAssignedBy      TaskAssignment[]              @relation("TaskAssigner")
+  taskFiles           TaskFile[]                    @relation("TaskFileUploader")
+  taskAuditLogs       TaskAuditLog[]                @relation("TaskAuditActor")
+  taskChecklistItems  TaskChecklist[]               @relation("TaskChecklistCreator")
+  adminNotes          AdminNote[]                   @relation("AdminNoteAuthor")
+  taskUpdates         TaskUpdate[]                  @relation("TaskUpdateAuthor")
+  aiReports           AIReport[]                    @relation("AIReportAuthor")
+  distributionEntries DistributionEntry[]           @relation("DistributionEntryCreator")
+  distAchievements    DistributionAchievement[]     @relation("DistAchievementCreator")
+  distDeviations      DistributionDeviation[]       @relation("DistDeviationCreator")
   distAnalyses        DistributionAnalysisSession[] @relation("DistAnalysisCreator")
 
   attendanceOverrides    AttendanceStatusOverride[]    @relation("AttendanceOverrideEditor")
@@ -1258,10 +1258,10 @@ model DistributionAnalysisSession {
   status DistributionAnalysisStatus @default(PENDING)
 
   // Filters applied at upload-time, kept so re-runs/exports are reproducible.
-  dateRangeStart  DateTime? @map("date_range_start") @db.Date
-  dateRangeEnd    DateTime? @map("date_range_end") @db.Date
-  centerFilter    String?   @map("center_filter") // makkah | madinah | all
-  analysisDepth   String    @default("COMPREHENSIVE") @map("analysis_depth") // BASIC | COMPREHENSIVE
+  dateRangeStart DateTime? @map("date_range_start") @db.Date
+  dateRangeEnd   DateTime? @map("date_range_end") @db.Date
+  centerFilter   String?   @map("center_filter") // makkah | madinah | all
+  analysisDepth  String    @default("COMPREHENSIVE") @map("analysis_depth") // BASIC | COMPREHENSIVE
 
   // Snapshots — keep both sides so the verdict survives later edits to source data.
   extractedData    Json? @map("extracted_data")
@@ -1276,16 +1276,16 @@ model DistributionAnalysisSession {
   matchedRows     Int?   @map("matched_rows")
   mismatchedRows  Int?   @map("mismatched_rows")
 
-  aiModel          String @default("claude-sonnet-4-5") @map("ai_model")
-  aiInputTokens    Int?   @map("ai_input_tokens")
-  aiOutputTokens   Int?   @map("ai_output_tokens")
-  processingTimeMs Int?   @map("processing_time_ms")
+  aiModel          String  @default("claude-sonnet-4-5") @map("ai_model")
+  aiInputTokens    Int?    @map("ai_input_tokens")
+  aiOutputTokens   Int?    @map("ai_output_tokens")
+  processingTimeMs Int?    @map("processing_time_ms")
   errorMessage     String? @map("error_message") @db.Text
 
   discrepancies DistributionAnalysisDiscrepancy[]
 
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
   completedAt DateTime? @map("completed_at")
 
   @@index([userId, createdAt])
@@ -1679,12 +1679,13 @@ model CustodyFund {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  createdBy    User                     @relation("CustodyFundCreator", fields: [createdById], references: [id])
-  closedBy     User?                    @relation("CustodyFundCloser", fields: [closedById], references: [id])
-  transactions CustodyFundTransaction[]
-  members      CustodyFundMember[]
-  invoices     CustodyFundInvoice[]
-  alerts       CustodyFundAlert[]
+  createdBy      User                     @relation("CustodyFundCreator", fields: [createdById], references: [id])
+  closedBy       User?                    @relation("CustodyFundCloser", fields: [closedById], references: [id])
+  transactions   CustodyFundTransaction[]
+  members        CustodyFundMember[]
+  invoices       CustodyFundInvoice[]
+  invoiceBatches InvoiceBatch[]
+  alerts         CustodyFundAlert[]
 
   @@index([status])
   @@map("custody_funds")
@@ -1760,16 +1761,56 @@ model CustodyFundInvoice {
   vendorName      String?   @map("vendor_name")
   aiRawResponse   Json?     @map("ai_raw_response")
 
+  // Batch upload (multi-invoice AI flow). Null for single-invoice submissions
+  // and for any invoice created before the batch feature shipped.
+  batchId String? @map("batch_id")
+
   createdById String   @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
 
   custodyFund   CustodyFund        @relation(fields: [custodyFundId], references: [id], onDelete: Cascade)
   custodyMember CustodyFundMember? @relation(fields: [custodyMemberId], references: [id])
   createdBy     User               @relation("CustodyFundInvCreator", fields: [createdById], references: [id])
+  batch         InvoiceBatch?      @relation(fields: [batchId], references: [id], onDelete: SetNull)
 
   @@index([custodyFundId])
   @@index([status])
+  @@index([batchId])
   @@map("custody_fund_invoices")
+}
+
+/// Tracks a multi-invoice AI upload session (1–10 invoices). Each successful
+/// invoice from the batch ends up linked back via CustodyFundInvoice.batchId
+/// once the user clicks "Save". Failed analyses are kept on the in-memory
+/// session (not in this table) so the user can retry.
+model InvoiceBatch {
+  id            String @id @default(cuid())
+  userId        String @map("user_id")
+  custodyFundId String @map("custody_fund_id")
+
+  totalFiles   Int @map("total_files")
+  successCount Int @default(0) @map("success_count")
+  errorCount   Int @default(0) @map("error_count")
+  savedCount   Int @default(0) @map("saved_count")
+
+  // processing | completed | partially_saved | discarded
+  status String @default("processing")
+
+  totalTokensUsed       Int   @default(0) @map("total_tokens_used")
+  totalCostInSar        Float @default(0) @map("total_cost_in_sar")
+  totalProcessingTimeMs Int?  @map("total_processing_time_ms")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+  savedAt     DateTime? @map("saved_at")
+
+  custodyFund CustodyFund          @relation(fields: [custodyFundId], references: [id], onDelete: Cascade)
+  invoices    CustodyFundInvoice[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@index([custodyFundId])
+  @@map("invoice_batches")
 }
 
 model CustodyFundAlert {
@@ -2131,7 +2172,7 @@ model PdfAttendanceAiAnalysis {
 
   // ─── Roster-aware sections (added when the booklet/charter sheet is seeded) ──
   // Both nullable so historical rows analyzed before this column remain valid.
-  byCity             Json? @map("by_city")             // [{city, employees, present, absent, attendanceRate}]
+  byCity             Json? @map("by_city") // [{city, employees, present, absent, attendanceRate}]
   scheduleCompliance Json? @map("schedule_compliance") // {withinSchedule, outsideSchedule, complianceRate, deviations:[…]}
 
   aiModel          String @default("claude-sonnet-4-5") @map("ai_model")

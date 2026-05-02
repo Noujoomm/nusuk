@@ -383,6 +383,41 @@ export const aiInvoiceApi = {
     ),
   previewUrl: (extractionId: string) =>
     `${API_URL}/api/support-services/ai-invoice/preview/${extractionId}`,
+
+  // ── Batch flow (1–10 invoices) ───────────────────────────────────────
+  batchAnalyze: (fundId: string, files: File[]) => {
+    const form = new FormData();
+    for (const f of files) form.append('files', f);
+    return api.post<any>(
+      `/custody-funds/${fundId}/ai-invoice/batch/analyze`,
+      form,
+      { timeout: 300000 },
+    );
+  },
+  batchRetry: (fundId: string, batchId: string, indices: number[]) =>
+    api.post<any>(
+      `/custody-funds/${fundId}/ai-invoice/batch/${batchId}/retry`,
+      { indices },
+      { timeout: 300000 },
+    ),
+  batchSave: (
+    fundId: string,
+    data: {
+      batchId: string;
+      invoices: Array<{
+        index: number;
+        editedData: any;
+        notes?: string;
+        category?: string;
+      }>;
+    },
+  ) =>
+    api.post<any>(
+      `/custody-funds/${fundId}/ai-invoice/batch/save`,
+      data,
+    ),
+  batchDiscard: (fundId: string, batchId: string) =>
+    api.delete(`/custody-funds/${fundId}/ai-invoice/batch/${batchId}`),
 };
 
 // ─── Roya Assistant (مساعد رؤية) ───
