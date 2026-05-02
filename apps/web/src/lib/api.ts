@@ -754,6 +754,17 @@ export const attendanceApi = {
     api.post('/attendance/unmatched/create-employees', { items }, { timeout: 120000 }),
   backfillCenter: () =>
     api.post('/attendance/employees/backfill-center', null, { timeout: 60000 }),
+  // ─── Manual status overrides ───
+  updateStatus: (payload: {
+    employeeId: string;
+    date: string;
+    status: 'PRESENT' | 'LATE' | 'ABSENT' | 'EXCUSED_ABSENCE';
+    reason?: string;
+  }) => api.patch('/attendance/status', payload),
+  clearStatus: (employeeId: string, date: string) =>
+    api.delete(`/attendance/status/${employeeId}/${date}`),
+  statusHistory: (employeeId: string, date: string) =>
+    api.get(`/attendance/status/${employeeId}/${date}/history`),
   dailyLetter: (uploadId: string, recipientName?: string) =>
     api.get(`/attendance/letters/daily/${uploadId}`, { params: recipientName ? { recipientName } : {} }),
   rangeLetter: (params: { from: string; to: string; recipientName?: string; noteAboutLastDay?: boolean }) =>

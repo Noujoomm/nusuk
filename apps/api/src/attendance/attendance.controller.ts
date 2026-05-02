@@ -31,6 +31,8 @@ import { AbsenceService } from './services/absence.service';
 import { AttendanceAnalysisService } from './services/attendance-analysis.service';
 import { AttendanceReportDocxService } from './services/attendance-report-docx.service';
 import { AttendanceAnalyticsService, AnalyticsScope, Center } from './services/attendance-analytics.service';
+import { AttendanceOverrideService } from './services/attendance-override.service';
+import { AttendanceManualStatus } from '@prisma/client';
 import { BulkAbsenceDto, GetEmployeesByTrackBookletDto } from './dto/absence.dto';
 import { fixMulterFilename } from '../common/fix-filename';
 import { setFileResponseHeaders } from '../common/utils/file-response.util';
@@ -59,6 +61,7 @@ export class AttendanceController {
     private analysis: AttendanceAnalysisService,
     private reportDocx: AttendanceReportDocxService,
     private analytics: AttendanceAnalyticsService,
+    private overrides: AttendanceOverrideService,
   ) {}
 
   // ─── AI ANALYSIS (cached in DB, refresh on demand) ───
@@ -164,6 +167,58 @@ export class AttendanceController {
       throw new BadRequestException('يجب تحديد الفترة (from + to)');
     }
     return this.analytics.analyze(from, to, { employeeId });
+  }
+
+  // ─── MANUAL STATUS OVERRIDES ────────────────────────────────────────
+  // Lets an authorized human flip a single (employee, day) cell in the
+  // analytics heatmap to PRESENT / LATE / ABSENT / EXCUSED_ABSENCE,
+  // overriding the auto-derived status. Stored in a separate table so
+  // reanalyze() can't wipe the edit. Audit trail in
+  // attendance_status_override_logs.
+
+  @Patch('status')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'system_manager', 'pm', 'track_lead', 'hr')
+  async updateStatus(
+    @Body() body: { employeeId: string; date: string; status: AttendanceManualStatus; reason?: string },
+    @CurrentUser() user: { id: string },
+  ) {
+    if (!body?.employeeId || !body?.date || !body?.status) {
+      throw new BadRequestException('employeeId و date و status حقول مطلوبة');
+    }
+    const allowed: AttendanceManualStatus[] = ['PRESENT', 'LATE', 'ABSENT', 'EXCUSED_ABSENCE'];
+    if (!allowed.includes(body.status)) {
+      throw new BadRequestException('قيمة الحالة غير صالحة');
+    }
+    return this.overrides.upsert(
+      {
+        employeeId: body.employeeId,
+        date: new Date(body.date),
+        status: body.status,
+        reason: body.reason,
+      },
+      user.id,
+    );
+  }
+
+  @Delete('status/:employeeId/:date')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'system_manager', 'pm', 'track_lead', 'hr')
+  async clearStatus(
+    @Param('employeeId') employeeId: string,
+    @Param('date') date: string,
+  ) {
+    return this.overrides.remove(employeeId, new Date(date));
+  }
+
+  @Get('status/:employeeId/:date/history')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'system_manager', 'pm', 'track_lead', 'hr')
+  async statusHistory(
+    @Param('employeeId') employeeId: string,
+    @Param('date') date: string,
+  ) {
+    return this.overrides.history(employeeId, new Date(date));
   }
 
   // ─── BULK ABSENCE BY TRACK + BOOKLET ───

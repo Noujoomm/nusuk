@@ -310,8 +310,43 @@ export class AttendanceAnalyticsService {
         },
       },
     });
+    // Layer manual overrides on top — keyed by (employeeId, date), they
+    // replace the auto-derived `status` for affected cells. Overrides
+    // outside the loaded employee set are ignored (the scope filters
+    // already narrowed the dataset).
+    const overrides = await this.prisma.attendanceStatusOverride.findMany({
+      where: {
+        date: { gte: from, lte: to },
+        employeeId: { in: [...new Set(summaries.map((s) => s.employeeId))] },
+      },
+      select: { employeeId: true, date: true, status: true, reason: true },
+    });
+    const overrideKey = (employeeId: string, d: Date) =>
+      `${employeeId}_${d.toISOString().slice(0, 10)}`;
+    const overrideMap = new Map<string, (typeof overrides)[number]>();
+    for (const o of overrides) overrideMap.set(overrideKey(o.employeeId, o.date), o);
+
+    // Apply: rewrite each summary's `status` (and zero `firstCheckIn` for
+    // ABSENT/EXCUSED to keep punctuality calc honest). The override also
+    // raises an `isOverride` flag the heatmap uses to show a marker.
+    for (const s of summaries) {
+      const ov = overrideMap.get(overrideKey(s.employeeId, s.reportDate));
+      if (!ov) continue;
+      // The summary type is generated from Prisma — these are diagnostic
+      // fields only used downstream in this same function, so cast at the
+      // attach site rather than expanding the typed surface.
+      (s as any).__overrideStatus = ov.status;
+      (s as any).__overrideReason = ov.reason;
+      s.status = manualToPdfStatus(ov.status);
+      if (ov.status === 'ABSENT' || ov.status === 'EXCUSED_ABSENCE') {
+        s.firstCheckIn = null;
+        s.lastCheckOut = null;
+        s.totalHours = null;
+      }
+    }
+
     this.logger.log(
-      `Analytics: from=${fromIso} to=${toIso} rows=${summaries.length} scope=${JSON.stringify(scope)}`,
+      `Analytics: from=${fromIso} to=${toIso} rows=${summaries.length} overrides=${overrides.length} scope=${JSON.stringify(scope)}`,
     );
 
     return this.compute(from, to, scope, summaries);
@@ -613,7 +648,7 @@ export class AttendanceAnalyticsService {
       if (r === undefined) continue;
       const c = idxByDate.get(new Date(s.reportDate).toISOString().slice(0, 10));
       if (c === undefined) continue;
-      cells[r][c] = statusCode(s.status);
+      cells[r][c] = statusCode(s.status, s.__overrideStatus);
     }
 
     return {
@@ -725,8 +760,15 @@ function severityRank(a: Anomaly, b: Anomaly): number {
 
 // Heatmap status codes — UI maps to colors.
 // 0 = no data, 1 = present, 2 = on-call present, 3 = incomplete,
-// 4 = check-only, 5 = absent, 6 = on-call no-visit, 7 = other.
-function statusCode(s: PdfAttendanceStatus): number {
+// 4 = check-only, 5 = absent, 6 = on-call no-visit, 7 = other,
+// 8 = manual LATE, 9 = manual EXCUSED_ABSENCE.
+function statusCode(s: PdfAttendanceStatus, overrideStatus?: string): number {
+  // Manual overrides take priority and get distinct codes so the UI
+  // can color them differently (and show a "manually edited" dot).
+  if (overrideStatus === 'LATE') return 8;
+  if (overrideStatus === 'EXCUSED_ABSENCE') return 9;
+  if (overrideStatus === 'PRESENT') return 1;
+  if (overrideStatus === 'ABSENT') return 5;
   switch (s) {
     case 'present': return 1;
     case 'on_call_present': return 2;
@@ -738,5 +780,16 @@ function statusCode(s: PdfAttendanceStatus): number {
     case 'absent': return 5;
     case 'on_call_no_visit': return 6;
     default: return 7;
+  }
+}
+
+/** Map our 4-state manual enum back to the closest PdfAttendanceStatus
+ *  so downstream KPI counts (present / absent / late) keep working. */
+function manualToPdfStatus(m: 'PRESENT' | 'LATE' | 'ABSENT' | 'EXCUSED_ABSENCE'): PdfAttendanceStatus {
+  switch (m) {
+    case 'PRESENT': return 'present';
+    case 'LATE': return 'present'; // late is still "showed up"; lateMinutes carry the nuance
+    case 'ABSENT': return 'absent';
+    case 'EXCUSED_ABSENCE': return 'absent';
   }
 }

@@ -27,6 +27,8 @@ import {
 import toast from 'react-hot-toast';
 import { attendanceApi } from '@/lib/api';
 import { PeriodSelector, defaultThisMonth, type DateRange } from '@/components/attendance/period-selector';
+import { StatusCellEditor, type ManualStatus } from '@/components/attendance/status-cell-editor';
+import { useAuth } from '@/stores/auth';
 
 type Severity = 'high' | 'medium' | 'low';
 
@@ -87,7 +89,14 @@ interface AnalyticsResult {
   };
 }
 
+// Roles allowed to flip cells in the heatmap. Mirrors the controller's
+// @Roles() guard so the UI never offers an action the API would reject.
+const STATUS_EDIT_ROLES = new Set(['admin', 'system_manager', 'pm', 'track_lead', 'hr']);
+
 export function AnalyticsView({ lockedCenter }: { lockedCenter?: 'makkah' | 'madinah' } = {}) {
+  const { user } = useAuth();
+  const canEditStatus = user?.role ? STATUS_EDIT_ROLES.has(user.role) : false;
+
   const [range, setRange] = useState<DateRange>(defaultThisMonth());
   // Locked routes (/makkah, /madinah) initialise their center and skip the
   // "all" toggle entirely; the unlocked /attendance-analytics page lets the
@@ -220,6 +229,8 @@ export function AnalyticsView({ lockedCenter }: { lockedCenter?: 'makkah' | 'mad
               accent="emerald"
               data={combinedData}
               showByCity
+              canEdit={canEditStatus}
+              onRefresh={load}
             />
           )}
           {showMakkah && makkahData && (
@@ -229,6 +240,8 @@ export function AnalyticsView({ lockedCenter }: { lockedCenter?: 'makkah' | 'mad
               accent="emerald"
               data={makkahData}
               subtitle="جميع المسارات في مركز مكة"
+              canEdit={canEditStatus}
+              onRefresh={load}
             />
           )}
           {showMadinah && madinahData && (
@@ -238,6 +251,8 @@ export function AnalyticsView({ lockedCenter }: { lockedCenter?: 'makkah' | 'mad
               accent="blue"
               data={madinahData}
               subtitle="مسار التوزيع — مركز المدينة"
+              canEdit={canEditStatus}
+              onRefresh={load}
             />
           )}
         </>
@@ -259,6 +274,8 @@ function Section({
   data,
   subtitle,
   showByCity,
+  canEdit,
+  onRefresh,
 }: {
   title: string;
   icon: string;
@@ -266,6 +283,8 @@ function Section({
   data: AnalyticsResult;
   subtitle?: string;
   showByCity?: boolean;
+  canEdit: boolean;
+  onRefresh: () => void;
 }) {
   const accentCls = {
     emerald: 'border-emerald-500/30 bg-emerald-500/[0.05]',
@@ -312,7 +331,7 @@ function Section({
           <RankingRow top={data.topPerformers} bottom={data.bottomPerformers} />
           <AnomaliesPanel anomalies={data.anomalies} />
           <ByTrackTable byTrack={data.byTrack} />
-          <Heatmap heatmap={data.heatmap} />
+          <Heatmap heatmap={data.heatmap} canEdit={canEdit} onRefresh={onRefresh} />
         </>
       )}
     </section>
@@ -1169,11 +1188,27 @@ function ByTrackTable({ byTrack }: { byTrack: AnalyticsResult['byTrack'] }) {
 
 // ─── Heatmap ────────────────────────────────────────────────────────────
 
-function Heatmap({ heatmap }: { heatmap: AnalyticsResult['heatmap'] }) {
+function Heatmap({
+  heatmap,
+  canEdit,
+  onRefresh,
+}: {
+  heatmap: AnalyticsResult['heatmap'];
+  canEdit: boolean;
+  onRefresh: () => void;
+}) {
+  // Manual-edit modal state — opened by clicking any cell when canEdit.
+  const [editing, setEditing] = useState<{
+    employeeId: string;
+    employeeName: string;
+    date: string;
+    currentStatus: ManualStatus | null;
+  } | null>(null);
+
   if (heatmap.employees.length === 0) return null;
   // Status code → color, must match service codes:
   // 0 no data, 1 present, 2 on-call present, 3 incomplete, 4 check-only,
-  // 5 absent, 6 on-call no-visit, 7 other
+  // 5 absent, 6 on-call no-visit, 7 other, 8 manual LATE, 9 manual EXCUSED.
   const colorOf = (c: number) => {
     switch (c) {
       case 1: return 'bg-emerald-500/80';
@@ -1183,6 +1218,8 @@ function Heatmap({ heatmap }: { heatmap: AnalyticsResult['heatmap'] }) {
       case 5: return 'bg-red-500/80';
       case 6: return 'bg-slate-500/40';
       case 7: return 'bg-blue-500/40';
+      case 8: return 'bg-amber-500/80'; // manual LATE
+      case 9: return 'bg-blue-500/80';  // manual EXCUSED_ABSENCE
       default: return 'bg-slate-800/60';
     }
   };
@@ -1195,9 +1232,19 @@ function Heatmap({ heatmap }: { heatmap: AnalyticsResult['heatmap'] }) {
       case 5: return 'غائب';
       case 6: return 'On Call — لم يحضر';
       case 7: return 'حالة أخرى';
+      case 8: return 'متأخر (تعديل يدوي)';
+      case 9: return 'غياب بعذر (تعديل يدوي)';
       default: return 'لا بيانات';
     }
   };
+  // Manual-edit codes carry the current override; everything else opens
+  // the editor blank so the user picks freely.
+  const codeToManual = (c: number): ManualStatus | null => {
+    if (c === 8) return 'LATE';
+    if (c === 9) return 'EXCUSED_ABSENCE';
+    return null;
+  };
+  const isManualCode = (c: number) => c === 8 || c === 9;
 
   // Pre-compute day number + weekday letter + month-change markers so the
   // header is readable without rotation. We also build a row of merged
@@ -1234,12 +1281,22 @@ function Heatmap({ heatmap }: { heatmap: AnalyticsResult['heatmap'] }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
       <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="text-sm font-bold text-white">خريطة الحضور (موظف × يوم)</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-bold text-white">خريطة الحضور (موظف × يوم)</h3>
+          {canEdit && (
+            <span
+              className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-slate-300"
+              title="اضغط أي مربع لتعديل الحالة يدوياً"
+            >
+              قابل للتعديل
+            </span>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2 text-[10px]">
           <Legend2 cls="bg-emerald-500/80" label="حاضر" />
-          <Legend2 cls="bg-emerald-400/60" label="On Call حاضر" />
-          <Legend2 cls="bg-amber-500/60" label="ناقص ساعات" />
+          <Legend2 cls="bg-amber-500/80" label="متأخر" />
           <Legend2 cls="bg-red-500/80" label="غائب" />
+          <Legend2 cls="bg-blue-500/80" label="غياب بعذر" />
           <Legend2 cls="bg-slate-800/60" label="لا بيانات" />
         </div>
       </div>
@@ -1300,20 +1357,49 @@ function Heatmap({ heatmap }: { heatmap: AnalyticsResult['heatmap'] }) {
                   <div className="truncate text-xs">{emp.name}</div>
                   <div className="truncate text-[10px] text-slate-500">{emp.track}</div>
                 </td>
-                {heatmap.cells[r].map((c, i) => (
-                  <td
-                    key={i}
-                    className={`p-0 ${cols[i].isWeekStart ? 'border-r border-white/10' : ''}`}
-                    style={{ width: CELL, minWidth: CELL }}
-                  >
-                    <div className="flex justify-center py-0.5">
-                      <div
-                        className={`h-4 w-4 rounded ${colorOf(c)}`}
-                        title={`${heatmap.dates[i]} • ${tipOf(c)}`}
-                      />
+                {heatmap.cells[r].map((c, i) => {
+                  const cellTip = `${heatmap.dates[i]} • ${tipOf(c)}${
+                    canEdit ? ' (اضغط للتعديل)' : ''
+                  }`;
+                  const cellInner = (
+                    <div className="relative flex justify-center py-0.5">
+                      <div className={`h-4 w-4 rounded ${colorOf(c)}`} />
+                      {isManualCode(c) && (
+                        <span
+                          className="absolute right-2.5 top-0 h-1.5 w-1.5 rounded-full bg-cyan-300 ring-1 ring-slate-900"
+                          aria-label="تعديل يدوي"
+                        />
+                      )}
                     </div>
-                  </td>
-                ))}
+                  );
+                  return (
+                    <td
+                      key={i}
+                      className={`p-0 ${cols[i].isWeekStart ? 'border-r border-white/10' : ''}`}
+                      style={{ width: CELL, minWidth: CELL }}
+                    >
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditing({
+                              employeeId: heatmap.employees[r].id,
+                              employeeName: heatmap.employees[r].name,
+                              date: heatmap.dates[i],
+                              currentStatus: codeToManual(c),
+                            })
+                          }
+                          className="block w-full cursor-pointer outline-none transition-transform hover:scale-110 focus:ring-2 focus:ring-emerald-400/50"
+                          title={cellTip}
+                        >
+                          {cellInner}
+                        </button>
+                      ) : (
+                        <div title={cellTip}>{cellInner}</div>
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
@@ -1321,7 +1407,23 @@ function Heatmap({ heatmap }: { heatmap: AnalyticsResult['heatmap'] }) {
       </div>
       <p className="mt-2 text-[10px] text-slate-500">
         الأحرف تحت الأيام: ح=الأحد، ن=الاثنين، ث=الثلاثاء، ر=الأربعاء، خ=الخميس، ج=الجمعة، س=السبت.
+        {canEdit && ' • النقطة الزرقاء = تعديل يدوي'}
       </p>
+
+      {editing && (
+        <StatusCellEditor
+          open={true}
+          employeeId={editing.employeeId}
+          employeeName={editing.employeeName}
+          date={editing.date}
+          currentStatus={editing.currentStatus}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            onRefresh();
+          }}
+        />
+      )}
     </div>
   );
 }

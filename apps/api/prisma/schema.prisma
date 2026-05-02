@@ -55,6 +55,9 @@ model User {
   distDeviations      DistributionDeviation[]   @relation("DistDeviationCreator")
   distAnalyses        DistributionAnalysisSession[] @relation("DistAnalysisCreator")
 
+  attendanceOverrides    AttendanceStatusOverride[]    @relation("AttendanceOverrideEditor")
+  attendanceOverrideLogs AttendanceStatusOverrideLog[] @relation("AttendanceOverrideLogEditor")
+
   // Phase 3: Updates & Import
   dailyUpdates           DailyUpdate[]           @relation("DailyUpdateAuthor")
   dailyUpdateReads       DailyUpdateRead[]       @relation("DailyUpdateReader")
@@ -1987,8 +1990,9 @@ model PdfAttendanceEmployee {
   aliases           String[]             @default([])
   center            PdfAttendanceCenter? @map("center")
 
-  records        PdfAttendanceRecord[]
-  dailySummaries PdfDailyAttendanceSummary[]
+  records         PdfAttendanceRecord[]
+  dailySummaries  PdfDailyAttendanceSummary[]
+  statusOverrides AttendanceStatusOverride[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1997,6 +2001,67 @@ model PdfAttendanceEmployee {
   @@index([track])
   @@index([center])
   @@map("pdf_attendance_employees")
+}
+
+// ─── Manual status overrides ─────────────────────────────────────────
+// Layered on top of auto-derived PdfDailyAttendanceSummary rows. We
+// don't mutate the summaries directly because reanalyze() wipes and
+// recreates them — the override survives because it's keyed by
+// (employeeId, reportDate) in its own table. Analytics service joins
+// this in when it builds the heatmap / KPIs so manual edits are
+// reflected everywhere instantly.
+//
+// Manual states are deliberately a SMALLER enum than PdfAttendanceStatus
+// (4 vs 12). The auto pipeline tracks check-only / on-call-no-visit /
+// incomplete-hours etc — but a human editor only ever needs to say
+// "this person was actually present / late / absent / excused".
+
+enum AttendanceManualStatus {
+  PRESENT
+  LATE
+  ABSENT
+  EXCUSED_ABSENCE
+}
+
+model AttendanceStatusOverride {
+  id         String                 @id @default(cuid())
+  employeeId String                 @map("employee_id")
+  date       DateTime               @map("date") @db.Date
+  status     AttendanceManualStatus
+  reason     String?                @db.Text
+  editedById String                 @map("edited_by_id")
+  editedAt   DateTime               @default(now()) @map("edited_at")
+  createdAt  DateTime               @default(now()) @map("created_at")
+  updatedAt  DateTime               @updatedAt @map("updated_at")
+
+  employee PdfAttendanceEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  editor   User                  @relation("AttendanceOverrideEditor", fields: [editedById], references: [id])
+
+  logs AttendanceStatusOverrideLog[]
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@index([editedById])
+  @@map("attendance_status_overrides")
+}
+
+model AttendanceStatusOverrideLog {
+  id             String                  @id @default(cuid())
+  overrideId     String?                 @map("override_id")
+  employeeId     String                  @map("employee_id")
+  date           DateTime                @map("date") @db.Date
+  previousStatus AttendanceManualStatus? @map("previous_status")
+  newStatus      AttendanceManualStatus  @map("new_status")
+  reason         String?                 @db.Text
+  editedById     String                  @map("edited_by_id")
+  editedAt       DateTime                @default(now()) @map("edited_at")
+
+  override AttendanceStatusOverride? @relation(fields: [overrideId], references: [id], onDelete: SetNull)
+  editor   User                      @relation("AttendanceOverrideLogEditor", fields: [editedById], references: [id])
+
+  @@index([employeeId, date])
+  @@index([editedAt])
+  @@map("attendance_status_override_logs")
 }
 
 model PdfAttendanceUpload {
