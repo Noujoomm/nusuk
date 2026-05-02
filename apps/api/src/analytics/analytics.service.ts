@@ -11,7 +11,10 @@ export class AnalyticsService {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    // "Today" for the daily-tracks card means today since midnight in Asia/Riyadh.
+    // The KSA never observes DST, so the offset is a constant +3h — no need
+    // for a tz lib. Resets to zero at 00:00 Makkah every day.
+    const startOfTodayMakkah = startOfDayInRiyadh(now);
     const taskWhere = { isDeleted: false };
 
     // ──────────────────────────────────────
@@ -248,19 +251,20 @@ export class AnalyticsService {
       description_ar: string;
     }> = [];
 
-    // Top 3 tracks — daily (last 24 hours): 70% reports + 30% daily interaction.
-    // Same composite formula as before, just a tighter window so the ranking
-    // reflects "what's happening today" instead of a smoothed weekly view.
+    // Top 3 tracks — today since 00:00 Asia/Riyadh: 70% reports + 30% daily
+    // interaction. Same composite formula and same normalization as before;
+    // only the window changes from "sliding 24h" to "calendar day in Makkah".
+    // Card visibly resets at midnight Makkah and fills back up through the day.
     const [reportsDayByTrack, engagementDayByTrack] = await this.prisma.withRetry(
       () => Promise.all([
         this.prisma.report.groupBy({
           by: ['trackId'],
-          where: { createdAt: { gte: oneDayAgo } },
+          where: { createdAt: { gte: startOfTodayMakkah } },
           _count: true,
         }),
         this.prisma.dailyUpdate.groupBy({
           by: ['trackId'],
-          where: { trackId: { not: null }, createdAt: { gte: oneDayAgo } },
+          where: { trackId: { not: null }, createdAt: { gte: startOfTodayMakkah } },
           _count: true,
         }),
       ]),
@@ -289,7 +293,7 @@ export class AnalyticsService {
         type: 'success',
         icon: 'trophy',
         title_ar: 'أفضل ٣ مسارات أداءً (يومي)',
-        description_ar: `${topList}\n٧٠٪ التقارير + ٣٠٪ التفاعل — آخر ٢٤ ساعة`,
+        description_ar: `${topList}\n٧٠٪ التقارير + ٣٠٪ التفاعل — منذ منتصف الليل بتوقيت مكة`,
       });
     }
 
@@ -542,4 +546,18 @@ export class AnalyticsService {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, count]) => ({ date, count }));
   }
+}
+
+/**
+ * Returns the UTC instant corresponding to today's 00:00 in Asia/Riyadh.
+ * Riyadh is a fixed UTC+3 (no DST), so the math is just "shift, floor, shift
+ * back" — no tz library needed and behaviour is identical regardless of where
+ * the server is hosted.
+ */
+function startOfDayInRiyadh(now: Date): Date {
+  const RIYADH_OFFSET_MS = 3 * 60 * 60 * 1000;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const riyadhStartOfDayMs =
+    Math.floor((now.getTime() + RIYADH_OFFSET_MS) / dayMs) * dayMs;
+  return new Date(riyadhStartOfDayMs - RIYADH_OFFSET_MS);
 }
