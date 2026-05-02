@@ -93,7 +93,40 @@ interface AnalyticsResult {
 // @Roles() guard so the UI never offers an action the API would reject.
 const STATUS_EDIT_ROLES = new Set(['admin', 'system_manager', 'pm', 'track_lead', 'hr']);
 
-export function AnalyticsView({ lockedCenter }: { lockedCenter?: 'makkah' | 'madinah' } = {}) {
+/** Track-key → regex used to resolve the actual Arabic track name from the
+ *  live data. Tracks come back as free-form Arabic strings (e.g. "التوزيع
+ *  - المدينة المنورة"), so we match on the keyword + optional city. */
+const LOCKED_TRACK_PATTERNS: Record<string, RegExp> = {
+  distribution: /توزيع/,
+};
+
+function resolveLockedTrack(
+  options: string[],
+  key: string,
+  city?: 'makkah' | 'madinah',
+): string {
+  const re = LOCKED_TRACK_PATTERNS[key];
+  if (!re) return '';
+  const cityRe =
+    city === 'makkah' ? /مكة|مكه/ : city === 'madinah' ? /المدينة|المدينه/ : null;
+  if (cityRe) {
+    const cityMatch = options.find((t) => re.test(t) && cityRe.test(t));
+    if (cityMatch) return cityMatch;
+  }
+  return options.find((t) => re.test(t)) ?? '';
+}
+
+export function AnalyticsView({
+  lockedCenter,
+  lockedTrackKey,
+}: {
+  lockedCenter?: 'makkah' | 'madinah';
+  /** When set (e.g. 'distribution' on the Madinah route), the track filter
+   *  is pinned to the resolved track name and the dropdown is replaced with
+   *  a static badge. Use this for routes whose subtitle promises a single
+   *  track — keeps the data and the copy in sync. */
+  lockedTrackKey?: keyof typeof LOCKED_TRACK_PATTERNS;
+} = {}) {
   const { user } = useAuth();
   const canEditStatus = user?.role ? STATUS_EDIT_ROLES.has(user.role) : false;
 
@@ -170,6 +203,21 @@ export function AnalyticsView({ lockedCenter }: { lockedCenter?: 'makkah' | 'mad
     load();
   }, [load]);
 
+  // Resolve the locked track name from the running track list. Runs after the
+  // first analytics fetch (or coverage panel) populates allTrackOptions; from
+  // then on the trackName state stays pinned and the FiltersBar dropdown is
+  // shown as a static badge.
+  useEffect(() => {
+    if (!lockedTrackKey) return;
+    if (trackName) return;
+    const resolved = resolveLockedTrack(
+      allTrackOptions,
+      lockedTrackKey,
+      lockedCenter,
+    );
+    if (resolved) setTrackName(resolved);
+  }, [lockedTrackKey, allTrackOptions, lockedCenter, trackName]);
+
   // Choose what to display empty-state vs sections vs loading.
   const anySectionHasData =
     (showCombined && combinedData && combinedData.kpis.totalDailyRecords > 0) ||
@@ -210,6 +258,7 @@ export function AnalyticsView({ lockedCenter }: { lockedCenter?: 'makkah' | 'mad
         onRosterOnly={setRosterOnly}
         trackOptions={allTrackOptions}
         cityLocked={lockedCenter}
+        trackLocked={!!lockedTrackKey}
       />
 
       {loading && (
@@ -835,6 +884,7 @@ function FiltersBar({
   onRosterOnly,
   trackOptions,
   cityLocked,
+  trackLocked,
 }: {
   center: 'makkah' | 'madinah' | 'all';
   onCenter: (c: 'makkah' | 'madinah' | 'all') => void;
@@ -844,6 +894,7 @@ function FiltersBar({
   onRosterOnly: (b: boolean) => void;
   trackOptions: string[];
   cityLocked?: 'makkah' | 'madinah';
+  trackLocked?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
@@ -877,21 +928,36 @@ function FiltersBar({
           </select>
         </label>
       )}
-      <label className="block">
-        <span className="mb-1 block text-[11px] text-slate-400">المسار</span>
-        <select
-          value={trackName}
-          onChange={(e) => onTrack(e.target.value)}
-          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
-        >
-          <option value="">كل المسارات</option>
-          {trackOptions.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </label>
+      {trackLocked ? (
+        // Track is pinned by the route (e.g. /madinah → distribution). Show
+        // the resolved name as a static badge so the user sees the active
+        // scope and isn't confused by a missing dropdown.
+        <div className="flex flex-col">
+          <span className="mb-1 text-[11px] text-slate-400">المسار</span>
+          <span
+            className="inline-flex items-center gap-1 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-200"
+            title="مثبّت من مسار الصفحة"
+          >
+            📦 {trackName || '— جارٍ تحديد مسار التوزيع —'}
+          </span>
+        </div>
+      ) : (
+        <label className="block">
+          <span className="mb-1 block text-[11px] text-slate-400">المسار</span>
+          <select
+            value={trackName}
+            onChange={(e) => onTrack(e.target.value)}
+            className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
+          >
+            <option value="">كل المسارات</option>
+            {trackOptions.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
         <input
           type="checkbox"
