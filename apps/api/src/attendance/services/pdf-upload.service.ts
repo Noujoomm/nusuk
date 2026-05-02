@@ -57,18 +57,42 @@ export class PdfUploadService {
       throw new BadRequestException('لم يتم استخراج أي سجلات بصمة من الملف');
     }
 
-    // ─── 1b. Reject duplicates for the same report date ──────────────────
-    // The biometric system emits one PDF per day; re-uploading the same date
-    // would silently double-count records and break the daily summary.
-    // Caller must DELETE the prior upload first if they really want to redo.
+    // ─── 1b. Reject duplicates for the same (date, city) ────────────────
+    // The biometric system emits one PDF per (city, day). Uploading two
+    // PDFs for the SAME city + SAME date would silently double-count, but
+    // the Makkah and Madinah PDFs are independent — uploading Makkah on
+    // 2026-04-02 must NOT block uploading Madinah on the same date.
+    //
+    // For an explicit centerOverride: conflict only with the same city OR a
+    // legacy mixed-city upload (coversCenter = null) — that mixed upload
+    // already covers everyone for that date.
+    // For "auto" (no override): keep the strict same-date check because we
+    // can't know which city the file will be tagged as until after parsing.
+    const existingWhere: Prisma.PdfAttendanceUploadWhereInput = {
+      reportDate,
+      status: 'processed',
+    };
+    if (centerOverride) {
+      existingWhere.OR = [
+        { coversCenter: centerOverride },
+        { coversCenter: null }, // legacy mixed upload — would overlap
+      ];
+    }
     const existing = await this.prisma.pdfAttendanceUpload.findFirst({
-      where: { reportDate, status: 'processed' },
-      select: { id: true, fileName: true },
+      where: existingWhere,
+      select: { id: true, fileName: true, coversCenter: true },
     });
     if (existing) {
-      throw new ConflictException(
-        `يوجد ملف مرفوع مسبقاً بتاريخ ${reportDate.toISOString().slice(0, 10)} (${fixStoredFilename(existing.fileName)}). احذفه أولاً ثم أعد الرفع.`,
-      );
+      const cityLabel = centerOverride
+        ? centerOverride === 'makkah'
+          ? 'مكة المكرمة'
+          : 'المدينة المنورة'
+        : null;
+      const dateStr = reportDate.toISOString().slice(0, 10);
+      const msg = cityLabel
+        ? `يوجد ملف مرفوع مسبقاً لـ${cityLabel} بتاريخ ${dateStr} (${fixStoredFilename(existing.fileName)}). احذفه أولاً ثم أعد الرفع.`
+        : `يوجد ملف مرفوع مسبقاً بتاريخ ${dateStr} (${fixStoredFilename(existing.fileName)}). احذفه أولاً ثم أعد الرفع.`;
+      throw new ConflictException(msg);
     }
 
     // ─── 1c. Hash for integrity check on later download ──────────────────
