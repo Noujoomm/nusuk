@@ -7,12 +7,16 @@ import { matchEmployee, MatchCandidate } from '../utils/name-matcher';
 import { analyzeDay } from '../utils/analyzer';
 import { Prisma, PdfShiftType, PdfAttendanceCenter } from '@prisma/client';
 import { fixStoredFilename } from '../../common/fix-filename';
+import { PdfVisionParserService } from './pdf-vision-parser.service';
 
 @Injectable()
 export class PdfUploadService {
   private readonly logger = new Logger(PdfUploadService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private vision: PdfVisionParserService,
+  ) {}
 
   /**
    * End-to-end ingestion of a single daily PDF:
@@ -36,18 +40,60 @@ export class PdfUploadService {
     centerOverride: PdfAttendanceCenter | null = null,
   ) {
     // ─── 1. Parse PDF ─────────────────────────────────────────────────
-    let rawText = '';
+    // Strategy: Vision API أولاً (أدق مع العربي)، pdf-parse كـ fallback لو
+    // الـ API غير متوفر/فشل. الـ rawText محفوظ من أيهما نجح للأرشفة لاحقاً.
     let parsed: ParsedPunch[] = [];
     let reportDate: Date | null = null;
-    try {
-      const parser = new PDFParse({ data: buffer });
-      const data = await parser.getText();
-      rawText = data.text || '';
-      const lines = cleanPdfText(rawText);
-      reportDate = extractReportDate(lines);
-      parsed = parsePunches(lines);
-    } catch (err: any) {
-      throw new BadRequestException(`فشل قراءة ملف PDF: ${err?.message || err}`);
+    let rawText = '';
+    let parseMethod: 'vision' | 'text' = 'vision';
+    const visionWarnings: string[] = [];
+
+    if (this.vision.isAvailable()) {
+      try {
+        const result = await this.vision.parse(buffer);
+        parsed = result.punches;
+        reportDate = result.reportDate;
+        visionWarnings.push(...result.warnings);
+        rawText = JSON.stringify({ records: parsed, warnings: result.warnings }, null, 2);
+        this.logger.log(
+          `Vision parser: ${parsed.length} سجل، ${visionWarnings.length} تحذير`,
+        );
+      } catch (err: any) {
+        this.logger.warn(
+          `Vision parser فشل: ${err?.message || err} — fallback إلى pdf-parse`,
+        );
+        parseMethod = 'text';
+      }
+    } else {
+      this.logger.warn('Vision parser غير متوفر — استخدام pdf-parse');
+      parseMethod = 'text';
+    }
+
+    if (parseMethod === 'text' || parsed.length === 0) {
+      try {
+        const parser = new PDFParse({ data: buffer });
+        const data = await parser.getText();
+        const fallbackText = data.text || '';
+        const lines = cleanPdfText(fallbackText);
+        const fallbackDate = extractReportDate(lines);
+        const fallbackPunches = parsePunches(lines);
+        if (fallbackPunches.length > parsed.length) {
+          parsed = fallbackPunches;
+          reportDate = fallbackDate ?? reportDate;
+          rawText = fallbackText;
+          parseMethod = 'text';
+          this.logger.log(
+            `pdf-parse fallback: ${parsed.length} سجل من النص الخام`,
+          );
+        }
+      } catch (err: any) {
+        if (parsed.length === 0) {
+          throw new BadRequestException(
+            `فشل قراءة ملف PDF: ${err?.message || err}`,
+          );
+        }
+        // عندنا نتائج Vision سليمة، نتجاهل فشل الـ text
+      }
     }
 
     if (!reportDate) {
@@ -56,6 +102,7 @@ export class PdfUploadService {
     if (parsed.length === 0) {
       throw new BadRequestException('لم يتم استخراج أي سجلات بصمة من الملف');
     }
+    this.logger.log(`PDF parsed via ${parseMethod}: ${parsed.length} records`);
 
     // ─── 1b. Reject duplicates for the same (date, city) ────────────────
     // The biometric system emits one PDF per (city, day). Uploading two

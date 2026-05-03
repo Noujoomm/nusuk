@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AttendanceController } from './attendance.controller';
 import { ExcelSeederService } from './services/excel-seeder.service';
 import { PdfUploadService } from './services/pdf-upload.service';
+import { PdfVisionParserService } from './services/pdf-vision-parser.service';
 import { LetterGeneratorService } from './services/letter-generator.service';
 import { AttendanceExportService } from './services/attendance-export.service';
 import { AbsenceService } from './services/absence.service';
@@ -15,6 +16,7 @@ import { AttendanceOverrideService } from './services/attendance-override.servic
   providers: [
     ExcelSeederService,
     PdfUploadService,
+    PdfVisionParserService,
     LetterGeneratorService,
     AttendanceExportService,
     AbsenceService,
@@ -26,6 +28,7 @@ import { AttendanceOverrideService } from './services/attendance-override.servic
   exports: [
     ExcelSeederService,
     PdfUploadService,
+    PdfVisionParserService,
     LetterGeneratorService,
     AttendanceExportService,
     AbsenceService,
