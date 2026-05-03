@@ -172,7 +172,42 @@ model Track {
 
   distAnalyses DistributionAnalysisSession[] @relation("DistAnalysisTrack")
 
+  dailyPerformance DailyTrackPerformance[]
+
   @@map("tracks")
+}
+
+/// Per-track daily performance snapshot, captured at 00:00 Asia/Riyadh by
+/// a cron that scores YESTERDAY's activity. Mirrors the formula used by
+/// the live "Top 3 tracks (daily)" card in analytics.service.ts so the
+/// archive matches what the user actually saw on the dashboard.
+///
+/// One row per (track, date). `date` is a calendar date in Riyadh (no tz)
+/// — comparisons are by date string, never by absolute time.
+model DailyTrackPerformance {
+  id      String   @id @default(cuid())
+  trackId String   @map("track_id")
+  date    DateTime @db.Date
+
+  reportsCount      Int @default(0) @map("reports_count")
+  interactionsCount Int @default(0) @map("interactions_count")
+
+  reportsScore      Float @default(0) @map("reports_score")
+  interactionsScore Float @default(0) @map("interactions_score")
+  finalScore        Float @default(0) @map("final_score")
+
+  /// 1, 2, 3, … among tracks that had ANY activity that day. NULL means
+  /// the track had no reports and no interactions on `date`.
+  rank Int?
+
+  capturedAt DateTime @default(now()) @map("captured_at")
+
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([trackId, date])
+  @@index([date])
+  @@index([trackId, date])
+  @@map("daily_track_performance")
 }
 
 model TrackPermission {

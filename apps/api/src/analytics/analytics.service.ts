@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { startOfDayInRiyadh } from './utils/riyadh-time.util';
 
 @Injectable()
 export class AnalyticsService {
@@ -546,18 +547,4 @@ export class AnalyticsService {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, count]) => ({ date, count }));
   }
-}
-
-/**
- * Returns the UTC instant corresponding to today's 00:00 in Asia/Riyadh.
- * Riyadh is a fixed UTC+3 (no DST), so the math is just "shift, floor, shift
- * back" — no tz library needed and behaviour is identical regardless of where
- * the server is hosted.
- */
-function startOfDayInRiyadh(now: Date): Date {
-  const RIYADH_OFFSET_MS = 3 * 60 * 60 * 1000;
-  const dayMs = 24 * 60 * 60 * 1000;
-  const riyadhStartOfDayMs =
-    Math.floor((now.getTime() + RIYADH_OFFSET_MS) / dayMs) * dayMs;
-  return new Date(riyadhStartOfDayMs - RIYADH_OFFSET_MS);
 }
