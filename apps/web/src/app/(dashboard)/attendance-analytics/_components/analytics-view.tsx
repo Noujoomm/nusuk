@@ -141,9 +141,11 @@ export function AnalyticsView({
   // Three independent datasets — one per section. The page stays in sync
   // with the filter bar by only fetching the sections that the current
   // scope actually shows: "all" → 3 calls in parallel; single-city → 1.
-  // No double-counting: each PdfDailyAttendanceSummary belongs to exactly
-  // one employee with exactly one center, so the same row never lands in
-  // both the Makkah and Madinah datasets.
+  // The Makkah and Madinah scopes both include `center='shared'` employees
+  // (relations / cross-center staff), so a shared row counts in both city
+  // sections by design. The Combined section is the source of truth for
+  // total/unique numbers — Makkah + Madinah will overcount by the shared
+  // headcount.
   const [combinedData, setCombinedData] = useState<AnalyticsResult | null>(null);
   const [makkahData, setMakkahData] = useState<AnalyticsResult | null>(null);
   const [madinahData, setMadinahData] = useState<AnalyticsResult | null>(null);

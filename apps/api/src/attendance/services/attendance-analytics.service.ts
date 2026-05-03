@@ -280,11 +280,24 @@ export class AttendanceAnalyticsService {
       throw new ForbiddenException('فترة غير صالحة');
     }
 
+    // City scope includes 'shared' employees alongside the named city —
+    // those employees genuinely work in both centers (relations team,
+    // visiting consultants, …) and should appear in both Makkah and
+    // Madinah views. Without this they're only visible on the unscoped
+    // /attendance-analytics dashboard, which is why a Makkah-locked page
+    // could end up showing just the city's own pure-tagged tracks.
+    const centerFilter: Prisma.PdfAttendanceEmployeeWhereInput = {};
+    if (scope.center === 'makkah') {
+      centerFilter.center = { in: ['makkah', 'shared'] };
+    } else if (scope.center === 'madinah') {
+      centerFilter.center = { in: ['madinah', 'shared'] };
+    }
+
     const where: Prisma.PdfDailyAttendanceSummaryWhereInput = {
       reportDate: { gte: from, lte: to },
       employee: {
         ...(scope.trackName ? { track: scope.trackName } : {}),
-        ...(scope.center && scope.center !== 'all' ? { center: scope.center as PdfAttendanceCenter } : {}),
+        ...centerFilter,
         ...(scope.rosterOnly ? { worksByCharter: true } : {}),
       },
       ...(scope.employeeId ? { employeeId: scope.employeeId } : {}),
